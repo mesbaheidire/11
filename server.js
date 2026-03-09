@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, getAuthState } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
 
 const app = express();
 const postScheduler = new PostScheduler();
@@ -1135,15 +1135,12 @@ app.post('/api/spy/config', (req, res) => {
     const config = { ...stored };
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
-    if (incoming.mode) config.mode = incoming.mode;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
-    if (incoming.botToken && !incoming.botToken.includes('...')) config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
-    if (incoming.cookie && !incoming.cookie.includes('...')) config.cookie = incoming.cookie;
     saveSpyConfig(config);
     res.json({ success: true });
   } catch (error) {
@@ -1158,15 +1155,12 @@ app.post('/api/spy/start', async (req, res) => {
     const config = { ...stored };
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
-    if (incoming.mode) config.mode = incoming.mode;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
-    if (incoming.botToken && !incoming.botToken.includes('...')) config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
-    if (incoming.cookie && !incoming.cookie.includes('...')) config.cookie = incoming.cookie;
     saveSpyConfig(config);
     await startSpy(config);
     res.json({ success: true, message: 'تم تشغيل نظام التجسس' });
@@ -1215,20 +1209,11 @@ app.post('/api/spy/verify-code', async (req, res) => {
   }
 });
 
-app.get('/api/spy/auth-state', (req, res) => {
-  try {
-    const state = getAuthState();
-    res.json({ success: true, ...state });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // Auto-start spy if it was enabled
 (async () => {
   try {
     const spyConfig = loadSpyConfig();
-    if (spyConfig.enabled && spyConfig.botToken) {
+    if (spyConfig.enabled && spyConfig.apiId) {
       console.log('🕵️ إعادة تشغيل نظام التجسس تلقائياً...');
       await startSpy(spyConfig);
     }

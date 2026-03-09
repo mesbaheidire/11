@@ -17,14 +17,11 @@ function loadConfig() {
   }
   return {
     enabled: false,
-    mode: 'userbot',
     sourceChannels: [],
     targetChannels: [],
-    botToken: '',
     apiId: '',
     apiHash: '',
     phoneNumber: '',
-    cookie: '',
     autoPublish: true,
     linkType: 'coin',
     messageTemplate: {
@@ -110,8 +107,15 @@ function extractPrice(text) {
   return null;
 }
 
+function getBotToken() {
+  return process.env.TELEGRAM_BOT_TOKEN || '';
+}
+
+function getCookie() {
+  return process.env.cook || '';
+}
+
 let spyClient = null;
-let spyBot = null;
 let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
 
@@ -134,7 +138,7 @@ async function processPost(config, text, photo, sourceName) {
 
   for (const originalLink of aliLinks) {
     try {
-      const cookie = config.cookie || process.env.cook || '';
+      const cookie = getCookie();
       const result = await portaffFunction(cookie, originalLink);
 
       if (!result || !result.aff) {
@@ -167,8 +171,9 @@ async function processPost(config, text, photo, sourceName) {
       if (t.hashtags) message += t.hashtags;
 
       let publishedCount = 0;
-      if (config.autoPublish && config.botToken) {
-        const publishBot = new Telegraf(config.botToken);
+      const botToken = getBotToken();
+      if (config.autoPublish && botToken) {
+        const publishBot = new Telegraf(botToken);
         for (const target of targetIds) {
           try {
             if (photo) {
@@ -203,7 +208,11 @@ async function processPost(config, text, photo, sourceName) {
   }
 }
 
-async function startUserbotSpy(config) {
+async function startSpy(config) {
+  if (spyRunning) {
+    await stopSpy();
+  }
+
   const { TelegramClient } = require('telegram');
   const { StringSession } = require('telegram/sessions');
   const { NewMessage } = require('telegram/events');
@@ -214,8 +223,16 @@ async function startUserbotSpy(config) {
   if (!apiId || !apiHash) {
     throw new Error('API ID و API Hash مطلوبان - احصل عليهما من my.telegram.org');
   }
-  if (!config.botToken && config.autoPublish) {
-    throw new Error('توكن البوت مطلوب للنشر في القنوات الهدف');
+  if (!config.targetChannels || config.targetChannels.length === 0) {
+    throw new Error('يجب إضافة قناة هدف واحدة على الأقل');
+  }
+  if (!config.sourceChannels || config.sourceChannels.length === 0) {
+    throw new Error('يجب إضافة قناة مصدر واحدة على الأقل');
+  }
+
+  const botToken = getBotToken();
+  if (!botToken && config.autoPublish) {
+    throw new Error('توكن البوت غير موجود - أضفه في إعدادات التطبيق الرئيسية');
   }
 
   let sessionStr = '';
@@ -226,14 +243,14 @@ async function startUserbotSpy(config) {
     }
   } catch (e) {}
 
+  if (!sessionStr) {
+    throw new Error('SESSION_REQUIRED');
+  }
+
   const session = new StringSession(sessionStr);
   spyClient = new TelegramClient(session, apiId, apiHash, {
     connectionRetries: 5,
   });
-
-  if (!sessionStr) {
-    throw new Error('SESSION_REQUIRED');
-  }
 
   await spyClient.connect();
 
@@ -274,24 +291,17 @@ async function startUserbotSpy(config) {
       if (!isSource) return;
 
       const text = msg.message || '';
-      let photoUrl = null;
+      let photoForPublish = null;
 
       if (msg.media && msg.media.photo) {
         try {
           const buffer = await spyClient.downloadMedia(msg.media, {});
           if (buffer) {
-            const base64 = buffer.toString('base64');
-            photoUrl = `data:image/jpeg;base64,${base64}`;
+            photoForPublish = { source: buffer };
           }
         } catch (e) {
           console.log('⚠️ فشل تحميل الصورة:', e.message);
         }
-      }
-
-      let photoForPublish = null;
-      if (photoUrl && photoUrl.startsWith('data:image')) {
-        const base64Data = photoUrl.replace(/^data:image\/\w+;base64,/, '');
-        photoForPublish = { source: Buffer.from(base64Data, 'base64') };
       }
 
       await processPost(config, text, photoForPublish, chatTitle);
@@ -302,96 +312,14 @@ async function startUserbotSpy(config) {
 
   spyRunning = true;
   config.enabled = true;
-  config.mode = 'userbot';
   saveConfig(config);
-  console.log('🕵️ تم تشغيل نظام التجسس (Userbot)');
-}
-
-async function startBotSpy(config) {
-  if (!config.botToken) {
-    throw new Error('توكن البوت مطلوب');
-  }
-  if (!config.sourceChannels || config.sourceChannels.length === 0) {
-    throw new Error('يجب إضافة قناة مصدر واحدة على الأقل');
-  }
-
-  spyBot = new Telegraf(config.botToken);
-  const sourceIds = config.sourceChannels.map(ch => {
-    if (ch.startsWith('-')) return ch;
-    if (ch.startsWith('@')) return ch;
-    if (ch.includes('t.me/')) {
-      const match = ch.match(/t\.me\/([^\/\?]+)/);
-      if (match) return '@' + match[1];
-    }
-    return '@' + ch;
-  });
-
-  spyBot.on('channel_post', async (ctx) => {
-    try {
-      const post = ctx.channelPost;
-      const chatId = String(post.chat.id);
-      const chatUsername = post.chat.username ? '@' + post.chat.username : '';
-
-      const isSourceChannel = sourceIds.some(src => {
-        return src === chatId || src === chatUsername || src === post.chat.username;
-      });
-      if (!isSourceChannel) return;
-
-      const text = post.text || post.caption || '';
-      const sourceName = post.chat.title || chatUsername || chatId;
-
-      let photo = null;
-      if (post.photo && post.photo.length > 0) {
-        photo = post.photo[post.photo.length - 1].file_id;
-      }
-
-      await processPost(config, text, photo, sourceName);
-    } catch (err) {
-      console.log('❌ خطأ في معالجة المنشور:', err.message);
-    }
-  });
-
-  spyBot.catch((err) => {
-    if (!err.message.includes('409')) {
-      console.log('Spy bot error:', err.message);
-    }
-  });
-
-  await spyBot.launch({ dropPendingUpdates: true });
-  spyRunning = true;
-  config.enabled = true;
-  config.mode = 'bot';
-  saveConfig(config);
-  console.log('🕵️ تم تشغيل نظام التجسس (Bot Admin)');
-}
-
-async function startSpy(config) {
-  if (spyRunning) {
-    await stopSpy();
-  }
-
-  if (!config.targetChannels || config.targetChannels.length === 0) {
-    throw new Error('يجب إضافة قناة هدف واحدة على الأقل');
-  }
-  if (!config.sourceChannels || config.sourceChannels.length === 0) {
-    throw new Error('يجب إضافة قناة مصدر واحدة على الأقل');
-  }
-
-  if (config.mode === 'userbot') {
-    await startUserbotSpy(config);
-  } else {
-    await startBotSpy(config);
-  }
+  console.log('🕵️ تم تشغيل نظام التجسس');
 }
 
 async function stopSpy() {
   if (spyClient) {
     try { await spyClient.disconnect(); } catch (e) {}
     spyClient = null;
-  }
-  if (spyBot) {
-    try { spyBot.stop('Spy stopped'); } catch (e) {}
-    spyBot = null;
   }
   spyRunning = false;
   const config = loadConfig();
@@ -430,8 +358,6 @@ async function sendLoginCode(config) {
 }
 
 async function verifyCode(config, code, password) {
-  const { TelegramClient } = require('telegram');
-
   if (!spyClient) throw new Error('ابدأ بإرسال رمز التحقق أولاً');
   if (authState.step !== 'code_sent' && authState.step !== 'need_password') {
     throw new Error('ابدأ بإرسال رمز التحقق أولاً');
@@ -478,24 +404,9 @@ async function verifyCode(config, code, password) {
   }
 }
 
-function getAuthState() {
-  const hasSession = fs.existsSync(SESSION_FILE);
-  return {
-    step: authState.step,
-    hasSession,
-    isRunning: spyRunning
-  };
-}
-
 function getStatus() {
   const config = loadConfig();
   const safeConfig = { ...config };
-  if (safeConfig.botToken) {
-    safeConfig.botToken = safeConfig.botToken.substring(0, 8) + '...' + safeConfig.botToken.slice(-4);
-  }
-  if (safeConfig.cookie) {
-    safeConfig.cookie = safeConfig.cookie.substring(0, 8) + '...';
-  }
   safeConfig.apiHash = safeConfig.apiHash ? '****' : '';
   safeConfig.phoneNumber = safeConfig.phoneNumber ? safeConfig.phoneNumber.substring(0, 4) + '****' : '';
 
@@ -520,6 +431,5 @@ module.exports = {
   extractAliExpressLinks,
   extractPrice,
   sendLoginCode,
-  verifyCode,
-  getAuthState
+  verifyCode
 };

@@ -36,8 +36,8 @@
 
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: 600; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; direction: rtl; transition: border-color 0.3s; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #bb86fc; }
+        .form-group input, .form-group select { width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; direction: rtl; transition: border-color 0.3s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #bb86fc; }
         .form-hint { font-size: 11px; color: #666; margin-top: 4px; }
 
         .channels-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -55,7 +55,6 @@
         .save-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #bb86fc, #9c27b0); border: none; border-radius: 12px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all 0.3s; }
         .save-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(187, 134, 252, 0.3); }
 
-        .log-section { margin-top: 30px; }
         .log-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
         .log-item { background: #16213e; border-radius: 12px; padding: 14px; border: 1px solid #2d2d44; }
         .log-item .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
@@ -65,8 +64,7 @@
         .log-item .log-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; display: inline-block; }
         .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
-        .log-item .log-status.failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
-        .log-item .log-status.error { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .log-item .log-status.failed, .log-item .log-status.error, .log-item .log-status.publish_failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
         .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
         .empty-log { text-align: center; color: #555; padding: 40px 20px; }
         .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
@@ -79,19 +77,13 @@
 
         .info-box { background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 12px; padding: 14px; margin: 15px 0; font-size: 12px; color: #ccc; line-height: 1.8; }
         .info-box i { color: #bb86fc; margin-left: 5px; }
+        .info-box a { color: #bb86fc; }
 
         .tab-bar { display: flex; gap: 0; margin: 20px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2d2d44; }
         .tab-btn { flex: 1; padding: 12px; background: #16213e; border: none; color: #888; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .tab-btn.active { background: #bb86fc; color: #1a1a2e; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-
-        .mode-selector { display: flex; gap: 10px; margin: 15px 0; }
-        .mode-card { flex: 1; background: #16213e; border: 2px solid #2d2d44; border-radius: 14px; padding: 16px 12px; text-align: center; cursor: pointer; transition: all 0.3s; }
-        .mode-card.selected { border-color: #bb86fc; background: rgba(187, 134, 252, 0.1); }
-        .mode-card i { font-size: 28px; display: block; margin-bottom: 8px; color: #bb86fc; }
-        .mode-card .mode-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-        .mode-card .mode-desc { font-size: 11px; color: #888; }
 
         .auth-section { background: #16213e; border-radius: 14px; padding: 18px; border: 2px solid #2d2d44; margin: 15px 0; }
         .auth-step { display: none; }
@@ -123,20 +115,10 @@
             </button>
         </div>
 
-        <div class="section">
-            <div class="section-title"><i class="fas fa-satellite-dish"></i> وضع المراقبة</div>
-            <div class="mode-selector">
-                <div class="mode-card selected" id="mode-userbot" onclick="selectMode('userbot')">
-                    <i class="fas fa-user-shield"></i>
-                    <div class="mode-title">Userbot</div>
-                    <div class="mode-desc">حسابك الشخصي - راقب أي قناة عامة بدون أن تكون مشرف</div>
-                </div>
-                <div class="mode-card" id="mode-bot" onclick="selectMode('bot')">
-                    <i class="fas fa-robot"></i>
-                    <div class="mode-title">Bot Admin</div>
-                    <div class="mode-desc">البوت كمشرف - يحتاج أن يكون مشرف في القنوات المصدر</div>
-                </div>
-            </div>
+        <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            يستخدم حسابك الشخصي في تيليجرام لمراقبة أي قناة عامة أنت مشترك فيها — <strong>بدون أن تكون مشرف</strong>.
+            توكن البوت والكوكي يُستخدمان تلقائياً من إعدادات التطبيق الرئيسية.
         </div>
 
         <div class="tab-bar">
@@ -146,72 +128,61 @@
         </div>
 
         <div class="tab-content active" id="tab-settings">
-
-            <div id="userbot-settings">
-                <div class="section">
-                    <div class="section-title"><i class="fas fa-key"></i> تسجيل دخول تيليجرام</div>
-                    <div class="info-box">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>خطوات الإعداد:</strong><br>
-                        1. اذهب إلى <a href="https://my.telegram.org" target="_blank" style="color: #bb86fc;">my.telegram.org</a><br>
-                        2. سجّل دخول برقم هاتفك<br>
-                        3. اختر "API development tools"<br>
-                        4. انسخ الـ <strong>API ID</strong> و <strong>API Hash</strong>
-                    </div>
-                    <div class="form-group">
-                        <label>API ID:</label>
-                        <input type="text" id="apiId" placeholder="مثال: 12345678" style="direction: ltr;">
-                    </div>
-                    <div class="form-group">
-                        <label>API Hash:</label>
-                        <input type="text" id="apiHash" placeholder="مثال: 0123456789abcdef..." style="direction: ltr;">
-                    </div>
-                    <div class="form-group">
-                        <label>رقم الهاتف (مع رمز الدولة):</label>
-                        <input type="text" id="phoneNumber" placeholder="مثال: +213XXXXXXXXX" style="direction: ltr;">
-                    </div>
-
-                    <div id="sessionStatus" style="margin: 12px 0;"></div>
-
-                    <div class="auth-section" id="authSection">
-                        <div class="auth-step active" id="auth-step-send">
-                            <button class="auth-btn primary" onclick="sendCode()" id="sendCodeBtn">
-                                <i class="fas fa-paper-plane"></i> إرسال رمز التحقق
-                            </button>
-                        </div>
-                        <div class="auth-step" id="auth-step-code">
-                            <div class="form-group">
-                                <label>رمز التحقق:</label>
-                                <input type="text" id="verifyCode" placeholder="أدخل الرمز من تيليجرام" style="direction: ltr; text-align: center; font-size: 20px; letter-spacing: 8px;">
-                            </div>
-                            <button class="auth-btn primary" onclick="verifyLoginCode()" id="verifyCodeBtn">
-                                <i class="fas fa-check"></i> تأكيد الرمز
-                            </button>
-                        </div>
-                        <div class="auth-step" id="auth-step-password">
-                            <div class="form-group">
-                                <label>كلمة مرور الحساب (Two-Step Verification):</label>
-                                <input type="password" id="twoStepPassword" placeholder="أدخل كلمة المرور">
-                            </div>
-                            <button class="auth-btn primary" onclick="verifyPassword()" id="verifyPassBtn">
-                                <i class="fas fa-lock-open"></i> تأكيد كلمة المرور
-                            </button>
-                        </div>
-                        <div class="auth-step" id="auth-step-done">
-                            <div style="text-align: center; padding: 10px;">
-                                <i class="fas fa-check-circle" style="font-size: 36px; color: #4CAF50; margin-bottom: 8px; display: block;"></i>
-                                <p style="font-weight: 700; color: #4CAF50;">تم تسجيل الدخول بنجاح!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div class="section">
-                <div class="section-title"><i class="fas fa-robot"></i> توكن البوت (للنشر)</div>
+                <div class="section-title"><i class="fas fa-key"></i> تسجيل دخول تيليجرام</div>
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>خطوات الإعداد:</strong><br>
+                    1. اذهب إلى <a href="https://my.telegram.org" target="_blank">my.telegram.org</a><br>
+                    2. سجّل دخول برقم هاتفك<br>
+                    3. اختر "API development tools"<br>
+                    4. انسخ الـ <strong>API ID</strong> و <strong>API Hash</strong>
+                </div>
                 <div class="form-group">
-                    <input type="text" id="botToken" placeholder="أدخل توكن البوت من @BotFather">
-                    <p class="form-hint">مطلوب للنشر في القنوات الهدف - البوت يجب أن يكون مشرف في قنوات الهدف</p>
+                    <label>API ID:</label>
+                    <input type="text" id="apiId" placeholder="مثال: 12345678" style="direction: ltr;">
+                </div>
+                <div class="form-group">
+                    <label>API Hash:</label>
+                    <input type="text" id="apiHash" placeholder="مثال: 0123456789abcdef..." style="direction: ltr;">
+                </div>
+                <div class="form-group">
+                    <label>رقم الهاتف (مع رمز الدولة):</label>
+                    <input type="text" id="phoneNumber" placeholder="مثال: +213XXXXXXXXX" style="direction: ltr;">
+                </div>
+
+                <div id="sessionStatus" style="margin: 12px 0;"></div>
+
+                <div class="auth-section" id="authSection">
+                    <div class="auth-step active" id="auth-step-send">
+                        <button class="auth-btn primary" onclick="sendCode()" id="sendCodeBtn">
+                            <i class="fas fa-paper-plane"></i> إرسال رمز التحقق
+                        </button>
+                    </div>
+                    <div class="auth-step" id="auth-step-code">
+                        <div class="form-group">
+                            <label>رمز التحقق:</label>
+                            <input type="text" id="verifyCode" placeholder="أدخل الرمز من تيليجرام" style="direction: ltr; text-align: center; font-size: 20px; letter-spacing: 8px;">
+                        </div>
+                        <button class="auth-btn primary" onclick="verifyLoginCode()" id="verifyCodeBtn">
+                            <i class="fas fa-check"></i> تأكيد الرمز
+                        </button>
+                    </div>
+                    <div class="auth-step" id="auth-step-password">
+                        <div class="form-group">
+                            <label>كلمة مرور الحساب (Two-Step Verification):</label>
+                            <input type="password" id="twoStepPassword" placeholder="أدخل كلمة المرور">
+                        </div>
+                        <button class="auth-btn primary" onclick="verifyPassword()" id="verifyPassBtn">
+                            <i class="fas fa-lock-open"></i> تأكيد كلمة المرور
+                        </button>
+                    </div>
+                    <div class="auth-step" id="auth-step-done">
+                        <div style="text-align: center; padding: 10px;">
+                            <i class="fas fa-check-circle" style="font-size: 36px; color: #4CAF50; margin-bottom: 8px; display: block;"></i>
+                            <p style="font-weight: 700; color: #4CAF50;">تم تسجيل الدخول بنجاح!</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -222,7 +193,7 @@
                     <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
                     <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
                 </div>
-                <p class="form-hint" id="sourceHint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
+                <p class="form-hint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
             </div>
 
             <div class="section">
@@ -232,20 +203,12 @@
                     <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
                     <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
                 </div>
-                <p class="form-hint">أضف قنواتك التي سيُنشر فيها المنتج - البوت يجب أن يكون مشرف فيها</p>
-            </div>
-
-            <div class="section">
-                <div class="section-title"><i class="fas fa-cookie"></i> كوكي AliExpress</div>
-                <div class="form-group">
-                    <input type="text" id="spyCookie" placeholder="xman_t cookie (اختياري)">
-                    <p class="form-hint">اتركه فارغاً لاستخدام الكوكي الافتراضي</p>
-                </div>
+                <p class="form-hint">أضف قنواتك التي سيُنشر فيها - البوت يجب أن يكون مشرف فيها</p>
             </div>
 
             <div class="section">
                 <div class="section-title"><i class="fas fa-link"></i> نوع الرابط</div>
-                <div class="link-type-grid" id="linkTypeGrid">
+                <div class="link-type-grid">
                     <div class="link-type-option selected" data-type="coin" onclick="selectLinkType('coin')">🪙 Coin</div>
                     <div class="link-type-option" data-type="point" onclick="selectLinkType('point')">⭐ Point</div>
                     <div class="link-type-option" data-type="super" onclick="selectLinkType('super')">🔥 Super</div>
@@ -296,19 +259,14 @@
         </div>
 
         <div class="tab-content" id="tab-log">
-            <div class="log-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div class="section-title" style="margin: 0;"><i class="fas fa-history"></i> سجل النشاط</div>
-                    <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 8px 14px; color: #bb86fc; font-family: 'Cairo'; font-size: 12px; cursor: pointer;">
-                        <i class="fas fa-sync-alt"></i> تحديث
-                    </button>
-                </div>
-                <div class="log-list" id="logList">
-                    <div class="empty-log">
-                        <i class="fas fa-ghost"></i>
-                        <p>لا يوجد نشاط بعد</p>
-                    </div>
-                </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="section-title" style="margin: 0;"><i class="fas fa-history"></i> سجل النشاط</div>
+                <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 8px 14px; color: #bb86fc; font-family: 'Cairo'; font-size: 12px; cursor: pointer;">
+                    <i class="fas fa-sync-alt"></i> تحديث
+                </button>
+            </div>
+            <div class="log-list" id="logList">
+                <div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>
             </div>
         </div>
 
@@ -322,14 +280,11 @@
     <script>
         let config = {
             enabled: false,
-            mode: 'userbot',
             sourceChannels: [],
             targetChannels: [],
-            botToken: '',
             apiId: '',
             apiHash: '',
             phoneNumber: '',
-            cookie: '',
             autoPublish: true,
             linkType: 'coin',
             messageTemplate: {
@@ -341,6 +296,13 @@
                 hashtags: '#Aliexpress #تخفيضات'
             }
         };
+
+        function esc(str) {
+            if (!str) return '';
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
 
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
@@ -358,19 +320,6 @@
             if (tab === 'log') refreshLog();
         }
 
-        function selectMode(mode) {
-            config.mode = mode;
-            document.getElementById('mode-userbot').classList.toggle('selected', mode === 'userbot');
-            document.getElementById('mode-bot').classList.toggle('selected', mode === 'bot');
-            document.getElementById('userbot-settings').style.display = mode === 'userbot' ? 'block' : 'none';
-            const hint = document.getElementById('sourceHint');
-            if (mode === 'userbot') {
-                hint.textContent = 'أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)';
-            } else {
-                hint.textContent = 'أضف القنوات التي تريد مراقبتها (البوت يجب أن يكون مشرف فيها)';
-            }
-        }
-
         function selectLinkType(type) {
             config.linkType = type;
             document.querySelectorAll('.link-type-option').forEach(el => {
@@ -381,8 +330,7 @@
         function renderChannels(type) {
             const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
             const channels = type === 'source' ? config.sourceChannels : config.targetChannels;
-            const list = document.getElementById(listId);
-            list.innerHTML = channels.map((ch, i) => `
+            document.getElementById(listId).innerHTML = channels.map((ch, i) => `
                 <div class="channel-item">
                     <span>${esc(ch)}</span>
                     <button class="remove-ch-btn" onclick="removeChannel('${type}', ${i})"><i class="fas fa-trash"></i></button>
@@ -406,19 +354,10 @@
             renderChannels(type);
         }
 
-        function esc(str) {
-            if (!str) return '';
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
-        }
-
         function collectConfig() {
-            config.botToken = document.getElementById('botToken').value.trim();
             config.apiId = document.getElementById('apiId').value.trim();
             config.apiHash = document.getElementById('apiHash').value.trim();
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();
-            config.cookie = document.getElementById('spyCookie').value.trim();
             config.autoPublish = document.getElementById('autoPublish').checked;
             config.messageTemplate = {
                 prefix: document.getElementById('tmplPrefix').value,
@@ -432,13 +371,10 @@
         }
 
         function populateUI() {
-            document.getElementById('botToken').value = config.botToken || '';
             document.getElementById('apiId').value = config.apiId || '';
             document.getElementById('apiHash').value = config.apiHash || '';
             document.getElementById('phoneNumber').value = config.phoneNumber || '';
-            document.getElementById('spyCookie').value = config.cookie || '';
             document.getElementById('autoPublish').checked = config.autoPublish !== false;
-            selectMode(config.mode || 'userbot');
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -468,6 +404,12 @@
             }
         }
 
+        function showAuthStep(step) {
+            document.querySelectorAll('.auth-step').forEach(el => el.classList.remove('active'));
+            const el = document.getElementById('auth-step-' + step);
+            if (el) el.classList.add('active');
+        }
+
         function updateSessionStatus(hasSession) {
             const el = document.getElementById('sessionStatus');
             if (hasSession) {
@@ -479,26 +421,19 @@
             }
         }
 
-        function showAuthStep(step) {
-            document.querySelectorAll('.auth-step').forEach(el => el.classList.remove('active'));
-            const el = document.getElementById('auth-step-' + step);
-            if (el) el.classList.add('active');
-        }
-
         async function loadStatus() {
             try {
                 const res = await fetch('/api/spy/status');
                 const data = await res.json();
                 if (data.success) {
                     if (data.config) {
-                        const masked = data.config;
-                        config.sourceChannels = masked.sourceChannels || [];
-                        config.targetChannels = masked.targetChannels || [];
-                        config.autoPublish = masked.autoPublish !== false;
-                        config.linkType = masked.linkType || 'coin';
-                        config.mode = masked.mode || 'userbot';
-                        config.messageTemplate = masked.messageTemplate || config.messageTemplate;
-                        config.enabled = masked.enabled;
+                        const c = data.config;
+                        config.sourceChannels = c.sourceChannels || [];
+                        config.targetChannels = c.targetChannels || [];
+                        config.autoPublish = c.autoPublish !== false;
+                        config.linkType = c.linkType || 'coin';
+                        config.messageTemplate = c.messageTemplate || config.messageTemplate;
+                        config.enabled = c.enabled;
                         populateUI();
                     }
                     updateStatusUI(data.running);
@@ -639,11 +574,8 @@
                     body: JSON.stringify(cfg)
                 });
                 const data = await res.json();
-                if (data.success) {
-                    showToast('تم حفظ الإعدادات', 'success');
-                } else {
-                    showToast(data.error || 'خطأ', 'error');
-                }
+                if (data.success) showToast('تم حفظ الإعدادات', 'success');
+                else showToast(data.error || 'خطأ', 'error');
             } catch (e) {
                 showToast('خطأ في الحفظ', 'error');
             }
@@ -658,17 +590,10 @@
                     logList.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
                     return;
                 }
-                const logs = data.log.slice().reverse();
-                logList.innerHTML = logs.map(entry => {
+                logList.innerHTML = data.log.slice().reverse().map(entry => {
                     const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
                     const statusClass = entry.status || 'detected';
-                    const statusLabels = {
-                        published: 'تم النشر',
-                        detected: 'تم الرصد',
-                        failed: 'فشل',
-                        error: 'خطأ',
-                        publish_failed: 'فشل النشر'
-                    };
+                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر' };
                     return `
                         <div class="log-item">
                             <div class="log-header">
@@ -681,12 +606,9 @@
                                 ${entry.price ? `<span class="log-price">${esc(entry.price)}</span>` : ''}
                             </div>
                             ${entry.error ? `<div style="color: #ff6b6b; font-size: 11px; margin-top: 4px;">${esc(entry.error)}</div>` : ''}
-                        </div>
-                    `;
+                        </div>`;
                 }).join('');
-            } catch (e) {
-                console.log('Error loading log:', e);
-            }
+            } catch (e) {}
         }
 
         document.addEventListener('DOMContentLoaded', loadStatus);
