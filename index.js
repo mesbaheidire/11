@@ -20,7 +20,7 @@ app.get('/ping', (req, res) =>
 
 /* -------------------- KEEP ALIVE -------------------- */
 function keepAppRunning() {
-  const baseUrl = process.env.RENDER_EXTERNAL_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  const baseUrl = process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : `https://${process.env.REPLIT_DEV_DOMAIN}`;
   setInterval(() => {
     https
       .get(`${baseUrl}/bot`)
@@ -180,7 +180,7 @@ bot.catch((err, ctx) => {
 
 /* -------------------- SERVER -------------------- */
 const PORT = process.env.PORT || 5000;
-const baseUrl = process.env.RENDER_EXTERNAL_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+const baseUrl = process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : `https://${process.env.REPLIT_DEV_DOMAIN}`;
 
 app.listen(PORT, '0.0.0.0', () => {
   bot.telegram
