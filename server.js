@@ -1196,6 +1196,12 @@ app.post('/api/spy/config', (req, res) => {
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
+    if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
+    if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));
+    if (incoming.delayMax !== undefined) config.delayMax = Math.max(1, Math.min(60, parseInt(incoming.delayMax) || 5));
+    if (config.delayMax < config.delayMin) config.delayMax = config.delayMin;
+    if (incoming.notifyOwner !== undefined) config.notifyOwner = incoming.notifyOwner;
+    if (incoming.ownerId !== undefined) config.ownerId = incoming.ownerId;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
@@ -1216,6 +1222,12 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
+    if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
+    if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));
+    if (incoming.delayMax !== undefined) config.delayMax = Math.max(1, Math.min(60, parseInt(incoming.delayMax) || 5));
+    if (config.delayMax < config.delayMin) config.delayMax = config.delayMin;
+    if (incoming.notifyOwner !== undefined) config.notifyOwner = incoming.notifyOwner;
+    if (incoming.ownerId !== undefined) config.ownerId = incoming.ownerId;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;

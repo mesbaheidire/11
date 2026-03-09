@@ -65,6 +65,7 @@
         .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.failed, .log-item .log-status.error, .log-item .log-status.publish_failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .log-item .log-status.pending { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
         .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
         .empty-log { text-align: center; color: #555; padding: 40px 20px; }
         .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
@@ -226,6 +227,43 @@
                     <p class="form-hint">عند التعطيل، سيتم فقط تسجيل المنشورات في السجل بدون نشرها</p>
                 </div>
             </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-clock"></i> تأخير النشر</div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
+                        <input type="checkbox" id="publishDelay" style="width: 20px; height: 20px; accent-color: #bb86fc;">
+                        تأخير عشوائي قبل النشر
+                    </label>
+                    <p class="form-hint">يجعل النشر يبدو طبيعياً ويتجنب الحظر</p>
+                </div>
+                <div id="delayRange" style="display: flex; gap: 12px; align-items: center; margin-top: 8px;">
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label>الحد الأدنى (دقيقة):</label>
+                        <input type="number" id="delayMin" value="1" min="1" max="30" style="direction: ltr;">
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <label>الحد الأقصى (دقيقة):</label>
+                        <input type="number" id="delayMax" value="5" min="1" max="60" style="direction: ltr;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-bell"></i> إشعارات فورية</div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
+                        <input type="checkbox" id="notifyOwner" style="width: 20px; height: 20px; accent-color: #bb86fc;">
+                        إرسال إشعار عند رصد منتج جديد
+                    </label>
+                    <p class="form-hint">ستصلك رسالة شخصية من البوت عند كل منتج جديد</p>
+                </div>
+                <div class="form-group">
+                    <label>معرف حسابك (Chat ID):</label>
+                    <input type="text" id="ownerId" placeholder="مثال: 123456789" style="direction: ltr;">
+                    <p class="form-hint">أرسل <span style="color: #bb86fc;">/start</span> للبوت ثم <span style="color: #bb86fc;">/id</span> لمعرفة معرفك — أو استخدم <span style="color: #bb86fc;">@userinfobot</span></p>
+                </div>
+            </div>
         </div>
 
         <div class="tab-content" id="tab-template">
@@ -286,6 +324,11 @@
             apiHash: '',
             phoneNumber: '',
             autoPublish: true,
+            publishDelay: false,
+            delayMin: 1,
+            delayMax: 5,
+            notifyOwner: false,
+            ownerId: '',
             linkType: 'coin',
             messageTemplate: {
                 prefix: '🔥 عرض حصري',
@@ -359,6 +402,11 @@
             config.apiHash = document.getElementById('apiHash').value.trim();
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();
             config.autoPublish = document.getElementById('autoPublish').checked;
+            config.publishDelay = document.getElementById('publishDelay').checked;
+            config.delayMin = parseInt(document.getElementById('delayMin').value) || 1;
+            config.delayMax = parseInt(document.getElementById('delayMax').value) || 5;
+            config.notifyOwner = document.getElementById('notifyOwner').checked;
+            config.ownerId = document.getElementById('ownerId').value.trim();
             config.messageTemplate = {
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
@@ -375,6 +423,11 @@
             document.getElementById('apiHash').value = config.apiHash || '';
             document.getElementById('phoneNumber').value = config.phoneNumber || '';
             document.getElementById('autoPublish').checked = config.autoPublish !== false;
+            document.getElementById('publishDelay').checked = !!config.publishDelay;
+            document.getElementById('delayMin').value = config.delayMin || 1;
+            document.getElementById('delayMax').value = config.delayMax || 5;
+            document.getElementById('notifyOwner').checked = !!config.notifyOwner;
+            document.getElementById('ownerId').value = config.ownerId || '';
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -433,6 +486,11 @@
                         config.autoPublish = c.autoPublish !== false;
                         config.linkType = c.linkType || 'coin';
                         config.messageTemplate = c.messageTemplate || config.messageTemplate;
+                        config.publishDelay = !!c.publishDelay;
+                        config.delayMin = c.delayMin || 1;
+                        config.delayMax = c.delayMax || 5;
+                        config.notifyOwner = !!c.notifyOwner;
+                        config.ownerId = c.ownerId || '';
                         config.enabled = c.enabled;
                         populateUI();
                     }
@@ -593,7 +651,7 @@
                 logList.innerHTML = data.log.slice().reverse().map(entry => {
                     const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
                     const statusClass = entry.status || 'detected';
-                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر' };
+                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار' };
                     return `
                         <div class="log-item">
                             <div class="log-header">
@@ -605,6 +663,7 @@
                                 <span class="log-status ${statusClass}">${statusLabels[entry.status] || esc(entry.status)}</span>
                                 ${entry.price ? `<span class="log-price">${esc(entry.price)}</span>` : ''}
                             </div>
+                            ${entry.scheduledDelay ? `<div style="color: #2196F3; font-size: 11px; margin-top: 4px;"><i class="fas fa-clock"></i> سيُنشر بعد ${entry.scheduledDelay} دقيقة</div>` : ''}
                             ${entry.error ? `<div style="color: #ff6b6b; font-size: 11px; margin-top: 4px;">${esc(entry.error)}</div>` : ''}
                         </div>`;
                 }).join('');

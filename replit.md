@@ -65,6 +65,9 @@ npm start
   - Bot token and cookie used automatically from main app environment variables
   - Configurable message template
   - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
+  - Duplicate link detection — skips already-processed links (stored 7 days, file: `spy_processed.json`)
+  - Random publish delay (configurable 1-60 min range) to avoid detection
+  - Owner notifications — sends you a personal Telegram message when a new product is detected
   - Activity log with full history
   - Auto-restart on server reboot
   - Authentication flow: API ID/Hash from my.telegram.org + phone verification

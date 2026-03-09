@@ -7,6 +7,72 @@ const http = require('http');
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
+const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
+
+function loadProcessedLinks() {
+  try {
+    if (fs.existsSync(PROCESSED_LINKS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PROCESSED_LINKS_FILE, 'utf8'));
+      const now = Date.now();
+      const filtered = data.filter(entry => now - entry.time < 7 * 24 * 60 * 60 * 1000);
+      if (filtered.length < data.length) {
+        saveProcessedLinks(filtered);
+      }
+      return filtered;
+    }
+  } catch (e) {}
+  return [];
+}
+
+function saveProcessedLinks(links) {
+  try {
+    fs.writeFileSync(PROCESSED_LINKS_FILE, JSON.stringify(links));
+  } catch (e) {}
+}
+
+function isLinkProcessed(link) {
+  const processed = loadProcessedLinks();
+  const normalized = normalizeAliLink(link);
+  return processed.some(entry => entry.link === normalized);
+}
+
+function markLinkProcessed(link) {
+  const processed = loadProcessedLinks();
+  processed.push({ link: normalizeAliLink(link), time: Date.now() });
+  saveProcessedLinks(processed);
+}
+
+function normalizeAliLink(link) {
+  try {
+    const url = new URL(link);
+    const productMatch = link.match(/\/item\/(\d+)/);
+    if (productMatch) return 'product:' + productMatch[1];
+    return url.hostname + url.pathname;
+  } catch {
+    return link;
+  }
+}
+
+function randomDelay(minMinutes, maxMinutes) {
+  const ms = (minMinutes + Math.random() * (maxMinutes - minMinutes)) * 60 * 1000;
+  return Math.round(ms);
+}
+
+async function sendOwnerNotification(botToken, ownerId, entry) {
+  if (!botToken || !ownerId) return;
+  try {
+    const bot = new Telegraf(botToken);
+    let msg = `🔔 *منتج جديد مرصود*\n\n`;
+    msg += `📡 المصدر: ${entry.source || 'غير معروف'}\n`;
+    if (entry.title) msg += `📦 ${entry.title}\n`;
+    if (entry.price) msg += `💰 السعر: ${entry.price}\n`;
+    if (entry.affiliateLink) msg += `🔗 الرابط: ${entry.affiliateLink}\n`;
+    msg += `\n⏱ سيتم النشر بعد ${entry.delayMinutes || 0} دقيقة`;
+    await bot.telegram.sendMessage(ownerId, msg);
+  } catch (e) {
+    console.log('⚠️ فشل إرسال الإشعار:', e.message);
+  }
+}
 
 function loadConfig() {
   try {
@@ -204,6 +270,11 @@ async function processPost(config, text, _unused, sourceName) {
   console.log(`🕵️ رصد منشور من ${sourceName} يحتوي على ${aliLinks.length} رابط`);
 
   for (const originalLink of aliLinks) {
+    if (isLinkProcessed(originalLink)) {
+      console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
+      continue;
+    }
+
     try {
       const cookie = getCookie();
       const result = await portaffFunction(cookie, originalLink);
@@ -221,6 +292,8 @@ async function processPost(config, text, _unused, sourceName) {
         addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
         continue;
       }
+
+      markLinkProcessed(originalLink);
 
       const apiTitle = (result.previews && result.previews.title) || '';
       const productImage = (result.previews && result.previews.image_url) || '';
@@ -247,35 +320,59 @@ async function processPost(config, text, _unused, sourceName) {
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
 
-      let publishedCount = 0;
       const botToken = getBotToken();
-      if (config.autoPublish && botToken) {
-        const publishBot = new Telegraf(botToken);
-        for (const target of targetIds) {
-          try {
-            if (productImage) {
-              await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
-            } else {
-              await publishBot.telegram.sendMessage(target, message);
-            }
-            publishedCount++;
-            console.log(`✅ تم النشر في ${target}`);
-          } catch (pubErr) {
-            console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
-            addLogEntry({ source: sourceName, target, originalLink, affiliateLink: affLink, status: 'publish_failed', error: pubErr.message });
-          }
-        }
+      const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
+      const delayMinutes = Math.round(delayMs / 60000);
+
+      if (config.notifyOwner && config.ownerId && botToken) {
+        await sendOwnerNotification(botToken, config.ownerId, {
+          source: sourceName, title: productTitle, price: productPrice,
+          affiliateLink: affLink, delayMinutes
+        });
       }
 
-      let finalStatus = 'detected';
-      if (config.autoPublish && publishedCount > 0) finalStatus = 'published';
-      else if (config.autoPublish && publishedCount === 0 && targetIds.length > 0) finalStatus = 'publish_failed';
+      const publishFn = async () => {
+        let publishedCount = 0;
+        if (config.autoPublish && botToken) {
+          const publishBot = new Telegraf(botToken);
+          for (const target of targetIds) {
+            try {
+              if (productImage) {
+                await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
+              } else {
+                await publishBot.telegram.sendMessage(target, message);
+              }
+              publishedCount++;
+              console.log(`✅ تم النشر في ${target}`);
+            } catch (pubErr) {
+              console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
+              addLogEntry({ source: sourceName, target, originalLink, affiliateLink: affLink, status: 'publish_failed', error: pubErr.message });
+            }
+          }
+        }
 
-      addLogEntry({
-        source: sourceName, originalLink, affiliateLink: affLink,
-        title: productTitle, price: productPrice, image: productImage,
-        status: finalStatus, targets: targetIds
-      });
+        let finalStatus = 'detected';
+        if (config.autoPublish && publishedCount > 0) finalStatus = 'published';
+        else if (config.autoPublish && publishedCount === 0 && targetIds.length > 0) finalStatus = 'publish_failed';
+
+        addLogEntry({
+          source: sourceName, originalLink, affiliateLink: affLink,
+          title: productTitle, price: productPrice, image: productImage,
+          status: finalStatus, targets: targetIds
+        });
+      };
+
+      if (delayMs > 0) {
+        console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+        addLogEntry({
+          source: sourceName, originalLink, affiliateLink: affLink,
+          title: productTitle, price: productPrice, image: productImage,
+          status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+        });
+        setTimeout(publishFn, delayMs);
+      } else {
+        await publishFn();
+      }
     } catch (linkErr) {
       console.log('❌ خطأ في معالجة الرابط:', linkErr.message);
       addLogEntry({ source: sourceName, originalLink, status: 'error', error: linkErr.message });
