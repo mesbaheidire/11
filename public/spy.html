@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>تجسس على القنوات</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: #0f0f1a; min-height: 100vh; color: #fff; }
+        .header { background: linear-gradient(135deg, #2d1b69, #1a0a3e); padding: 60px 20px 40px; border-radius: 0 0 30px 30px; text-align: center; position: relative; box-shadow: 0 10px 30px rgba(45, 27, 105, 0.4); }
+        .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 5px; }
+        .header p { opacity: 0.8; font-size: 13px; }
+        .back-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.15); border: none; border-radius: 50%; width: 40px; height: 40px; color: #fff; font-size: 18px; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+        .content { padding: 20px; max-width: 600px; margin: 0 auto; }
+
+        .status-card { background: linear-gradient(135deg, #16213e, #1a1a2e); border-radius: 16px; padding: 20px; margin: 20px 0; border: 2px solid #2d2d44; display: flex; align-items: center; justify-content: space-between; }
+        .status-info { display: flex; align-items: center; gap: 12px; }
+        .status-dot { width: 14px; height: 14px; border-radius: 50%; }
+        .status-dot.active { background: #4CAF50; box-shadow: 0 0 12px rgba(76, 175, 80, 0.6); animation: pulse 2s infinite; }
+        .status-dot.inactive { background: #ff4444; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .status-text { font-weight: 700; font-size: 16px; }
+
+        .toggle-btn { padding: 12px 28px; border: none; border-radius: 12px; font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
+        .toggle-btn.start { background: linear-gradient(135deg, #4CAF50, #388E3C); color: #fff; }
+        .toggle-btn.stop { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
+        .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .section { margin: 25px 0; }
+        .section-title { font-size: 17px; font-weight: 700; margin-bottom: 12px; color: #bb86fc; display: flex; align-items: center; gap: 8px; }
+        .section-title i { font-size: 18px; }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: 600; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; direction: rtl; transition: border-color 0.3s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #bb86fc; }
+        .form-hint { font-size: 11px; color: #666; margin-top: 4px; }
+
+        .channels-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+        .channel-item { display: flex; align-items: center; justify-content: space-between; background: #16213e; padding: 10px 14px; border-radius: 10px; border: 1px solid #2d2d44; }
+        .channel-item span { font-size: 14px; direction: ltr; }
+        .remove-ch-btn { background: #ff4444; border: none; border-radius: 8px; width: 32px; height: 32px; color: #fff; cursor: pointer; font-size: 14px; }
+        .add-ch-row { display: flex; gap: 8px; }
+        .add-ch-row input { flex: 1; }
+        .add-ch-btn { padding: 14px 18px; background: #bb86fc; border: none; border-radius: 10px; color: #1a1a2e; font-size: 18px; cursor: pointer; font-weight: 700; }
+
+        .link-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .link-type-option { background: #16213e; border: 2px solid #2d2d44; border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s; }
+        .link-type-option.selected { border-color: #bb86fc; background: rgba(187, 134, 252, 0.15); color: #bb86fc; }
+
+        .save-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #bb86fc, #9c27b0); border: none; border-radius: 12px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all 0.3s; }
+        .save-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(187, 134, 252, 0.3); }
+
+        .log-section { margin-top: 30px; }
+        .log-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+        .log-item { background: #16213e; border-radius: 12px; padding: 14px; border: 1px solid #2d2d44; }
+        .log-item .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .log-item .log-source { color: #bb86fc; font-weight: 700; font-size: 13px; }
+        .log-item .log-time { color: #666; font-size: 11px; direction: ltr; }
+        .log-item .log-title { font-size: 13px; color: #ddd; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .log-item .log-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+        .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+        .log-item .log-status.failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .log-item .log-status.error { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
+        .empty-log { text-align: center; color: #555; padding: 40px 20px; }
+        .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
+
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 14px 28px; border-radius: 25px; display: none; z-index: 2000; font-weight: 600; font-size: 14px; }
+        .toast.show { display: block; animation: fadeInOut 3s ease-in-out; }
+        .toast.success { background: #4CAF50; }
+        .toast.error { background: #ff4444; }
+        @keyframes fadeInOut { 0%, 100% { opacity: 0; } 10%, 90% { opacity: 1; } }
+
+        .info-box { background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 12px; padding: 14px; margin: 15px 0; font-size: 12px; color: #ccc; line-height: 1.8; }
+        .info-box i { color: #bb86fc; margin-left: 5px; }
+
+        .tab-bar { display: flex; gap: 0; margin: 20px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2d2d44; }
+        .tab-btn { flex: 1; padding: 12px; background: #16213e; border: none; color: #888; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .tab-btn.active { background: #bb86fc; color: #1a1a2e; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-btn"><i class="fas fa-arrow-right"></i></a>
+        <h1><i class="fas fa-user-secret"></i> تجسس على القنوات</h1>
+        <p>راقب قنوات المنافسين وانشر العروض تلقائياً</p>
+    </div>
+
+    <div class="content">
+        <div class="status-card">
+            <div class="status-info">
+                <div class="status-dot inactive" id="statusDot"></div>
+                <span class="status-text" id="statusText">متوقف</span>
+            </div>
+            <button class="toggle-btn start" id="toggleBtn" onclick="toggleSpy()">
+                <i class="fas fa-play"></i> تشغيل
+            </button>
+        </div>
+
+        <div class="info-box">
+            <i class="fas fa-info-circle"></i>
+            يجب أن يكون البوت <strong>مشرف (Admin)</strong> في القنوات المصدر ليتمكن من قراءة المنشورات.
+            عند رصد رابط AliExpress، يتم تحويله تلقائياً لرابط الأفلييت الخاص بك ونشره في قنواتك.
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
+            <button class="tab-btn" onclick="switchTab('template')"><i class="fas fa-edit"></i> القالب</button>
+            <button class="tab-btn" onclick="switchTab('log')"><i class="fas fa-list"></i> السجل</button>
+        </div>
+
+        <div class="tab-content active" id="tab-settings">
+            <div class="section">
+                <div class="section-title"><i class="fas fa-robot"></i> توكن البوت</div>
+                <div class="form-group">
+                    <input type="text" id="botToken" placeholder="أدخل توكن البوت من @BotFather">
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة)</div>
+                <div class="channels-list" id="sourceChannelsList"></div>
+                <div class="add-ch-row">
+                    <input type="text" id="newSourceChannel" placeholder="@channel أو معرف القناة">
+                    <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
+                </div>
+                <p class="form-hint">أضف معرّف القنوات التي تريد مراقبتها (البوت يجب أن يكون مشرف فيها)</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-bullhorn"></i> القنوات الهدف (للنشر)</div>
+                <div class="channels-list" id="targetChannelsList"></div>
+                <div class="add-ch-row">
+                    <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
+                    <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
+                </div>
+                <p class="form-hint">أضف قنواتك التي سيُنشر فيها المنتج بعد تعديل الرابط</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-cookie"></i> كوكي AliExpress</div>
+                <div class="form-group">
+                    <input type="text" id="spyCookie" placeholder="xman_t cookie (اختياري - يستخدم الافتراضي)">
+                    <p class="form-hint">اتركه فارغاً لاستخدام الكوكي الافتراضي من الإعدادات</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title"><i class="fas fa-link"></i> نوع الرابط</div>
+                <div class="link-type-grid" id="linkTypeGrid">
+                    <div class="link-type-option selected" data-type="coin" onclick="selectLinkType('coin')">🪙 Coin</div>
+                    <div class="link-type-option" data-type="point" onclick="selectLinkType('point')">⭐ Point</div>
+                    <div class="link-type-option" data-type="super" onclick="selectLinkType('super')">🔥 Super</div>
+                    <div class="link-type-option" data-type="limit" onclick="selectLinkType('limit')">⚡ Limited</div>
+                    <div class="link-type-option" data-type="ther3" onclick="selectLinkType('ther3')">📦 Bundle</div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
+                        <input type="checkbox" id="autoPublish" checked style="width: 20px; height: 20px; accent-color: #bb86fc;">
+                        نشر تلقائي في القنوات الهدف
+                    </label>
+                    <p class="form-hint">عند التعطيل، سيتم فقط تسجيل المنشورات في السجل بدون نشرها</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-template">
+            <div class="section">
+                <div class="section-title"><i class="fas fa-pen-fancy"></i> قالب الرسالة</div>
+                <div class="form-group">
+                    <label>المقدمة:</label>
+                    <input type="text" id="tmplPrefix" placeholder="🔥 عرض حصري">
+                </div>
+                <div class="form-group">
+                    <label>عنوان السعر:</label>
+                    <input type="text" id="tmplPriceLabel" placeholder="💰 السعر:">
+                </div>
+                <div class="form-group">
+                    <label>عنوان الرابط:</label>
+                    <input type="text" id="tmplLinkLabel" placeholder="🛒 رابط الشراء:">
+                </div>
+                <div class="form-group">
+                    <label>التذييل:</label>
+                    <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
+                </div>
+                <div class="form-group">
+                    <label>رابط البوت:</label>
+                    <input type="text" id="tmplBotLink" placeholder="@AliOffersDZ_bot">
+                </div>
+                <div class="form-group">
+                    <label>الهاشتاقات:</label>
+                    <input type="text" id="tmplHashtags" placeholder="#Aliexpress #تخفيضات">
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tab-log">
+            <div class="log-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div class="section-title" style="margin: 0;"><i class="fas fa-history"></i> سجل النشاط</div>
+                    <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 8px 14px; color: #bb86fc; font-family: 'Cairo'; font-size: 12px; cursor: pointer;">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </button>
+                </div>
+                <div class="log-list" id="logList">
+                    <div class="empty-log">
+                        <i class="fas fa-ghost"></i>
+                        <p>لا يوجد نشاط بعد</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="save-btn" onclick="saveAndApply()">
+            <i class="fas fa-save"></i> حفظ الإعدادات
+        </button>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let config = {
+            enabled: false,
+            sourceChannels: [],
+            targetChannels: [],
+            botToken: '',
+            cookie: '',
+            autoPublish: true,
+            linkType: 'coin',
+            messageTemplate: {
+                prefix: '🔥 عرض حصري',
+                priceLabel: '💰 السعر:',
+                linkLabel: '🛒 رابط الشراء:',
+                footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz',
+                botLink: '@AliOffersDZ_bot',
+                hashtags: '#Aliexpress #تخفيضات'
+            }
+        };
+
+        function showToast(msg, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast show ' + (type || '');
+            setTimeout(() => toast.className = 'toast', 3000);
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', ['settings', 'template', 'log'][i] === tab);
+            });
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            if (tab === 'log') refreshLog();
+        }
+
+        function selectLinkType(type) {
+            config.linkType = type;
+            document.querySelectorAll('.link-type-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.type === type);
+            });
+        }
+
+        function renderChannels(type) {
+            const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
+            const channels = type === 'source' ? config.sourceChannels : config.targetChannels;
+            const list = document.getElementById(listId);
+            list.innerHTML = channels.map((ch, i) => `
+                <div class="channel-item">
+                    <span>${ch}</span>
+                    <button class="remove-ch-btn" onclick="removeChannel('${type}', ${i})"><i class="fas fa-trash"></i></button>
+                </div>
+            `).join('');
+        }
+
+        function addChannel(type) {
+            const inputId = type === 'source' ? 'newSourceChannel' : 'newTargetChannel';
+            const value = document.getElementById(inputId).value.trim();
+            if (!value) return;
+            if (type === 'source') config.sourceChannels.push(value);
+            else config.targetChannels.push(value);
+            document.getElementById(inputId).value = '';
+            renderChannels(type);
+        }
+
+        function removeChannel(type, index) {
+            if (type === 'source') config.sourceChannels.splice(index, 1);
+            else config.targetChannels.splice(index, 1);
+            renderChannels(type);
+        }
+
+        function collectConfig() {
+            config.botToken = document.getElementById('botToken').value.trim();
+            config.cookie = document.getElementById('spyCookie').value.trim();
+            config.autoPublish = document.getElementById('autoPublish').checked;
+            config.messageTemplate = {
+                prefix: document.getElementById('tmplPrefix').value,
+                priceLabel: document.getElementById('tmplPriceLabel').value,
+                linkLabel: document.getElementById('tmplLinkLabel').value,
+                footer: document.getElementById('tmplFooter').value,
+                botLink: document.getElementById('tmplBotLink').value,
+                hashtags: document.getElementById('tmplHashtags').value
+            };
+            return config;
+        }
+
+        function populateUI() {
+            document.getElementById('botToken').value = config.botToken || '';
+            document.getElementById('spyCookie').value = config.cookie || '';
+            document.getElementById('autoPublish').checked = config.autoPublish !== false;
+            selectLinkType(config.linkType || 'coin');
+            renderChannels('source');
+            renderChannels('target');
+            const t = config.messageTemplate || {};
+            document.getElementById('tmplPrefix').value = t.prefix || '';
+            document.getElementById('tmplPriceLabel').value = t.priceLabel || '';
+            document.getElementById('tmplLinkLabel').value = t.linkLabel || '';
+            document.getElementById('tmplFooter').value = t.footer || '';
+            document.getElementById('tmplBotLink').value = t.botLink || '';
+            document.getElementById('tmplHashtags').value = t.hashtags || '';
+        }
+
+        function updateStatusUI(running) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const btn = document.getElementById('toggleBtn');
+            if (running) {
+                dot.className = 'status-dot active';
+                text.textContent = 'يعمل';
+                btn.className = 'toggle-btn stop';
+                btn.innerHTML = '<i class="fas fa-stop"></i> إيقاف';
+            } else {
+                dot.className = 'status-dot inactive';
+                text.textContent = 'متوقف';
+                btn.className = 'toggle-btn start';
+                btn.innerHTML = '<i class="fas fa-play"></i> تشغيل';
+            }
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch('/api/spy/status');
+                const data = await res.json();
+                if (data.success) {
+                    if (data.config) {
+                        const masked = data.config;
+                        config.sourceChannels = masked.sourceChannels || [];
+                        config.targetChannels = masked.targetChannels || [];
+                        config.autoPublish = masked.autoPublish !== false;
+                        config.linkType = masked.linkType || 'coin';
+                        config.messageTemplate = masked.messageTemplate || config.messageTemplate;
+                        config.enabled = masked.enabled;
+                        populateUI();
+                    }
+                    updateStatusUI(data.running);
+                }
+            } catch (e) {
+                console.log('Error loading status:', e);
+            }
+        }
+
+        async function toggleSpy() {
+            const btn = document.getElementById('toggleBtn');
+            btn.disabled = true;
+            try {
+                const status = await (await fetch('/api/spy/status')).json();
+                if (status.running) {
+                    const res = await fetch('/api/spy/stop', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        updateStatusUI(false);
+                        showToast('تم إيقاف التجسس', 'success');
+                    } else {
+                        showToast(data.error || 'خطأ', 'error');
+                    }
+                } else {
+                    const cfg = collectConfig();
+                    const res = await fetch('/api/spy/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(cfg)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        updateStatusUI(true);
+                        showToast('تم تشغيل التجسس', 'success');
+                    } else {
+                        showToast(data.error || 'خطأ', 'error');
+                    }
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+            btn.disabled = false;
+        }
+
+        async function saveAndApply() {
+            const cfg = collectConfig();
+            try {
+                const res = await fetch('/api/spy/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cfg)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم حفظ الإعدادات', 'success');
+                } else {
+                    showToast(data.error || 'خطأ', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الحفظ', 'error');
+            }
+        }
+
+        async function refreshLog() {
+            try {
+                const res = await fetch('/api/spy/log');
+                const data = await res.json();
+                const logList = document.getElementById('logList');
+                if (!data.success || !data.log || data.log.length === 0) {
+                    logList.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
+                    return;
+                }
+                function esc(str) {
+                    if (!str) return '';
+                    const d = document.createElement('div');
+                    d.textContent = str;
+                    return d.innerHTML;
+                }
+                const logs = data.log.slice().reverse();
+                logList.innerHTML = logs.map(entry => {
+                    const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
+                    const statusClass = entry.status || 'detected';
+                    const statusLabels = {
+                        published: 'تم النشر',
+                        detected: 'تم الرصد',
+                        failed: 'فشل',
+                        error: 'خطأ',
+                        publish_failed: 'فشل النشر'
+                    };
+                    return `
+                        <div class="log-item">
+                            <div class="log-header">
+                                <span class="log-source"><i class="fas fa-satellite-dish"></i> ${esc(entry.source) || 'غير معروف'}</span>
+                                <span class="log-time">${esc(time)}</span>
+                            </div>
+                            ${entry.title ? `<div class="log-title">${esc(entry.title)}</div>` : ''}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                                <span class="log-status ${statusClass}">${statusLabels[entry.status] || esc(entry.status)}</span>
+                                ${entry.price ? `<span class="log-price">${esc(entry.price)}</span>` : ''}
+                            </div>
+                            ${entry.error ? `<div style="color: #ff6b6b; font-size: 11px; margin-top: 4px;">${esc(entry.error)}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.log('Error loading log:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadStatus);
+    </script>
+</body>
+</html>

@@ -9,8 +9,10 @@ An Arabic-language web application for generating AliExpress affiliate links and
 - `scheduler.js` - Post scheduling functionality
 - `aliexpress-api.js` - AliExpress API integration
 - `index.js` - Telegram bot entry point
+- `spy.js` - Channel spy module (monitor competitor channels)
 - `public/` - Static frontend files
   - `index.html` - Main app interface
+  - `spy.html` - Channel spy management page
   - `collections.html` - Collections page
   - `telegram.html` - Telegram publishing page
   - `manifest.json` - PWA manifest
@@ -53,6 +55,16 @@ npm start
   - One-click republish to Telegram
   - Edit saved posts before republishing
   - Posts stored in `saved_posts.json` (gitignored)
+- **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
+  - Auto-detect AliExpress links from source channel posts
+  - Convert links to your own affiliate links automatically
+  - Extract product price from posts
+  - Republish with same image to your target channels
+  - Configurable message template
+  - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
+  - Activity log with full history
+  - Auto-restart on server reboot
+  - Config stored in `spy_config.json` (gitignored)
 
 ## Product Metadata Extraction
 The app uses multiple fallback methods to extract product title and image:

@@ -11,6 +11,8 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog } = require('./spy');
+
 const app = express();
 const postScheduler = new PostScheduler();
 postScheduler.start();
@@ -1114,6 +1116,69 @@ app.delete('/api/saved-posts', (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ========== Spy API ==========
+
+app.get('/api/spy/status', (req, res) => {
+  try {
+    const status = getSpyStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/config', (req, res) => {
+  try {
+    const config = req.body;
+    saveSpyConfig(config);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/start', async (req, res) => {
+  try {
+    const config = req.body || loadSpyConfig();
+    if (req.body) saveSpyConfig(config);
+    await startSpy(config);
+    res.json({ success: true, message: 'تم تشغيل نظام التجسس' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/stop', async (req, res) => {
+  try {
+    await stopSpy();
+    res.json({ success: true, message: 'تم إيقاف نظام التجسس' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/spy/log', (req, res) => {
+  try {
+    const log = loadSpyLog();
+    res.json({ success: true, log });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Auto-start spy if it was enabled
+(async () => {
+  try {
+    const spyConfig = loadSpyConfig();
+    if (spyConfig.enabled && spyConfig.botToken) {
+      console.log('🕵️ إعادة تشغيل نظام التجسس تلقائياً...');
+      await startSpy(spyConfig);
+    }
+  } catch (e) {
+    console.log('⚠️ فشل تشغيل نظام التجسس تلقائياً:', e.message);
+  }
+})();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
