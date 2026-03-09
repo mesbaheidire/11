@@ -58,6 +58,37 @@ function randomDelay(minMinutes, maxMinutes) {
   return Math.round(ms);
 }
 
+let dailyPublishCount = 0;
+let dailyPublishDate = '';
+
+function getTodayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getDailyCount() {
+  const today = getTodayStr();
+  if (dailyPublishDate !== today) {
+    dailyPublishDate = today;
+    dailyPublishCount = 0;
+  }
+  return dailyPublishCount;
+}
+
+function incrementDailyCount() {
+  const today = getTodayStr();
+  if (dailyPublishDate !== today) {
+    dailyPublishDate = today;
+    dailyPublishCount = 0;
+  }
+  dailyPublishCount++;
+  return dailyPublishCount;
+}
+
+function isDailyLimitReached(config) {
+  if (!config.dailyLimit || config.dailyLimit <= 0) return false;
+  return getDailyCount() >= config.dailyLimit;
+}
+
 async function sendOwnerNotification(botToken, ownerId, entry) {
   if (!botToken || !ownerId) return;
   try {
@@ -256,6 +287,17 @@ async function executePublish(review) {
   const botToken = getBotToken();
   if (!botToken) return;
 
+  const config = loadConfig();
+  if (isDailyLimitReached(config)) {
+    console.log(`🚫 تم بلوغ الحد اليومي عند النشر (${config.dailyLimit}) — إلغاء`);
+    addLogEntry({
+      source: sourceName, originalLink, affiliateLink,
+      title: productTitle, price: productPrice, image: productImage,
+      status: 'daily_limit', targets: targetIds
+    });
+    return;
+  }
+
   const publishBot = new Telegraf(botToken);
   let publishedCount = 0;
 
@@ -275,6 +317,10 @@ async function executePublish(review) {
   }
 
   let finalStatus = publishedCount > 0 ? 'published' : 'publish_failed';
+  if (publishedCount > 0) {
+    incrementDailyCount();
+    console.log(`📊 النشر اليومي: ${getDailyCount()}`);
+  }
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,
     title: productTitle, price: productPrice, image: productImage,
@@ -458,6 +504,16 @@ async function processPost(config, text, _unused, sourceName) {
       if (t.hashtags) message += t.hashtags;
 
       const botToken = getBotToken();
+
+      if (isDailyLimitReached(config)) {
+        console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
+        addLogEntry({
+          source: sourceName, originalLink, affiliateLink: affLink,
+          title: productTitle, price: productPrice, image: productImage,
+          status: 'daily_limit', targets: targetIds
+        });
+        continue;
+      }
 
       const reviewData = {
         message, productImage, targetIds, sourceName, originalLink,

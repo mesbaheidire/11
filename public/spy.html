@@ -69,6 +69,7 @@
         .log-item .log-status.review { background: rgba(156, 39, 176, 0.2); color: #CE93D8; }
         .log-item .log-status.skipped { background: rgba(158, 158, 158, 0.2); color: #9E9E9E; }
         .log-item .log-status.expired { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+        .log-item .log-status.daily_limit { background: rgba(121, 85, 72, 0.2); color: #BCAAA4; }
         .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
         .empty-log { text-align: center; color: #555; padding: 40px 20px; }
         .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
@@ -253,6 +254,15 @@
             </div>
 
             <div class="section">
+                <div class="section-title"><i class="fas fa-chart-bar"></i> الحد اليومي للنشر</div>
+                <div class="form-group">
+                    <label>الحد الأقصى للمنشورات يومياً:</label>
+                    <input type="number" id="dailyLimit" value="0" min="0" max="200" style="direction: ltr;">
+                    <p class="form-hint">اتركه 0 لإلغاء الحد. عند بلوغ الحد، تُسجّل المنتجات في السجل فقط بدون نشر حتى اليوم التالي.</p>
+                </div>
+            </div>
+
+            <div class="section">
                 <div class="section-title"><i class="fas fa-clipboard-check"></i> المراجعة اليدوية</div>
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
@@ -348,6 +358,7 @@
             notifyOwner: false,
             ownerId: '',
             manualReview: false,
+            dailyLimit: 0,
             linkType: 'coin',
             messageTemplate: {
                 prefix: '🔥 عرض حصري',
@@ -427,6 +438,7 @@
             config.notifyOwner = document.getElementById('notifyOwner').checked;
             config.ownerId = document.getElementById('ownerId').value.trim();
             config.manualReview = document.getElementById('manualReview').checked;
+            config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.messageTemplate = {
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
@@ -449,6 +461,7 @@
             document.getElementById('notifyOwner').checked = !!config.notifyOwner;
             document.getElementById('ownerId').value = config.ownerId || '';
             document.getElementById('manualReview').checked = !!config.manualReview;
+            document.getElementById('dailyLimit').value = config.dailyLimit || 0;
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -513,6 +526,7 @@
                         config.notifyOwner = !!c.notifyOwner;
                         config.ownerId = c.ownerId || '';
                         config.manualReview = !!c.manualReview;
+                        config.dailyLimit = c.dailyLimit || 0;
                         config.enabled = c.enabled;
                         populateUI();
                     }
@@ -673,7 +687,7 @@
                 logList.innerHTML = data.log.slice().reverse().map(entry => {
                     const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
                     const statusClass = entry.status || 'detected';
-                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية' };
+                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية', daily_limit: 'تجاوز الحد اليومي' };
                     return `
                         <div class="log-item">
                             <div class="log-header">
