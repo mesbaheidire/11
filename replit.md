@@ -67,6 +67,7 @@ npm start
   - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
   - Duplicate link detection — skips already-processed links (stored 7 days, file: `spy_processed.json`)
   - Random publish delay (configurable 1-60 min range) to avoid detection
+  - Manual review mode — products sent to you via bot with "Publish"/"Skip" buttons before posting (30-min expiry)
   - Owner notifications — sends you a personal Telegram message when a new product is detected
   - Activity log with full history
   - Auto-restart on server reboot

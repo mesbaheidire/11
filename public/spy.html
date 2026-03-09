@@ -66,6 +66,9 @@
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.failed, .log-item .log-status.error, .log-item .log-status.publish_failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
         .log-item .log-status.pending { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
+        .log-item .log-status.review { background: rgba(156, 39, 176, 0.2); color: #CE93D8; }
+        .log-item .log-status.skipped { background: rgba(158, 158, 158, 0.2); color: #9E9E9E; }
+        .log-item .log-status.expired { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
         .empty-log { text-align: center; color: #555; padding: 40px 20px; }
         .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
@@ -250,6 +253,21 @@
             </div>
 
             <div class="section">
+                <div class="section-title"><i class="fas fa-clipboard-check"></i> المراجعة اليدوية</div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
+                        <input type="checkbox" id="manualReview" style="width: 20px; height: 20px; accent-color: #bb86fc;">
+                        تفعيل وضع المراجعة اليدوية
+                    </label>
+                    <p class="form-hint">كل منتج يُرسل لك أولاً مع زري "نشر" و"تخطي" — أنت تتحكم بكل منشور قبل خروجه. تنتهي صلاحية المراجعة بعد 30 دقيقة.</p>
+                </div>
+                <div class="info-box">
+                    <i class="fas fa-exclamation-triangle" style="color: #FF9800;"></i>
+                    عند تفعيل المراجعة اليدوية، يتم تجاهل النشر التلقائي والتأخير. يجب إدخال <strong>معرف حسابك (Chat ID)</strong> في قسم الإشعارات أدناه.
+                </div>
+            </div>
+
+            <div class="section">
                 <div class="section-title"><i class="fas fa-bell"></i> إشعارات فورية</div>
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
@@ -329,6 +347,7 @@
             delayMax: 5,
             notifyOwner: false,
             ownerId: '',
+            manualReview: false,
             linkType: 'coin',
             messageTemplate: {
                 prefix: '🔥 عرض حصري',
@@ -407,6 +426,7 @@
             config.delayMax = parseInt(document.getElementById('delayMax').value) || 5;
             config.notifyOwner = document.getElementById('notifyOwner').checked;
             config.ownerId = document.getElementById('ownerId').value.trim();
+            config.manualReview = document.getElementById('manualReview').checked;
             config.messageTemplate = {
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
@@ -428,6 +448,7 @@
             document.getElementById('delayMax').value = config.delayMax || 5;
             document.getElementById('notifyOwner').checked = !!config.notifyOwner;
             document.getElementById('ownerId').value = config.ownerId || '';
+            document.getElementById('manualReview').checked = !!config.manualReview;
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -491,6 +512,7 @@
                         config.delayMax = c.delayMax || 5;
                         config.notifyOwner = !!c.notifyOwner;
                         config.ownerId = c.ownerId || '';
+                        config.manualReview = !!c.manualReview;
                         config.enabled = c.enabled;
                         populateUI();
                     }
@@ -651,7 +673,7 @@
                 logList.innerHTML = data.log.slice().reverse().map(entry => {
                     const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
                     const statusClass = entry.status || 'detected';
-                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار' };
+                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية' };
                     return `
                         <div class="log-item">
                             <div class="log-header">

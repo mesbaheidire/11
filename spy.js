@@ -185,6 +185,143 @@ function getCookie() {
 let spyClient = null;
 let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
+let reviewBot = null;
+const pendingReviews = new Map();
+
+function startReviewBot(botToken) {
+  if (reviewBot) return;
+  try {
+    reviewBot = new Telegraf(botToken);
+
+    reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      const review = pendingReviews.get(reviewId);
+      if (!review) {
+        await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏰ منتهي الصلاحية', callback_data: 'noop' }]] });
+        return;
+      }
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('جاري النشر...');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
+
+      try {
+        await executePublish(review);
+        console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
+      } catch (e) {
+        console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
+      }
+    });
+
+    reviewBot.action(/^spy_skip_(.+)$/, async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('تم التخطي');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
+      addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
+      console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
+    });
+
+    reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
+
+    reviewBot.launch({ dropPendingUpdates: true });
+    console.log('🤖 بوت المراجعة يعمل');
+  } catch (e) {
+    console.log('⚠️ فشل تشغيل بوت المراجعة:', e.message);
+    reviewBot = null;
+  }
+}
+
+function stopReviewBot() {
+  if (reviewBot) {
+    try { reviewBot.stop(); } catch (e) {}
+    reviewBot = null;
+    pendingReviews.clear();
+    console.log('🤖 تم إيقاف بوت المراجعة');
+  }
+}
+
+async function executePublish(review) {
+  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice } = review;
+  const botToken = getBotToken();
+  if (!botToken) return;
+
+  const publishBot = new Telegraf(botToken);
+  let publishedCount = 0;
+
+  for (const target of targetIds) {
+    try {
+      if (productImage) {
+        await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
+      } else {
+        await publishBot.telegram.sendMessage(target, message);
+      }
+      publishedCount++;
+      console.log(`✅ تم النشر في ${target}`);
+    } catch (pubErr) {
+      console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
+      addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
+    }
+  }
+
+  let finalStatus = publishedCount > 0 ? 'published' : 'publish_failed';
+  addLogEntry({
+    source: sourceName, originalLink, affiliateLink,
+    title: productTitle, price: productPrice, image: productImage,
+    status: finalStatus, targets: targetIds
+  });
+}
+
+async function sendForReview(botToken, ownerId, review) {
+  const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+  pendingReviews.set(reviewId, review);
+
+  setTimeout(() => {
+    if (pendingReviews.has(reviewId)) {
+      pendingReviews.delete(reviewId);
+      addLogEntry({ status: 'expired', title: review.productTitle, source: review.sourceName });
+      console.log(`⏰ انتهت صلاحية المراجعة: ${reviewId}`);
+    }
+  }, 30 * 60 * 1000);
+
+  const bot = new Telegraf(botToken);
+  let msg = `📋 *منتج جديد للمراجعة*\n\n`;
+  msg += `📡 المصدر: ${review.sourceName || 'غير معروف'}\n`;
+  if (review.productTitle) msg += `📦 ${review.productTitle}\n`;
+  if (review.productPrice) msg += `💰 السعر: ${review.productPrice}\n`;
+  if (review.affiliateLink) msg += `🔗 ${review.affiliateLink}\n`;
+  msg += `\n📢 القنوات الهدف: ${(review.targetIds || []).join(', ')}`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
+        { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
+      ]
+    ]
+  };
+
+  try {
+    if (review.productImage) {
+      await bot.telegram.sendPhoto(ownerId, review.productImage, { caption: msg, reply_markup: keyboard });
+    } else {
+      await bot.telegram.sendMessage(ownerId, msg, { reply_markup: keyboard });
+    }
+  } catch (e) {
+    console.log('⚠️ فشل إرسال طلب المراجعة:', e.message);
+    pendingReviews.delete(reviewId);
+  }
+}
 
 async function extractPriceWithAI(text) {
   return new Promise((resolve) => {
@@ -321,57 +458,52 @@ async function processPost(config, text, _unused, sourceName) {
       if (t.hashtags) message += t.hashtags;
 
       const botToken = getBotToken();
-      const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
-      const delayMinutes = Math.round(delayMs / 60000);
 
-      if (config.notifyOwner && config.ownerId && botToken) {
-        await sendOwnerNotification(botToken, config.ownerId, {
-          source: sourceName, title: productTitle, price: productPrice,
-          affiliateLink: affLink, delayMinutes
-        });
-      }
-
-      const publishFn = async () => {
-        let publishedCount = 0;
-        if (config.autoPublish && botToken) {
-          const publishBot = new Telegraf(botToken);
-          for (const target of targetIds) {
-            try {
-              if (productImage) {
-                await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
-              } else {
-                await publishBot.telegram.sendMessage(target, message);
-              }
-              publishedCount++;
-              console.log(`✅ تم النشر في ${target}`);
-            } catch (pubErr) {
-              console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
-              addLogEntry({ source: sourceName, target, originalLink, affiliateLink: affLink, status: 'publish_failed', error: pubErr.message });
-            }
-          }
-        }
-
-        let finalStatus = 'detected';
-        if (config.autoPublish && publishedCount > 0) finalStatus = 'published';
-        else if (config.autoPublish && publishedCount === 0 && targetIds.length > 0) finalStatus = 'publish_failed';
-
-        addLogEntry({
-          source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: productImage,
-          status: finalStatus, targets: targetIds
-        });
+      const reviewData = {
+        message, productImage, targetIds, sourceName, originalLink,
+        affiliateLink: affLink, productTitle, productPrice
       };
 
-      if (delayMs > 0) {
-        console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+      if (config.manualReview && config.ownerId && botToken) {
+        console.log(`📋 إرسال للمراجعة اليدوية...`);
         addLogEntry({
           source: sourceName, originalLink, affiliateLink: affLink,
           title: productTitle, price: productPrice, image: productImage,
-          status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+          status: 'review', targets: targetIds
         });
-        setTimeout(publishFn, delayMs);
+        await sendForReview(botToken, config.ownerId, reviewData);
+      } else if (config.autoPublish) {
+        const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
+        const delayMinutes = Math.round(delayMs / 60000);
+
+        if (config.notifyOwner && config.ownerId && botToken) {
+          await sendOwnerNotification(botToken, config.ownerId, {
+            source: sourceName, title: productTitle, price: productPrice,
+            affiliateLink: affLink, delayMinutes
+          });
+        }
+
+        const publishFn = async () => {
+          await executePublish(reviewData);
+        };
+
+        if (delayMs > 0) {
+          console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+          addLogEntry({
+            source: sourceName, originalLink, affiliateLink: affLink,
+            title: productTitle, price: productPrice, image: productImage,
+            status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+          });
+          setTimeout(publishFn, delayMs);
+        } else {
+          await publishFn();
+        }
       } else {
-        await publishFn();
+        addLogEntry({
+          source: sourceName, originalLink, affiliateLink: affLink,
+          title: productTitle, price: productPrice, image: productImage,
+          status: 'detected', targets: targetIds
+        });
       }
     } catch (linkErr) {
       console.log('❌ خطأ في معالجة الرابط:', linkErr.message);
@@ -403,8 +535,11 @@ async function startSpy(config) {
   }
 
   const botToken = getBotToken();
-  if (!botToken && config.autoPublish) {
+  if (!botToken && (config.autoPublish || config.manualReview)) {
     throw new Error('توكن البوت غير موجود - أضفه في إعدادات التطبيق الرئيسية');
+  }
+  if (config.manualReview && !config.ownerId) {
+    throw new Error('وضع المراجعة اليدوية يتطلب إدخال معرف حسابك (Chat ID)');
   }
 
   let sessionStr = '';
@@ -472,10 +607,16 @@ async function startSpy(config) {
   spyRunning = true;
   config.enabled = true;
   saveConfig(config);
+
+  if (config.manualReview && botToken) {
+    startReviewBot(botToken);
+  }
+
   console.log('🕵️ تم تشغيل نظام التجسس');
 }
 
 async function stopSpy() {
+  stopReviewBot();
   if (spyClient) {
     try { await spyClient.disconnect(); } catch (e) {}
     spyClient = null;
