@@ -56,12 +56,13 @@ npm start
   - Edit saved posts before republishing
   - Posts stored in `saved_posts.json` (gitignored)
 - **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
-  - **Two modes:** Userbot (personal account, no admin needed) or Bot Admin (requires admin in source channels)
-  - Userbot mode uses GramJS (Telegram MTProto) to monitor any public channel you're subscribed to
+  - Uses GramJS (Telegram MTProto) Userbot mode — monitors any public channel you're subscribed to without admin access
   - Auto-detect AliExpress links from source channel posts
   - Convert links to your own affiliate links automatically
-  - Extract product price from posts
-  - Republish with same image to your target channels
+  - Extract price from competitor posts, get product title and image from AliExpress API
+  - AI-powered title refinement via Gemini (improves AliExpress product titles)
+  - Publishes with AliExpress API image (not competitor's image) to target channels
+  - Bot token and cookie used automatically from main app environment variables
   - Configurable message template
   - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
   - Activity log with full history

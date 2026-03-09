@@ -2,6 +2,7 @@ const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const { portaffFunction } = require('./afflink');
+const http = require('http');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
@@ -119,11 +120,38 @@ let spyClient = null;
 let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
 
-async function processPost(config, text, photo, sourceName) {
+async function refineTitle(title) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ title, isHook: false });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-refine-title',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success ? parsed.refinedTitle : title);
+        } catch { resolve(title); }
+      });
+    });
+    req.on('error', () => resolve(title));
+    req.setTimeout(15000, () => { req.destroy(); resolve(title); });
+    req.write(postData);
+    req.end();
+  });
+}
+
+async function processPost(config, text, _unused, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
   if (aliLinks.length === 0) return;
 
-  const price = extractPrice(text);
+  const priceFromPost = extractPrice(text);
   const targetIds = (config.targetChannels || []).map(ch => {
     if (ch.startsWith('-')) return ch;
     if (ch.startsWith('@')) return ch;
@@ -155,14 +183,24 @@ async function processPost(config, text, photo, sourceName) {
         continue;
       }
 
-      const productTitle = (result.previews && result.previews.title) || '';
+      const apiTitle = (result.previews && result.previews.title) || '';
       const productImage = (result.previews && result.previews.image_url) || '';
-      const productPrice = price || (result.previews && result.previews.price) || '';
+      const productPrice = priceFromPost || (result.previews && result.previews.price) || '';
+
+      let productTitle = apiTitle;
+      if (apiTitle) {
+        try {
+          productTitle = await refineTitle(apiTitle);
+          console.log(`🤖 عنوان محسّن: ${productTitle}`);
+        } catch (aiErr) {
+          console.log(`⚠️ فشل تحسين العنوان، استخدام العنوان الأصلي: ${aiErr.message}`);
+        }
+      }
 
       const t = config.messageTemplate || {};
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
-      else message += `${productTitle}\n\n`;
+      else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n\n`;
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
@@ -176,9 +214,7 @@ async function processPost(config, text, photo, sourceName) {
         const publishBot = new Telegraf(botToken);
         for (const target of targetIds) {
           try {
-            if (photo) {
-              await publishBot.telegram.sendPhoto(target, photo, { caption: message });
-            } else if (productImage) {
+            if (productImage) {
               await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
             } else {
               await publishBot.telegram.sendMessage(target, message);
@@ -291,20 +327,7 @@ async function startSpy(config) {
       if (!isSource) return;
 
       const text = msg.message || '';
-      let photoForPublish = null;
-
-      if (msg.media && msg.media.photo) {
-        try {
-          const buffer = await spyClient.downloadMedia(msg.media, {});
-          if (buffer) {
-            photoForPublish = { source: buffer };
-          }
-        } catch (e) {
-          console.log('⚠️ فشل تحميل الصورة:', e.message);
-        }
-      }
-
-      await processPost(config, text, photoForPublish, chatTitle);
+      await processPost(config, text, null, chatTitle);
     } catch (err) {
       console.log('❌ خطأ Userbot:', err.message);
     }
