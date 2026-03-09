@@ -718,6 +718,64 @@ app.post('/api/ai-refine-title', async (req, res) => {
   }
 });
 
+app.post('/api/ai-extract-price', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ success: false, error: 'النص مطلوب' });
+
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, price: null, method: 'no_ai' });
+    }
+
+    try {
+      const prompt = `أنت محلل نصوص خبير. استخرج السعر من النص التالي.
+
+قواعد:
+1. ابحث عن أي سعر مذكور بأي عملة (دينار، دولار، يورو، ريال، درهم، جنيه، DA, DZD, USD, EUR، إلخ).
+2. إذا وُجد أكثر من سعر، اختر السعر النهائي أو سعر البيع (وليس السعر الأصلي/المشطوب).
+3. أعد الإجابة بصيغة JSON فقط: {"price":"السعر مع العملة"} أو {"price":null} إذا لم تجد سعراً.
+4. لا تضف أي شرح أو نص إضافي — فقط JSON.
+
+النص:
+${text}`;
+
+      const rawResult = await runGeminiWithRotation(prompt);
+      let extracted = null;
+      try {
+        const jsonMatch = rawResult.match(/\{[\s\S]*?"price"[\s\S]*?\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          extracted = parsed.price;
+        }
+      } catch {}
+
+      if (!extracted) {
+        const fallbackLine = rawResult.replace(/^(السعر|Price|النتيجة)[\s:]+/i, '').split('\n')[0].trim();
+        if (fallbackLine && fallbackLine !== 'NONE' && fallbackLine.toLowerCase() !== 'none' && fallbackLine !== 'null') {
+          extracted = fallbackLine;
+        }
+      }
+
+      if (extracted) {
+        extracted = String(extracted).replace(/[*#]/g, '').trim();
+        const hasNumber = /\d/.test(extracted);
+        if (!hasNumber || extracted.length > 50) {
+          return res.json({ success: true, price: null, method: 'ai_invalid' });
+        }
+      }
+
+      res.json({ success: true, price: extracted || null, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI price extraction failed:', aiError.message);
+      res.json({ success: true, price: null, method: 'fallback' });
+    }
+  } catch (error) {
+    console.error('Price extraction error:', error.message || error);
+    res.json({ success: true, price: null, method: 'error' });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {

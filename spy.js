@@ -120,6 +120,33 @@ let spyClient = null;
 let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
 
+async function extractPriceWithAI(text) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-extract-price',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.price ? parsed.price : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function refineTitle(title) {
   return new Promise((resolve) => {
     const postData = JSON.stringify({ title, isHook: false });
@@ -151,7 +178,19 @@ async function processPost(config, text, _unused, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
   if (aliLinks.length === 0) return;
 
-  const priceFromPost = extractPrice(text);
+  let priceFromPost = null;
+  try {
+    priceFromPost = await extractPriceWithAI(text);
+    if (priceFromPost) {
+      console.log(`🤖 سعر مستخرج بالذكاء الاصطناعي: ${priceFromPost}`);
+    }
+  } catch (e) {
+    console.log('⚠️ فشل استخراج السعر بالذكاء الاصطناعي:', e.message);
+  }
+  if (!priceFromPost) {
+    priceFromPost = extractPrice(text);
+    if (priceFromPost) console.log(`📋 سعر مستخرج بالنمط: ${priceFromPost}`);
+  }
   const targetIds = (config.targetChannels || []).map(ch => {
     if (ch.startsWith('-')) return ch;
     if (ch.startsWith('@')) return ch;
