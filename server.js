@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, getAuthState } = require('./spy');
 
 const app = express();
 const postScheduler = new PostScheduler();
@@ -1130,7 +1130,20 @@ app.get('/api/spy/status', (req, res) => {
 
 app.post('/api/spy/config', (req, res) => {
   try {
-    const config = req.body;
+    const stored = loadSpyConfig();
+    const incoming = req.body || {};
+    const config = { ...stored };
+    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.mode) config.mode = incoming.mode;
+    if (incoming.linkType) config.linkType = incoming.linkType;
+    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
+    if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
+    if (incoming.botToken && !incoming.botToken.includes('...')) config.botToken = incoming.botToken;
+    if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
+    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
+    if (incoming.cookie && !incoming.cookie.includes('...')) config.cookie = incoming.cookie;
     saveSpyConfig(config);
     res.json({ success: true });
   } catch (error) {
@@ -1140,8 +1153,21 @@ app.post('/api/spy/config', (req, res) => {
 
 app.post('/api/spy/start', async (req, res) => {
   try {
-    const config = req.body || loadSpyConfig();
-    if (req.body) saveSpyConfig(config);
+    const stored = loadSpyConfig();
+    const incoming = req.body || {};
+    const config = { ...stored };
+    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.mode) config.mode = incoming.mode;
+    if (incoming.linkType) config.linkType = incoming.linkType;
+    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
+    if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
+    if (incoming.botToken && !incoming.botToken.includes('...')) config.botToken = incoming.botToken;
+    if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
+    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
+    if (incoming.cookie && !incoming.cookie.includes('...')) config.cookie = incoming.cookie;
+    saveSpyConfig(config);
     await startSpy(config);
     res.json({ success: true, message: 'تم تشغيل نظام التجسس' });
   } catch (error) {
@@ -1162,6 +1188,37 @@ app.get('/api/spy/log', (req, res) => {
   try {
     const log = loadSpyLog();
     res.json({ success: true, log });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/send-code', async (req, res) => {
+  try {
+    const config = req.body;
+    saveSpyConfig(config);
+    const result = await sendLoginCode(config);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/verify-code', async (req, res) => {
+  try {
+    const { code, password } = req.body;
+    const config = loadSpyConfig();
+    const result = await verifyCode(config, code, password);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/spy/auth-state', (req, res) => {
+  try {
+    const state = getAuthState();
+    res.json({ success: true, ...state });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

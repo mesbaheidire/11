@@ -85,6 +85,24 @@
         .tab-btn.active { background: #bb86fc; color: #1a1a2e; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+
+        .mode-selector { display: flex; gap: 10px; margin: 15px 0; }
+        .mode-card { flex: 1; background: #16213e; border: 2px solid #2d2d44; border-radius: 14px; padding: 16px 12px; text-align: center; cursor: pointer; transition: all 0.3s; }
+        .mode-card.selected { border-color: #bb86fc; background: rgba(187, 134, 252, 0.1); }
+        .mode-card i { font-size: 28px; display: block; margin-bottom: 8px; color: #bb86fc; }
+        .mode-card .mode-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+        .mode-card .mode-desc { font-size: 11px; color: #888; }
+
+        .auth-section { background: #16213e; border-radius: 14px; padding: 18px; border: 2px solid #2d2d44; margin: 15px 0; }
+        .auth-step { display: none; }
+        .auth-step.active { display: block; }
+        .auth-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 10px; }
+        .auth-btn.primary { background: linear-gradient(135deg, #bb86fc, #9c27b0); color: #fff; }
+        .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .session-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .session-badge.connected { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .session-badge.disconnected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
     </style>
 </head>
 <body>
@@ -105,10 +123,20 @@
             </button>
         </div>
 
-        <div class="info-box">
-            <i class="fas fa-info-circle"></i>
-            يجب أن يكون البوت <strong>مشرف (Admin)</strong> في القنوات المصدر ليتمكن من قراءة المنشورات.
-            عند رصد رابط AliExpress، يتم تحويله تلقائياً لرابط الأفلييت الخاص بك ونشره في قنواتك.
+        <div class="section">
+            <div class="section-title"><i class="fas fa-satellite-dish"></i> وضع المراقبة</div>
+            <div class="mode-selector">
+                <div class="mode-card selected" id="mode-userbot" onclick="selectMode('userbot')">
+                    <i class="fas fa-user-shield"></i>
+                    <div class="mode-title">Userbot</div>
+                    <div class="mode-desc">حسابك الشخصي - راقب أي قناة عامة بدون أن تكون مشرف</div>
+                </div>
+                <div class="mode-card" id="mode-bot" onclick="selectMode('bot')">
+                    <i class="fas fa-robot"></i>
+                    <div class="mode-title">Bot Admin</div>
+                    <div class="mode-desc">البوت كمشرف - يحتاج أن يكون مشرف في القنوات المصدر</div>
+                </div>
+            </div>
         </div>
 
         <div class="tab-bar">
@@ -118,10 +146,72 @@
         </div>
 
         <div class="tab-content active" id="tab-settings">
+
+            <div id="userbot-settings">
+                <div class="section">
+                    <div class="section-title"><i class="fas fa-key"></i> تسجيل دخول تيليجرام</div>
+                    <div class="info-box">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>خطوات الإعداد:</strong><br>
+                        1. اذهب إلى <a href="https://my.telegram.org" target="_blank" style="color: #bb86fc;">my.telegram.org</a><br>
+                        2. سجّل دخول برقم هاتفك<br>
+                        3. اختر "API development tools"<br>
+                        4. انسخ الـ <strong>API ID</strong> و <strong>API Hash</strong>
+                    </div>
+                    <div class="form-group">
+                        <label>API ID:</label>
+                        <input type="text" id="apiId" placeholder="مثال: 12345678" style="direction: ltr;">
+                    </div>
+                    <div class="form-group">
+                        <label>API Hash:</label>
+                        <input type="text" id="apiHash" placeholder="مثال: 0123456789abcdef..." style="direction: ltr;">
+                    </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف (مع رمز الدولة):</label>
+                        <input type="text" id="phoneNumber" placeholder="مثال: +213XXXXXXXXX" style="direction: ltr;">
+                    </div>
+
+                    <div id="sessionStatus" style="margin: 12px 0;"></div>
+
+                    <div class="auth-section" id="authSection">
+                        <div class="auth-step active" id="auth-step-send">
+                            <button class="auth-btn primary" onclick="sendCode()" id="sendCodeBtn">
+                                <i class="fas fa-paper-plane"></i> إرسال رمز التحقق
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-code">
+                            <div class="form-group">
+                                <label>رمز التحقق:</label>
+                                <input type="text" id="verifyCode" placeholder="أدخل الرمز من تيليجرام" style="direction: ltr; text-align: center; font-size: 20px; letter-spacing: 8px;">
+                            </div>
+                            <button class="auth-btn primary" onclick="verifyLoginCode()" id="verifyCodeBtn">
+                                <i class="fas fa-check"></i> تأكيد الرمز
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-password">
+                            <div class="form-group">
+                                <label>كلمة مرور الحساب (Two-Step Verification):</label>
+                                <input type="password" id="twoStepPassword" placeholder="أدخل كلمة المرور">
+                            </div>
+                            <button class="auth-btn primary" onclick="verifyPassword()" id="verifyPassBtn">
+                                <i class="fas fa-lock-open"></i> تأكيد كلمة المرور
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-done">
+                            <div style="text-align: center; padding: 10px;">
+                                <i class="fas fa-check-circle" style="font-size: 36px; color: #4CAF50; margin-bottom: 8px; display: block;"></i>
+                                <p style="font-weight: 700; color: #4CAF50;">تم تسجيل الدخول بنجاح!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="section">
-                <div class="section-title"><i class="fas fa-robot"></i> توكن البوت</div>
+                <div class="section-title"><i class="fas fa-robot"></i> توكن البوت (للنشر)</div>
                 <div class="form-group">
                     <input type="text" id="botToken" placeholder="أدخل توكن البوت من @BotFather">
+                    <p class="form-hint">مطلوب للنشر في القنوات الهدف - البوت يجب أن يكون مشرف في قنوات الهدف</p>
                 </div>
             </div>
 
@@ -129,10 +219,10 @@
                 <div class="section-title"><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة)</div>
                 <div class="channels-list" id="sourceChannelsList"></div>
                 <div class="add-ch-row">
-                    <input type="text" id="newSourceChannel" placeholder="@channel أو معرف القناة">
+                    <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
                     <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
                 </div>
-                <p class="form-hint">أضف معرّف القنوات التي تريد مراقبتها (البوت يجب أن يكون مشرف فيها)</p>
+                <p class="form-hint" id="sourceHint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
             </div>
 
             <div class="section">
@@ -142,14 +232,14 @@
                     <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
                     <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
                 </div>
-                <p class="form-hint">أضف قنواتك التي سيُنشر فيها المنتج بعد تعديل الرابط</p>
+                <p class="form-hint">أضف قنواتك التي سيُنشر فيها المنتج - البوت يجب أن يكون مشرف فيها</p>
             </div>
 
             <div class="section">
                 <div class="section-title"><i class="fas fa-cookie"></i> كوكي AliExpress</div>
                 <div class="form-group">
-                    <input type="text" id="spyCookie" placeholder="xman_t cookie (اختياري - يستخدم الافتراضي)">
-                    <p class="form-hint">اتركه فارغاً لاستخدام الكوكي الافتراضي من الإعدادات</p>
+                    <input type="text" id="spyCookie" placeholder="xman_t cookie (اختياري)">
+                    <p class="form-hint">اتركه فارغاً لاستخدام الكوكي الافتراضي</p>
                 </div>
             </div>
 
@@ -232,9 +322,13 @@
     <script>
         let config = {
             enabled: false,
+            mode: 'userbot',
             sourceChannels: [],
             targetChannels: [],
             botToken: '',
+            apiId: '',
+            apiHash: '',
+            phoneNumber: '',
             cookie: '',
             autoPublish: true,
             linkType: 'coin',
@@ -264,6 +358,19 @@
             if (tab === 'log') refreshLog();
         }
 
+        function selectMode(mode) {
+            config.mode = mode;
+            document.getElementById('mode-userbot').classList.toggle('selected', mode === 'userbot');
+            document.getElementById('mode-bot').classList.toggle('selected', mode === 'bot');
+            document.getElementById('userbot-settings').style.display = mode === 'userbot' ? 'block' : 'none';
+            const hint = document.getElementById('sourceHint');
+            if (mode === 'userbot') {
+                hint.textContent = 'أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)';
+            } else {
+                hint.textContent = 'أضف القنوات التي تريد مراقبتها (البوت يجب أن يكون مشرف فيها)';
+            }
+        }
+
         function selectLinkType(type) {
             config.linkType = type;
             document.querySelectorAll('.link-type-option').forEach(el => {
@@ -277,7 +384,7 @@
             const list = document.getElementById(listId);
             list.innerHTML = channels.map((ch, i) => `
                 <div class="channel-item">
-                    <span>${ch}</span>
+                    <span>${esc(ch)}</span>
                     <button class="remove-ch-btn" onclick="removeChannel('${type}', ${i})"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('');
@@ -299,8 +406,18 @@
             renderChannels(type);
         }
 
+        function esc(str) {
+            if (!str) return '';
+            const d = document.createElement('div');
+            d.textContent = str;
+            return d.innerHTML;
+        }
+
         function collectConfig() {
             config.botToken = document.getElementById('botToken').value.trim();
+            config.apiId = document.getElementById('apiId').value.trim();
+            config.apiHash = document.getElementById('apiHash').value.trim();
+            config.phoneNumber = document.getElementById('phoneNumber').value.trim();
             config.cookie = document.getElementById('spyCookie').value.trim();
             config.autoPublish = document.getElementById('autoPublish').checked;
             config.messageTemplate = {
@@ -316,8 +433,12 @@
 
         function populateUI() {
             document.getElementById('botToken').value = config.botToken || '';
+            document.getElementById('apiId').value = config.apiId || '';
+            document.getElementById('apiHash').value = config.apiHash || '';
+            document.getElementById('phoneNumber').value = config.phoneNumber || '';
             document.getElementById('spyCookie').value = config.cookie || '';
             document.getElementById('autoPublish').checked = config.autoPublish !== false;
+            selectMode(config.mode || 'userbot');
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -347,6 +468,23 @@
             }
         }
 
+        function updateSessionStatus(hasSession) {
+            const el = document.getElementById('sessionStatus');
+            if (hasSession) {
+                el.innerHTML = '<span class="session-badge connected"><i class="fas fa-check-circle"></i> الحساب متصل</span>';
+                showAuthStep('done');
+            } else {
+                el.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> يجب تسجيل الدخول</span>';
+                showAuthStep('send');
+            }
+        }
+
+        function showAuthStep(step) {
+            document.querySelectorAll('.auth-step').forEach(el => el.classList.remove('active'));
+            const el = document.getElementById('auth-step-' + step);
+            if (el) el.classList.add('active');
+        }
+
         async function loadStatus() {
             try {
                 const res = await fetch('/api/spy/status');
@@ -358,15 +496,99 @@
                         config.targetChannels = masked.targetChannels || [];
                         config.autoPublish = masked.autoPublish !== false;
                         config.linkType = masked.linkType || 'coin';
+                        config.mode = masked.mode || 'userbot';
                         config.messageTemplate = masked.messageTemplate || config.messageTemplate;
                         config.enabled = masked.enabled;
                         populateUI();
                     }
                     updateStatusUI(data.running);
+                    updateSessionStatus(data.hasSession);
                 }
             } catch (e) {
                 console.log('Error loading status:', e);
             }
+        }
+
+        async function sendCode() {
+            const btn = document.getElementById('sendCodeBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+            try {
+                const cfg = collectConfig();
+                const res = await fetch('/api/spy/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cfg)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم إرسال رمز التحقق', 'success');
+                    showAuthStep('code');
+                } else {
+                    showToast(data.error || 'خطأ', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> إرسال رمز التحقق';
+        }
+
+        async function verifyLoginCode() {
+            const btn = document.getElementById('verifyCodeBtn');
+            const code = document.getElementById('verifyCode').value.trim();
+            if (!code) return showToast('أدخل رمز التحقق', 'error');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            try {
+                const res = await fetch('/api/spy/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    showAuthStep('done');
+                    updateSessionStatus(true);
+                } else if (data.needPassword) {
+                    showToast(data.message, 'error');
+                    showAuthStep('password');
+                } else {
+                    showToast(data.error || 'خطأ', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> تأكيد الرمز';
+        }
+
+        async function verifyPassword() {
+            const btn = document.getElementById('verifyPassBtn');
+            const password = document.getElementById('twoStepPassword').value;
+            if (!password) return showToast('أدخل كلمة المرور', 'error');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            try {
+                const res = await fetch('/api/spy/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    showAuthStep('done');
+                    updateSessionStatus(true);
+                } else {
+                    showToast(data.error || 'خطأ', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-lock-open"></i> تأكيد كلمة المرور';
         }
 
         async function toggleSpy() {
@@ -395,7 +617,11 @@
                         updateStatusUI(true);
                         showToast('تم تشغيل التجسس', 'success');
                     } else {
-                        showToast(data.error || 'خطأ', 'error');
+                        if (data.error && data.error.includes('SESSION_REQUIRED')) {
+                            showToast('يجب تسجيل الدخول أولاً', 'error');
+                        } else {
+                            showToast(data.error || 'خطأ', 'error');
+                        }
                     }
                 }
             } catch (e) {
@@ -431,12 +657,6 @@
                 if (!data.success || !data.log || data.log.length === 0) {
                     logList.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
                     return;
-                }
-                function esc(str) {
-                    if (!str) return '';
-                    const d = document.createElement('div');
-                    d.textContent = str;
-                    return d.innerHTML;
                 }
                 const logs = data.log.slice().reverse();
                 logList.innerHTML = logs.map(entry => {

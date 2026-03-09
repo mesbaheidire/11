@@ -56,6 +56,8 @@ npm start
   - Edit saved posts before republishing
   - Posts stored in `saved_posts.json` (gitignored)
 - **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
+  - **Two modes:** Userbot (personal account, no admin needed) or Bot Admin (requires admin in source channels)
+  - Userbot mode uses GramJS (Telegram MTProto) to monitor any public channel you're subscribed to
   - Auto-detect AliExpress links from source channel posts
   - Convert links to your own affiliate links automatically
   - Extract product price from posts
@@ -64,7 +66,8 @@ npm start
   - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
   - Activity log with full history
   - Auto-restart on server reboot
-  - Config stored in `spy_config.json` (gitignored)
+  - Authentication flow: API ID/Hash from my.telegram.org + phone verification
+  - Session stored in `spy_session.json` (gitignored), config in `spy_config.json` (gitignored)
 
 ## Product Metadata Extraction
 The app uses multiple fallback methods to extract product title and image:
