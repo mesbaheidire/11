@@ -621,7 +621,12 @@ async function startSpy(config) {
     throw new Error('SESSION_REQUIRED');
   }
 
-  console.log('🕵️ تم الاتصال بحساب تيليجرام');
+  try {
+    const me = await spyClient.getMe();
+    console.log(`🕵️ تم الاتصال بحساب: ${me.firstName || ''} ${me.lastName || ''} (@${me.username || 'بدون'})`);
+  } catch (e) {
+    console.log('🕵️ تم الاتصال بحساب تيليجرام');
+  }
 
   const sourceUsernames = config.sourceChannels.map(ch => {
     if (ch.startsWith('@')) return ch.substring(1);
@@ -632,33 +637,65 @@ async function startSpy(config) {
     return ch;
   });
 
+  let msgCount = 0;
+
   spyClient.addEventHandler(async (event) => {
     try {
       const msg = event.message;
       if (!msg || !msg.peerId) return;
 
+      msgCount++;
+      if (msgCount <= 3 || msgCount % 50 === 0) {
+        console.log(`📨 رسالة #${msgCount} — peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
+      }
+
       let chatEntity;
       try {
         chatEntity = await spyClient.getEntity(msg.peerId);
-      } catch (e) { return; }
+      } catch (e) {
+        console.log(`⚠️ فشل حل الكيان: ${e.message}`);
+        return;
+      }
 
-      const chatUsername = chatEntity.username || '';
-      const chatTitle = chatEntity.title || chatUsername || '';
+      const chatUsername = (chatEntity.username || '').toLowerCase();
+      const chatTitle = chatEntity.title || chatEntity.username || '';
+      const chatId = String(chatEntity.id?.value ?? chatEntity.id);
+
+      if (msgCount <= 5) {
+        console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
+      }
 
       const isSource = sourceUsernames.some(src => {
-        return chatUsername.toLowerCase() === src.toLowerCase() ||
-               String(chatEntity.id) === src ||
-               ('-100' + chatEntity.id) === src;
+        const srcLower = src.toLowerCase();
+        return chatUsername === srcLower ||
+               chatId === src ||
+               ('-100' + chatId) === src;
       });
 
       if (!isSource) return;
 
+      console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
+
       const text = msg.message || '';
+      if (!text) {
+        console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
+        return;
+      }
+
+      const aliLinks = extractAliExpressLinks(text);
+      if (aliLinks.length === 0) {
+        console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة`);
+        return;
+      }
+
+      console.log(`🔗 وجد ${aliLinks.length} رابط AliExpress — بدء المعالجة`);
       await processPost(config, text, null, chatTitle);
     } catch (err) {
       console.log('❌ خطأ Userbot:', err.message);
     }
   }, new NewMessage({}));
+
+  console.log(`🔍 مراقبة القنوات: ${sourceUsernames.join(', ')}`);
 
   spyRunning = true;
   config.enabled = true;
