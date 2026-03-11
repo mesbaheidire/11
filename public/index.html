@@ -533,6 +533,18 @@
             
             localStorage.setItem('appSettings', JSON.stringify(settings));
             document.getElementById('warningText').textContent = settings.warning;
+
+            if (settings.cook || settings.telegramToken) {
+                const syncData = {};
+                if (settings.cook) syncData.cook = settings.cook;
+                if (settings.telegramToken) syncData.botToken = settings.telegramToken;
+                fetch('/api/spy/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(syncData)
+                }).catch(() => {});
+            }
+
             closeSettings();
             showToast('تم حفظ الإعدادات');
         }
