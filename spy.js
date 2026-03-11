@@ -463,9 +463,9 @@ async function extractPriceWithAI(text) {
   });
 }
 
-async function refineTitle(title) {
+function callAiRefine(title, isHook) {
   return new Promise((resolve) => {
-    const postData = JSON.stringify({ title, isHook: false });
+    const postData = JSON.stringify({ title, isHook });
     const options = {
       hostname: '127.0.0.1',
       port: parseInt(process.env.PORT) || 5000,
@@ -479,15 +479,23 @@ async function refineTitle(title) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed.success ? parsed.refinedTitle : title);
-        } catch { resolve(title); }
+          resolve(parsed.success ? parsed.refinedTitle : (isHook ? '' : title));
+        } catch { resolve(isHook ? '' : title); }
       });
     });
-    req.on('error', () => resolve(title));
-    req.setTimeout(15000, () => { req.destroy(); resolve(title); });
+    req.on('error', () => resolve(isHook ? '' : title));
+    req.setTimeout(15000, () => { req.destroy(); resolve(isHook ? '' : title); });
     req.write(postData);
     req.end();
   });
+}
+
+async function refineTitle(title) {
+  return callAiRefine(title, false);
+}
+
+async function generateHook(title) {
+  return callAiRefine(title, true);
 }
 
 async function processPost(config, text, sourceImage, sourceName) {
@@ -593,6 +601,16 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
+      let hook = '';
+      if (productTitle) {
+        try {
+          hook = await generateHook(productTitle);
+          if (hook) console.log(`🎯 هوك: ${hook}`);
+        } catch (hookErr) {
+          console.log(`⚠️ فشل توليد الهوك: ${hookErr.message}`);
+        }
+      }
+
       const t = config.messageTemplate || {};
 
       const extractedCoupon = extractCouponFromPost(text);
@@ -603,12 +621,14 @@ async function processPost(config, text, sourceImage, sourceName) {
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
       else if (productTitle) message += `${productTitle}\n\n`;
-      if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n\n`;
+      if (hook) message += `🔥 ${hook}\n\n`;
+      if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
+      if (t.couponLabel && extractedCoupon) {
+        message += `${t.couponLabel}: ${extractedCoupon}\n`;
+      }
+      message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
-      if (t.couponLabel && extractedCoupon) {
-        message += `${t.couponLabel}: ${extractedCoupon}\n\n`;
-      }
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
