@@ -57,7 +57,9 @@ function normalizeAliLink(link) {
     const url = new URL(link);
     const productMatch = link.match(/\/item\/(\d+)/);
     if (productMatch) return 'product:' + productMatch[1];
-    return url.hostname + url.pathname;
+    const pidParam = url.searchParams.get('productIds') || url.searchParams.get('productId') || url.searchParams.get('itemId');
+    if (pidParam) return 'product:' + pidParam;
+    return url.hostname + url.pathname + (url.search || '');
   } catch {
     return link;
   }
@@ -247,14 +249,14 @@ function extractAliExpressLinks(text) {
 function extractPrice(text) {
   if (!text) return null;
   const patterns = [
-    /(\d+[\.,]\d+)\s*(?:د\.ج|DA|DZD|دج)/i,
-    /(\d+[\.,]\d+)\s*(?:\$|USD|€|EUR)/i,
-    /(?:السعر|Price|سعر|الثمن|prix)[:\s]*(\d+[\.,]\d+)/i,
-    /(\d+[\.,]\d+)\s*(?:ج|جنيه|ريال|درهم)/i,
-    /💰[:\s]*(\d+[\.,]\d+)/,
-    /(\d+[\.,]\d+)\s*\$/,
-    /\$\s*(\d+[\.,]\d+)/,
-    /(\d{1,5}[\.,]\d{1,2})\s*(?:dollar|دولار)/i
+    /(\d+[\.,]?\d*)\s*(?:د\.ج|DA|DZD|دج)/i,
+    /(\d+[\.,]?\d*)\s*(?:\$|USD|€|EUR)/i,
+    /(?:السعر|Price|سعر|الثمن|prix)[:\s]*(\d+[\.,]?\d*)/i,
+    /(\d+[\.,]?\d*)\s*(?:ج|جنيه|ريال|درهم)/i,
+    /💰[:\s]*(\d+[\.,]?\d*)/,
+    /(\d+[\.,]?\d*)\s*\$/,
+    /\$\s*(\d+[\.,]?\d*)/,
+    /(\d{1,6}[\.,]?\d{0,2})\s*(?:dollar|دولار)/i
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -531,6 +533,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         const result = await portaffFunction(cookie, originalLink);
         if (!result || !result.aff) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
+          inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
         const linkType = config.linkType || 'coin';
@@ -539,6 +542,7 @@ async function processPost(config, text, sourceImage, sourceName) {
                   Object.values(result.aff).find(v => v);
         if (!affLink) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
+          inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
         console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
@@ -549,6 +553,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         const directResult = await directAffLink(cookie, originalLink);
         if (!directResult || !directResult.affLink) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
+          inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
         affLink = directResult.affLink;
