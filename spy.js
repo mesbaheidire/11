@@ -585,7 +585,12 @@ async function processPost(config, text, sourceImage, sourceName) {
           console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
         }
       } else if (apiTitle) {
-        console.log(`📋 عنوان من API: ${productTitle}`);
+        try {
+          productTitle = await refineTitle(apiTitle);
+          console.log(`🤖 عنوان محسّن: ${productTitle}`);
+        } catch (aiErr) {
+          console.log(`⚠️ فشل تحسين العنوان، استخدام الأصلي: ${aiErr.message}`);
+        }
       }
 
       const t = config.messageTemplate || {};
