@@ -9,6 +9,8 @@ const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
 const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
 
+const inFlightLinks = new Set();
+
 function loadProcessedLinks() {
   try {
     if (fs.existsSync(PROCESSED_LINKS_FILE)) {
@@ -31,14 +33,22 @@ function saveProcessedLinks(links) {
 }
 
 function isLinkProcessed(link) {
-  const processed = loadProcessedLinks();
   const normalized = normalizeAliLink(link);
+  if (inFlightLinks.has(normalized)) return true;
+  const processed = loadProcessedLinks();
   return processed.some(entry => entry.link === normalized);
 }
 
+function reserveLink(link) {
+  const normalized = normalizeAliLink(link);
+  inFlightLinks.add(normalized);
+}
+
 function markLinkProcessed(link) {
+  const normalized = normalizeAliLink(link);
+  inFlightLinks.delete(normalized);
   const processed = loadProcessedLinks();
-  processed.push({ link: normalizeAliLink(link), time: Date.now() });
+  processed.push({ link: normalized, time: Date.now() });
   saveProcessedLinks(processed);
 }
 
@@ -508,6 +518,8 @@ async function processPost(config, text, _unused, sourceName) {
       continue;
     }
 
+    reserveLink(originalLink);
+
     try {
       const cookie = getCookie();
       let affLink, apiTitle, productImage, productPrice, resolvedProductId = null;
@@ -638,6 +650,7 @@ async function processPost(config, text, _unused, sourceName) {
         });
       }
     } catch (linkErr) {
+      inFlightLinks.delete(normalizeAliLink(originalLink));
       console.log('❌ خطأ في معالجة الرابط:', linkErr.message);
       addLogEntry({ source: sourceName, originalLink, status: 'error', error: linkErr.message });
     }
