@@ -192,8 +192,12 @@
             </div>
 
             <div class="section">
-                <div class="section-title"><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة)</div>
-                <div class="channels-list" id="sourceChannelsList"></div>
+                <div class="section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleChannelList('source')">
+                    <span><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة) <span id="sourceCount" style="background:#bb86fc;color:#1a1a2e;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:6px;">0</span></span>
+                    <i class="fas fa-chevron-down" id="sourceArrow" style="transition:transform 0.3s;"></i>
+                </div>
+                <div id="sourceChannelsWrap" style="display:none;">
+                <div class="channels-list" id="sourceChannelsList" style="max-height:200px;overflow-y:auto;"></div>
                 <div class="add-ch-row">
                     <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
                     <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
@@ -204,11 +208,16 @@
                     <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
                 </div>
                 <p class="form-hint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
+                </div>
             </div>
 
             <div class="section">
-                <div class="section-title"><i class="fas fa-bullhorn"></i> القنوات الهدف (للنشر)</div>
-                <div class="channels-list" id="targetChannelsList"></div>
+                <div class="section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleChannelList('target')">
+                    <span><i class="fas fa-bullhorn"></i> القنوات الهدف (للنشر) <span id="targetCount" style="background:#bb86fc;color:#1a1a2e;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:6px;">0</span></span>
+                    <i class="fas fa-chevron-down" id="targetArrow" style="transition:transform 0.3s;"></i>
+                </div>
+                <div id="targetChannelsWrap" style="display:none;">
+                <div class="channels-list" id="targetChannelsList" style="max-height:200px;overflow-y:auto;"></div>
                 <div class="add-ch-row">
                     <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
                     <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
@@ -219,6 +228,7 @@
                     <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
                 </div>
                 <p class="form-hint">أضف قنواتك التي سيُنشر فيها - البوت يجب أن يكون مشرف فيها</p>
+                </div>
             </div>
 
             <div class="section">
@@ -431,6 +441,14 @@
         }
         document.getElementById('useTypedLinks').addEventListener('change', toggleLinkTypeGrid);
 
+        function toggleChannelList(type) {
+            const wrap = document.getElementById(type + 'ChannelsWrap');
+            const arrow = document.getElementById(type + 'Arrow');
+            const show = wrap.style.display === 'none';
+            wrap.style.display = show ? 'block' : 'none';
+            arrow.style.transform = show ? 'rotate(180deg)' : '';
+        }
+
         function renderChannels(type) {
             const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
             const channels = type === 'source' ? config.sourceChannels : config.targetChannels;
@@ -440,6 +458,8 @@
                     <button class="remove-ch-btn" onclick="removeChannel('${type}', ${i})"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('');
+            const countEl = document.getElementById(type + 'Count');
+            if (countEl) countEl.textContent = channels.length;
         }
 
         function addChannel(type) {
