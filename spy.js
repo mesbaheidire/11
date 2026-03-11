@@ -487,13 +487,7 @@ async function processPost(config, text, _unused, sourceName) {
         continue;
       }
 
-      const detectedType = detectLinkType(originalLink, text);
-      const linkType = detectedType || config.linkType || 'coin';
-      if (detectedType) {
-        console.log(`🔗 نوع الرابط المكتشف: ${detectedType}`);
-      } else {
-        console.log(`🔗 نوع الرابط الافتراضي: ${linkType}`);
-      }
+      const linkType = config.linkType || 'coin';
 
       const affLink = result.aff[linkType] ||
                       result.aff.coin || result.aff.super || result.aff.point ||
