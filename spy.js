@@ -249,15 +249,18 @@ function extractPrice(text) {
   const patterns = [
     /(\d+[\.,]\d+)\s*(?:د\.ج|DA|DZD|دج)/i,
     /(\d+[\.,]\d+)\s*(?:\$|USD|€|EUR)/i,
-    /(?:السعر|Price|سعر)[:\s]*(\d+[\.,]\d+)/i,
+    /(?:السعر|Price|سعر|الثمن|prix)[:\s]*(\d+[\.,]\d+)/i,
     /(\d+[\.,]\d+)\s*(?:ج|جنيه|ريال|درهم)/i,
-    /(\$|€)?\s*(\d+[\.,]\d+)/
+    /💰[:\s]*(\d+[\.,]\d+)/,
+    /(\d+[\.,]\d+)\s*\$/,
+    /\$\s*(\d+[\.,]\d+)/,
+    /(\d{1,5}[\.,]\d{1,2})\s*(?:dollar|دولار)/i
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match) {
       const priceStr = match[2] || match[1];
-      if (priceStr && parseFloat(priceStr.replace(',', '.')) > 0) {
+      if (priceStr && parseFloat(priceStr.replace(',', '.')) > 0.5) {
         return priceStr;
       }
     }
