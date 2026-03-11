@@ -213,7 +213,14 @@
 
             <div class="section">
                 <div class="section-title"><i class="fas fa-link"></i> نوع الرابط</div>
-                <div class="link-type-grid">
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
+                        <input type="checkbox" id="useTypedLinks" style="width: 20px; height: 20px; accent-color: #bb86fc;">
+                        تفعيل تحويل حسب النوع (Coin, Point, Super...)
+                    </label>
+                    <p class="form-hint">عند الإيقاف: تحويل مباشر للرابط كما هو. عند التفعيل: اختر النوع المطلوب أدناه.</p>
+                </div>
+                <div id="linkTypeGrid" class="link-type-grid" style="display: none;">
                     <div class="link-type-option selected" data-type="coin" onclick="selectLinkType('coin')">🪙 Coin</div>
                     <div class="link-type-option" data-type="point" onclick="selectLinkType('point')">⭐ Point</div>
                     <div class="link-type-option" data-type="super" onclick="selectLinkType('super')">🔥 Super</div>
@@ -359,6 +366,7 @@
             ownerId: '',
             manualReview: false,
             dailyLimit: 0,
+            useTypedLinks: false,
             linkType: 'coin',
             messageTemplate: {
                 prefix: '🔥 عرض حصري',
@@ -400,6 +408,13 @@
             });
         }
 
+        function toggleLinkTypeGrid() {
+            const checked = document.getElementById('useTypedLinks').checked;
+            document.getElementById('linkTypeGrid').style.display = checked ? 'flex' : 'none';
+            config.useTypedLinks = checked;
+        }
+        document.getElementById('useTypedLinks').addEventListener('change', toggleLinkTypeGrid);
+
         function renderChannels(type) {
             const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
             const channels = type === 'source' ? config.sourceChannels : config.targetChannels;
@@ -439,6 +454,7 @@
             config.ownerId = document.getElementById('ownerId').value.trim();
             config.manualReview = document.getElementById('manualReview').checked;
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
+            config.useTypedLinks = document.getElementById('useTypedLinks').checked;
             config.messageTemplate = {
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
@@ -462,6 +478,8 @@
             document.getElementById('ownerId').value = config.ownerId || '';
             document.getElementById('manualReview').checked = !!config.manualReview;
             document.getElementById('dailyLimit').value = config.dailyLimit || 0;
+            document.getElementById('useTypedLinks').checked = !!config.useTypedLinks;
+            document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'flex' : 'none';
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -527,6 +545,7 @@
                         config.ownerId = c.ownerId || '';
                         config.manualReview = !!c.manualReview;
                         config.dailyLimit = c.dailyLimit || 0;
+                        config.useTypedLinks = !!c.useTypedLinks;
                         config.enabled = c.enabled;
                         populateUI();
                     }

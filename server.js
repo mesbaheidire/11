@@ -1204,6 +1204,7 @@ app.post('/api/spy/config', (req, res) => {
     if (incoming.ownerId !== undefined) config.ownerId = incoming.ownerId;
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
+    if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
@@ -1232,6 +1233,7 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.ownerId !== undefined) config.ownerId = incoming.ownerId;
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
+    if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;

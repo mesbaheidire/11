@@ -480,21 +480,40 @@ async function processPost(config, text, _unused, sourceName) {
 
     try {
       const cookie = getCookie();
-      const directResult = await directAffLink(cookie, originalLink);
+      let affLink, apiTitle, productImage, productPrice;
 
-      if (!directResult || !directResult.affLink) {
-        addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
-        continue;
+      if (config.useTypedLinks) {
+        const result = await portaffFunction(cookie, originalLink);
+        if (!result || !result.aff) {
+          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
+          continue;
+        }
+        const linkType = config.linkType || 'coin';
+        affLink = result.aff[linkType] ||
+                  result.aff.coin || result.aff.super || result.aff.point ||
+                  Object.values(result.aff).find(v => v);
+        if (!affLink) {
+          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
+          continue;
+        }
+        console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
+        apiTitle = (result.previews && result.previews.title) || '';
+        productImage = (result.previews && result.previews.image_url) || '';
+        productPrice = priceFromPost || (result.previews && result.previews.price) || '';
+      } else {
+        const directResult = await directAffLink(cookie, originalLink);
+        if (!directResult || !directResult.affLink) {
+          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
+          continue;
+        }
+        affLink = directResult.affLink;
+        console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
+        apiTitle = (directResult.previews && directResult.previews.title) || '';
+        productImage = (directResult.previews && directResult.previews.image_url) || '';
+        productPrice = priceFromPost || (directResult.previews && directResult.previews.price) || '';
       }
 
-      const affLink = directResult.affLink;
-      console.log(`🔗 تم تحويل الرابط مباشرة: ${affLink.substring(0, 60)}...`);
-
       markLinkProcessed(originalLink);
-
-      const apiTitle = (directResult.previews && directResult.previews.title) || '';
-      const productImage = (directResult.previews && directResult.previews.image_url) || '';
-      const productPrice = priceFromPost || (directResult.previews && directResult.previews.price) || '';
 
       let productTitle = apiTitle;
       if (apiTitle) {
