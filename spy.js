@@ -165,35 +165,6 @@ function addLogEntry(entry) {
   saveLog(log);
 }
 
-async function checkSellerCoupon(productId) {
-  if (!productId) return null;
-  try {
-    const got = require('got');
-    const url = `https://www.aliexpress.com/item/${productId}.html`;
-    const response = await got(url, {
-      timeout: { request: 10000 },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
-      followRedirect: true
-    });
-    const html = response.body;
-    const hasCoupon = html.includes('sellerCoupon') || html.includes('seller-coupon') ||
-                      html.includes('store-coupon') || html.includes('storeCoupon') ||
-                      html.includes('"coupon"') || html.includes('couponList');
-    if (hasCoupon) {
-      console.log(`🎁 كوبون بائع متوفر للمنتج ${productId}`);
-      return `https://www.aliexpress.com/item/${productId}.html?pdp_npi=4%40dis%21&gatewayAda498t=sellerCoupon`;
-    }
-    console.log(`ℹ️ لا يوجد كوبون بائع للمنتج ${productId}`);
-    return null;
-  } catch (e) {
-    console.log(`⚠️ فشل التحقق من كوبون المنتج: ${e.message}`);
-    return null;
-  }
-}
-
 function isPhoneProduct(title, text) {
   const combined = ((title || '') + ' ' + (text || '')).toLowerCase();
   const phoneKeywords = [
@@ -575,17 +546,14 @@ async function processPost(config, text, _unused, sourceName) {
       const couponIdMatch = affLink.match(/productIds=(\d+)/) || affLink.match(/\/item\/(\d+)/) || originalLink.match(/\/item\/(\d+)/);
       const couponProductId = resolvedProductId || (couponIdMatch ? couponIdMatch[1] : null);
 
-      let couponUrl = null;
-      if (t.couponLabel && couponProductId) {
-        couponUrl = await checkSellerCoupon(couponProductId);
-      }
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
       else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n\n`;
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
-      if (couponUrl && t.couponLabel) {
+      if (t.couponLabel && couponProductId) {
+        const couponUrl = `https://www.aliexpress.com/item/${couponProductId}.html?pdp_npi=4%40dis%21&gatewayAda498t=sellerCoupon`;
         message += `${t.couponLabel}\n${couponUrl}\n\n`;
       }
       if (t.footer) message += `${t.footer}\n`;
