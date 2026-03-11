@@ -218,7 +218,7 @@ async function runGeminiWithRotation(prompt, maxRetries = 3) {
     } catch (error) {
       const errorMsg = error.message || '';
       // Check if it's a quota error
-      if (errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('403') || errorMsg.includes('leaked') || errorMsg.includes('Forbidden')) {
+      if (errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('403') || errorMsg.includes('leaked') || errorMsg.includes('Forbidden') || errorMsg.includes('400') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('not valid')) {
         console.log(`⚠️ Gemini quota exceeded on attempt ${attempt + 1}, rotating key...`);
         if (rotateGeminiKey()) {
           continue; // Try with next key
