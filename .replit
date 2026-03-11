@@ -42,3 +42,4 @@ run = ["node", "server.js"]
 
 [userenv.shared]
 ALIEXPRESS_TRACK_ID = "Bestcoupons"
+TELEGRAM_BOT_TOKEN = "8252407430:AAHyK3ZGiwPBL5vVnh1Q-ZIhsjTTObu7WPw"
