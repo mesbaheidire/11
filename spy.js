@@ -165,6 +165,24 @@ function addLogEntry(entry) {
   saveLog(log);
 }
 
+function extractCouponFromPost(text) {
+  if (!text) return null;
+  const patterns = [
+    /(?:كوبون|قسيمة|coupon|code|كود|رمز)[:\s]*([A-Z0-9]{4,20})/i,
+    /(?:خصم|discount|off)[:\s]*(\d+%?\s*(?:خصم|off)?)/i,
+    /([A-Z]{2,6}\d{2,10})/,
+    /(?:استخدم|use|ادخل)[:\s]*([A-Z0-9]{4,20})/i
+  ];
+  for (const pat of patterns) {
+    const match = text.match(pat);
+    if (match && match[1]) {
+      const code = match[1].trim();
+      if (code.length >= 3 && code.length <= 25) return code;
+    }
+  }
+  return null;
+}
+
 function isPhoneProduct(title, text) {
   const combined = ((title || '') + ' ' + (text || '')).toLowerCase();
   const phoneKeywords = [
@@ -543,8 +561,10 @@ async function processPost(config, text, _unused, sourceName) {
 
       const t = config.messageTemplate || {};
 
-      const couponIdMatch = affLink.match(/productIds=(\d+)/) || affLink.match(/\/item\/(\d+)/) || originalLink.match(/\/item\/(\d+)/);
-      const couponProductId = resolvedProductId || (couponIdMatch ? couponIdMatch[1] : null);
+      const extractedCoupon = extractCouponFromPost(text);
+      if (extractedCoupon) {
+        console.log(`🎁 كوبون مستخرج من المنشور: ${extractedCoupon}`);
+      }
 
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
@@ -552,9 +572,8 @@ async function processPost(config, text, _unused, sourceName) {
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n\n`;
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
-      if (t.couponLabel && couponProductId) {
-        const couponUrl = `https://www.aliexpress.com/item/${couponProductId}.html?pdp_npi=4%40dis%21&gatewayAda498t=sellerCoupon`;
-        message += `${t.couponLabel}\n${couponUrl}\n\n`;
+      if (t.couponLabel && extractedCoupon) {
+        message += `${t.couponLabel} ${extractedCoupon}\n\n`;
       }
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
