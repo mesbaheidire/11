@@ -198,6 +198,11 @@
                     <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
                     <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
                 </div>
+                <textarea id="bulkSourceChannels" placeholder="الصق قائمة قنوات هنا (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:14px;resize:vertical;display:none;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:13px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة واحدة</button>
+                    <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
+                </div>
                 <p class="form-hint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
             </div>
 
@@ -207,6 +212,11 @@
                 <div class="add-ch-row">
                     <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
                     <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
+                </div>
+                <textarea id="bulkTargetChannels" placeholder="الصق قائمة قنوات هنا (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:14px;resize:vertical;display:none;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:13px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة واحدة</button>
+                    <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
                 </div>
                 <p class="form-hint">أضف قنواتك التي سيُنشر فيها - البوت يجب أن يكون مشرف فيها</p>
             </div>
@@ -446,6 +456,30 @@
             if (type === 'source') config.sourceChannels.splice(index, 1);
             else config.targetChannels.splice(index, 1);
             renderChannels(type);
+        }
+
+        function toggleBulk(type) {
+            const ta = document.getElementById(type === 'source' ? 'bulkSourceChannels' : 'bulkTargetChannels');
+            const btn = document.getElementById(type === 'source' ? 'bulkSourceBtn' : 'bulkTargetBtn');
+            const show = ta.style.display === 'none';
+            ta.style.display = show ? 'block' : 'none';
+            btn.style.display = show ? 'block' : 'none';
+        }
+
+        function addBulkChannels(type) {
+            const taId = type === 'source' ? 'bulkSourceChannels' : 'bulkTargetChannels';
+            const raw = document.getElementById(taId).value;
+            const lines = raw.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
+            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
+            let added = 0;
+            for (const ch of lines) {
+                if (!arr.includes(ch)) { arr.push(ch); added++; }
+            }
+            document.getElementById(taId).value = '';
+            document.getElementById(taId).style.display = 'none';
+            document.getElementById(type === 'source' ? 'bulkSourceBtn' : 'bulkTargetBtn').style.display = 'none';
+            renderChannels(type);
+            if (added > 0) showToast(`تمت إضافة ${added} قناة`);
         }
 
         function collectConfig() {
