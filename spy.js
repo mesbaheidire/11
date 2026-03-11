@@ -1,7 +1,7 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-const { portaffFunction } = require('./afflink');
+const { portaffFunction, directAffLink } = require('./afflink');
 const http = require('http');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
@@ -480,29 +480,21 @@ async function processPost(config, text, _unused, sourceName) {
 
     try {
       const cookie = getCookie();
-      const result = await portaffFunction(cookie, originalLink);
+      const directResult = await directAffLink(cookie, originalLink);
 
-      if (!result || !result.aff) {
+      if (!directResult || !directResult.affLink) {
         addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
         continue;
       }
 
-      const linkType = config.linkType || 'coin';
-
-      const affLink = result.aff[linkType] ||
-                      result.aff.coin || result.aff.super || result.aff.point ||
-                      Object.values(result.aff).find(v => v);
-
-      if (!affLink) {
-        addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
-        continue;
-      }
+      const affLink = directResult.affLink;
+      console.log(`🔗 تم تحويل الرابط مباشرة: ${affLink.substring(0, 60)}...`);
 
       markLinkProcessed(originalLink);
 
-      const apiTitle = (result.previews && result.previews.title) || '';
-      const productImage = (result.previews && result.previews.image_url) || '';
-      const productPrice = priceFromPost || (result.previews && result.previews.price) || '';
+      const apiTitle = (directResult.previews && directResult.previews.title) || '';
+      const productImage = (directResult.previews && directResult.previews.image_url) || '';
+      const productPrice = priceFromPost || (directResult.previews && directResult.previews.price) || '';
 
       let productTitle = apiTitle;
       if (apiTitle) {

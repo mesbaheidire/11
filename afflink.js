@@ -340,17 +340,7 @@ async function portaffFunction(cookie, ids) {
 
     if (!productId) throw new Error("❌ لم يتم استخراج Product ID.");
 
-    // Handle cookie format - user might provide just the value or include xman_t=
-    let cookieStr = cookie.trim();
-    if (cookieStr.includes('xman_t=')) {
-        // Extract the xman_t value from the full cookie string
-        const match = cookieStr.match(/xman_t=([^;]+)/);
-        if (match) {
-            cookieStr = `xman_t=${match[1]};`;
-        }
-    } else {
-        cookieStr = `xman_t=${cookieStr};`;
-    }
+    let cookieStr = prepareCookie(cookie);
     
     const sourceTypes = {
         "555": "coin",
@@ -404,4 +394,53 @@ async function portaffFunction(cookie, ids) {
 
     return result;
 }
+
+function prepareCookie(cookie) {
+    let cookieStr = cookie.trim();
+    if (cookieStr.includes('xman_t=')) {
+        const match = cookieStr.match(/xman_t=([^;]+)/);
+        if (match) {
+            cookieStr = `xman_t=${match[1]};`;
+        }
+    } else {
+        cookieStr = `xman_t=${cookieStr};`;
+    }
+    return cookieStr;
+}
+
+async function directAffLink(cookie, originalUrl) {
+    let cookieStr = prepareCookie(cookie);
+
+    const response = await got("https://portals.aliexpress.com/tools/linkGenerate/generatePromotionLink.htm", {
+        searchParams: {
+            trackId: process.env.ALIEXPRESS_TRACK_ID || "default",
+            targetUrl: originalUrl
+        },
+        headers: {
+            cookie: cookieStr
+        },
+        responseType: "json"
+    });
+
+    const data = response.body.data;
+    let affLink = null;
+    if (data && typeof data === 'object') {
+        affLink = data.promotionUrl || data.couponUrl || data.url || null;
+    } else if (typeof data === 'string') {
+        affLink = data;
+    }
+
+    if (!affLink) throw new Error('فشل تحويل الرابط');
+
+    const idObj = await idCatcher(originalUrl);
+    const productId = idObj?.id;
+    let previews = {};
+    if (productId) {
+        previews = await fetchLinkPreview(productId);
+    }
+
+    return { affLink, previews, productId };
+}
+
 exports.portaffFunction = portaffFunction;
+exports.directAffLink = directAffLink;
