@@ -628,6 +628,14 @@ async function startSpy(config) {
     console.log('🕵️ تم الاتصال بحساب تيليجرام');
   }
 
+  console.log('🔄 جاري مزامنة المحادثات...');
+  try {
+    const dialogs = await spyClient.getDialogs({ limit: 100 });
+    console.log(`📋 تمت مزامنة ${dialogs.length} محادثة`);
+  } catch (e) {
+    console.log(`⚠️ فشل مزامنة المحادثات: ${e.message}`);
+  }
+
   const sourceUsernames = config.sourceChannels.map(ch => {
     if (ch.startsWith('@')) return ch.substring(1);
     if (ch.includes('t.me/')) {
@@ -637,6 +645,22 @@ async function startSpy(config) {
     return ch;
   });
 
+  const resolvedSourceIds = new Set();
+  for (const src of sourceUsernames) {
+    try {
+      const entity = await spyClient.getEntity(src);
+      const entityId = String(entity.id?.value ?? entity.id);
+      resolvedSourceIds.add(entityId);
+      console.log(`✅ تم حل القناة: ${src} → ${entity.title || src} (ID: ${entityId})`);
+    } catch (e) {
+      console.log(`❌ فشل حل القناة "${src}": ${e.message}`);
+    }
+  }
+
+  if (resolvedSourceIds.size === 0) {
+    console.log('⚠️ لم يتم حل أي قناة مصدر — تأكد أن الحساب مشترك في القنوات');
+  }
+
   let msgCount = 0;
 
   spyClient.addEventHandler(async (event) => {
@@ -645,7 +669,7 @@ async function startSpy(config) {
       if (!msg || !msg.peerId) return;
 
       msgCount++;
-      if (msgCount <= 3 || msgCount % 50 === 0) {
+      if (msgCount <= 5 || msgCount % 50 === 0) {
         console.log(`📨 رسالة #${msgCount} — peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
       }
 
@@ -653,7 +677,7 @@ async function startSpy(config) {
       try {
         chatEntity = await spyClient.getEntity(msg.peerId);
       } catch (e) {
-        console.log(`⚠️ فشل حل الكيان: ${e.message}`);
+        if (msgCount <= 10) console.log(`⚠️ فشل حل الكيان: ${e.message}`);
         return;
       }
 
@@ -661,16 +685,17 @@ async function startSpy(config) {
       const chatTitle = chatEntity.title || chatEntity.username || '';
       const chatId = String(chatEntity.id?.value ?? chatEntity.id);
 
-      if (msgCount <= 5) {
+      if (msgCount <= 10) {
         console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
       }
 
-      const isSource = sourceUsernames.some(src => {
-        const srcLower = src.toLowerCase();
-        return chatUsername === srcLower ||
-               chatId === src ||
-               ('-100' + chatId) === src;
-      });
+      const isSource = resolvedSourceIds.has(chatId) ||
+        sourceUsernames.some(src => {
+          const srcLower = src.toLowerCase();
+          return chatUsername === srcLower ||
+                 chatId === src ||
+                 ('-100' + chatId) === src;
+        });
 
       if (!isSource) return;
 
