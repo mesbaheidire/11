@@ -573,7 +573,7 @@ async function processPost(config, text, _unused, sourceName) {
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
       if (t.couponLabel && extractedCoupon) {
-        message += `${t.couponLabel} ${extractedCoupon}\n\n`;
+        message += `${t.couponLabel}\nكوبون: ${extractedCoupon}\n\n`;
       }
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
