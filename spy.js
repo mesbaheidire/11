@@ -165,6 +165,26 @@ function addLogEntry(entry) {
   saveLog(log);
 }
 
+function detectLinkType(url, text) {
+  if (url) {
+    const u = url.toLowerCase();
+    if (u.includes('coin-index') || u.includes('syicon') || u.includes('sourcetype=555') || u.includes('/p/coin')) return 'coin';
+    if (u.includes('sourcetype=620') || u.includes('channel=coin') || u.includes('point')) return 'point';
+    if (u.includes('sourcetype=562') || u.includes('super')) return 'super';
+    if (u.includes('sourcetype=570') || u.includes('limited') || u.includes('limit')) return 'limit';
+    if (u.includes('bundledeals') || u.includes('sourcetype=561') || u.includes('bundle')) return 'ther3';
+  }
+  if (text) {
+    const t = text.toLowerCase();
+    if (t.includes('🪙') || t.includes('coin') || t.includes('كوين')) return 'coin';
+    if (t.includes('⭐') || t.includes('point') || t.includes('بوينت') || t.includes('نقاط')) return 'point';
+    if (t.includes('🔥') || t.includes('super') || t.includes('سوبر')) return 'super';
+    if (t.includes('⚡') || t.includes('limited') || t.includes('محدود')) return 'limit';
+    if (t.includes('bundle') || t.includes('باندل') || t.includes('حزمة')) return 'ther3';
+  }
+  return null;
+}
+
 function extractAliExpressLinks(text) {
   if (!text) return [];
   const patterns = [
@@ -467,7 +487,15 @@ async function processPost(config, text, _unused, sourceName) {
         continue;
       }
 
-      const affLink = result.aff[config.linkType || 'coin'] ||
+      const detectedType = detectLinkType(originalLink, text);
+      const linkType = detectedType || config.linkType || 'coin';
+      if (detectedType) {
+        console.log(`🔗 نوع الرابط المكتشف: ${detectedType}`);
+      } else {
+        console.log(`🔗 نوع الرابط الافتراضي: ${linkType}`);
+      }
+
+      const affLink = result.aff[linkType] ||
                       result.aff.coin || result.aff.super || result.aff.point ||
                       Object.values(result.aff).find(v => v);
 
