@@ -65,6 +65,7 @@
         .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.failed, .log-item .log-status.error, .log-item .log-status.publish_failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .log-item .log-status.cookie_expired { background: rgba(255, 165, 0, 0.3); color: #ffa500; }
         .log-item .log-status.pending { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
         .log-item .log-status.review { background: rgba(156, 39, 176, 0.2); color: #CE93D8; }
         .log-item .log-status.skipped { background: rgba(158, 158, 158, 0.2); color: #9E9E9E; }
@@ -768,7 +769,7 @@
                 logList.innerHTML = data.log.slice().reverse().map(entry => {
                     const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
                     const statusClass = entry.status || 'detected';
-                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية', daily_limit: 'تجاوز الحد اليومي' };
+                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', cookie_expired: 'كوكي منتهي ⚠️', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية', daily_limit: 'تجاوز الحد اليومي' };
                     return `
                         <div class="log-item">
                             <div class="log-header">

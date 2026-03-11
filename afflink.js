@@ -402,15 +402,31 @@ async function portaffFunction(cookie, ids) {
                 },
                 headers: {
                     cookie: cookieStr
-                },
-                responseType: "json"
+                }
             })
-                .then(r => ({ type: name, data: r.body.data }))
+                .then(r => {
+                    const raw = r.body;
+                    if (typeof raw === 'string' && (raw.includes('<!DOCTYPE') || raw.includes('login.html') || raw.includes('<html'))) {
+                        console.log(`⚠️ الكوكي منتهي — رد تسجيل دخول من AliExpress (${name})`);
+                        return { type: name, data: null, cookieExpired: true };
+                    }
+                    try {
+                        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                        return { type: name, data: parsed.data };
+                    } catch {
+                        return { type: name, data: null };
+                    }
+                })
                 .catch(() => ({ type: name, data: null }))
         );
     }
 
     const promoResults = await Promise.all(promoRequests);
+
+    const cookieExpired = promoResults.some(pr => pr.cookieExpired);
+    if (cookieExpired) {
+        console.log('🔴 الكوكي منتهي الصلاحية — جدّد الكوكي من إعدادات التطبيق');
+    }
 
     for (const pr of promoResults) {
         if (pr.data && typeof pr.data === 'object') {
@@ -450,11 +466,22 @@ async function directAffLink(cookie, originalUrl) {
         },
         headers: {
             cookie: cookieStr
-        },
-        responseType: "json"
+        }
     });
 
-    const data = response.body.data;
+    const rawBody = response.body;
+    if (typeof rawBody === 'string' && (rawBody.includes('<!DOCTYPE') || rawBody.includes('login.html') || rawBody.includes('<html'))) {
+        throw new Error('⚠️ الكوكي منتهي الصلاحية — AliExpress يطلب تسجيل الدخول. جدّد الكوكي من إعدادات التطبيق.');
+    }
+
+    let parsed;
+    try {
+        parsed = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+    } catch (e) {
+        throw new Error('⚠️ رد غير متوقع من AliExpress — تحقق من صلاحية الكوكي');
+    }
+
+    const data = parsed.data;
     let affLink = null;
     if (data && typeof data === 'object') {
         affLink = data.promotionUrl || data.couponUrl || data.url || null;

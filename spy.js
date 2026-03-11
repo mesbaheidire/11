@@ -671,8 +671,11 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
     } catch (linkErr) {
       inFlightLinks.delete(normalizeAliLink(originalLink));
-      console.log('❌ خطأ في معالجة الرابط:', linkErr.message);
-      addLogEntry({ source: sourceName, originalLink, status: 'error', error: linkErr.message });
+      const isCookieError = linkErr.message && (linkErr.message.includes('الكوكي منتهي') || linkErr.message.includes('login') || linkErr.message.includes('DOCTYPE'));
+      const errorStatus = isCookieError ? 'cookie_expired' : 'error';
+      const errorMsg = isCookieError ? '⚠️ الكوكي منتهي الصلاحية — جدّد الكوكي' : linkErr.message;
+      console.log(`❌ خطأ في معالجة الرابط: ${errorMsg}`);
+      addLogEntry({ source: sourceName, originalLink, status: errorStatus, error: errorMsg });
     }
   }
 }
