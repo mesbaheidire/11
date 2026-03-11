@@ -165,6 +165,18 @@ function addLogEntry(entry) {
   saveLog(log);
 }
 
+function isPhoneProduct(title, text) {
+  const combined = ((title || '') + ' ' + (text || '')).toLowerCase();
+  const phoneKeywords = [
+    'smartphone', 'phone', 'iphone', 'samsung', 'galaxy', 'xiaomi', 'redmi',
+    'poco', 'realme', 'oppo', 'vivo', 'oneplus', 'huawei', 'honor', 'nokia',
+    'motorola', 'pixel', 'nothing phone', 'zte', 'infinix', 'tecno', 'itel',
+    'هاتف', 'موبايل', 'جوال', 'تلفون', 'سمارتفون',
+    '5g phone', '4g phone', 'cellphone', 'cell phone', 'mobile phone'
+  ];
+  return phoneKeywords.some(kw => combined.includes(kw));
+}
+
 function detectLinkType(url, text) {
   if (url) {
     const u = url.toLowerCase();
@@ -516,7 +528,10 @@ async function processPost(config, text, _unused, sourceName) {
       markLinkProcessed(originalLink);
 
       let productTitle = apiTitle;
-      if (apiTitle) {
+      const isPhone = isPhoneProduct(apiTitle, text);
+      if (isPhone) {
+        console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
+      } else if (apiTitle) {
         try {
           productTitle = await refineTitle(apiTitle);
           console.log(`🤖 عنوان محسّن: ${productTitle}`);
