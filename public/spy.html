@@ -317,6 +317,11 @@
                     <input type="text" id="tmplLinkLabel" placeholder="🛒 رابط الشراء:">
                 </div>
                 <div class="form-group">
+                    <label>عنوان الكوبون:</label>
+                    <input type="text" id="tmplCouponLabel" placeholder="🎁 إحجز قسيمة البائع">
+                    <p class="form-hint">اتركه فارغاً لإخفاء سطر الكوبون</p>
+                </div>
+                <div class="form-group">
                     <label>التذييل:</label>
                     <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
                 </div>
@@ -372,6 +377,7 @@
                 prefix: '🔥 عرض حصري',
                 priceLabel: '💰 السعر:',
                 linkLabel: '🛒 رابط الشراء:',
+                couponLabel: '🎁 إحجز قسيمة البائع',
                 footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz',
                 botLink: '@AliOffersDZ_bot',
                 hashtags: '#Aliexpress #تخفيضات'
@@ -459,6 +465,7 @@
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
                 linkLabel: document.getElementById('tmplLinkLabel').value,
+                couponLabel: document.getElementById('tmplCouponLabel').value,
                 footer: document.getElementById('tmplFooter').value,
                 botLink: document.getElementById('tmplBotLink').value,
                 hashtags: document.getElementById('tmplHashtags').value
@@ -487,6 +494,7 @@
             document.getElementById('tmplPrefix').value = t.prefix || '';
             document.getElementById('tmplPriceLabel').value = t.priceLabel || '';
             document.getElementById('tmplLinkLabel').value = t.linkLabel || '';
+            document.getElementById('tmplCouponLabel').value = t.couponLabel || '';
             document.getElementById('tmplFooter').value = t.footer || '';
             document.getElementById('tmplBotLink').value = t.botLink || '';
             document.getElementById('tmplHashtags').value = t.hashtags || '';

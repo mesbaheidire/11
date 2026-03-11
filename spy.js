@@ -492,7 +492,7 @@ async function processPost(config, text, _unused, sourceName) {
 
     try {
       const cookie = getCookie();
-      let affLink, apiTitle, productImage, productPrice;
+      let affLink, apiTitle, productImage, productPrice, resolvedProductId = null;
 
       if (config.useTypedLinks) {
         const result = await portaffFunction(cookie, originalLink);
@@ -519,6 +519,7 @@ async function processPost(config, text, _unused, sourceName) {
           continue;
         }
         affLink = directResult.affLink;
+        resolvedProductId = directResult.productId || null;
         console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
         apiTitle = (directResult.previews && directResult.previews.title) || '';
         productImage = (directResult.previews && directResult.previews.image_url) || '';
@@ -540,6 +541,9 @@ async function processPost(config, text, _unused, sourceName) {
         }
       }
 
+      const couponIdMatch = affLink.match(/productIds=(\d+)/) || affLink.match(/\/item\/(\d+)/) || originalLink.match(/\/item\/(\d+)/);
+      const couponProductId = resolvedProductId || (couponIdMatch ? couponIdMatch[1] : null);
+
       const t = config.messageTemplate || {};
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
@@ -547,6 +551,10 @@ async function processPost(config, text, _unused, sourceName) {
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n\n`;
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
+      if (t.couponLabel && couponProductId) {
+        const couponUrl = `https://www.aliexpress.com/item/${couponProductId}.html?pdp_npi=4%40dis%21&gatewayAda498t=sellerCoupon`;
+        message += `${t.couponLabel}\n${couponUrl}\n\n`;
+      }
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
