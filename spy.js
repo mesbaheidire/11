@@ -271,11 +271,13 @@ function extractPrice(text) {
 }
 
 function getBotToken() {
-  return process.env.TELEGRAM_BOT_TOKEN || '';
+  const config = loadConfig();
+  return config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
 }
 
 function getCookie() {
-  return process.env.cook || '';
+  const config = loadConfig();
+  return config.cook || process.env.cook || '';
 }
 
 let spyClient = null;
@@ -952,6 +954,8 @@ function getStatus() {
   const safeConfig = { ...config };
   safeConfig.apiHash = safeConfig.apiHash ? '****' : '';
   safeConfig.phoneNumber = safeConfig.phoneNumber ? safeConfig.phoneNumber.substring(0, 4) + '****' : '';
+  safeConfig.cook = safeConfig.cook ? true : false;
+  safeConfig.botToken = safeConfig.botToken ? true : false;
 
   const hasSession = fs.existsSync(SESSION_FILE);
   return {

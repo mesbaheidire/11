@@ -124,7 +124,7 @@
         <div class="info-box">
             <i class="fas fa-info-circle"></i>
             يستخدم حسابك الشخصي في تيليجرام لمراقبة أي قناة عامة أنت مشترك فيها — <strong>بدون أن تكون مشرف</strong>.
-            توكن البوت والكوكي يُستخدمان تلقائياً من إعدادات التطبيق الرئيسية.
+            توكن البوت والكوكي يُحفظان في إعدادات التجسس أدناه — لا حاجة لمتغيرات البيئة.
         </div>
 
         <div class="tab-bar">
@@ -155,6 +155,22 @@
                 <div class="form-group">
                     <label>رقم الهاتف (مع رمز الدولة):</label>
                     <input type="text" id="phoneNumber" placeholder="مثال: +213XXXXXXXXX" style="direction: ltr;">
+                </div>
+
+                <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0; padding-top: 16px;">
+                    <div class="info-box" style="margin-bottom: 12px;">
+                        <i class="fas fa-key"></i>
+                        <strong>بيانات AliExpress و البوت:</strong><br>
+                        يتم حفظها داخل التطبيق — لا حاجة لمتغيرات البيئة على Render
+                    </div>
+                    <div class="form-group">
+                        <label>كوكي AliExpress (cook):</label>
+                        <input type="text" id="cookInput" placeholder="الصق الكوكي هنا..." style="direction: ltr;">
+                    </div>
+                    <div class="form-group">
+                        <label>توكن بوت تيليجرام:</label>
+                        <input type="text" id="botTokenInput" placeholder="مثال: 123456:ABC-DEF..." style="direction: ltr;">
+                    </div>
                 </div>
 
                 <div id="sessionStatus" style="margin: 12px 0;"></div>
@@ -507,6 +523,10 @@
             config.apiId = document.getElementById('apiId').value.trim();
             config.apiHash = document.getElementById('apiHash').value.trim();
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();
+            const cookVal = document.getElementById('cookInput').value.trim();
+            if (cookVal && cookVal !== '****') config.cook = cookVal;
+            const botVal = document.getElementById('botTokenInput').value.trim();
+            if (botVal && botVal !== '****') config.botToken = botVal;
             config.autoPublish = document.getElementById('autoPublish').checked;
             config.publishDelay = document.getElementById('publishDelay').checked;
             config.delayMin = parseInt(document.getElementById('delayMin').value) || 1;
@@ -532,6 +552,10 @@
             document.getElementById('apiId').value = config.apiId || '';
             document.getElementById('apiHash').value = config.apiHash || '';
             document.getElementById('phoneNumber').value = config.phoneNumber || '';
+            document.getElementById('cookInput').value = config.cook ? '****' : '';
+            document.getElementById('cookInput').placeholder = config.cook ? 'محفوظ — اتركه فارغ للإبقاء' : 'الصق الكوكي هنا...';
+            document.getElementById('botTokenInput').value = config.botToken ? '****' : '';
+            document.getElementById('botTokenInput').placeholder = config.botToken ? 'محفوظ — اتركه فارغ للإبقاء' : 'مثال: 123456:ABC-DEF...';
             document.getElementById('autoPublish').checked = config.autoPublish !== false;
             document.getElementById('publishDelay').checked = !!config.publishDelay;
             document.getElementById('delayMin').value = config.delayMin || 1;

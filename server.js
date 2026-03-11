@@ -438,7 +438,8 @@ app.post('/api/frame-image', async (req, res) => {
 app.post('/api/affiliate', async (req, res) => {
   try {
     const { url, credentials } = req.body;
-    const cookies = credentials?.cook || process.env.cook;
+    const spyCfg = loadSpyConfig();
+    const cookies = credentials?.cook || spyCfg.cook || process.env.cook;
     if (!url) return res.status(400).json({ success: false, error: 'الرجاء إرسال رابط المنتج' });
     if (!cookies) return res.status(500).json({ success: false, error: 'الرجاء إدخال Cookie في الإعدادات' });
 
@@ -474,7 +475,8 @@ app.post('/api/affiliate', async (req, res) => {
 app.post('/api/publish-telegram', async (req, res) => {
   try {
     const { title, price, link, coupon, image, settings, credentials } = req.body;
-    const botToken = credentials?.telegramToken || process.env.TELEGRAM_BOT_TOKEN;
+    const spyCfg2 = loadSpyConfig();
+    const botToken = credentials?.telegramToken || spyCfg2.botToken || process.env.TELEGRAM_BOT_TOKEN;
     let channelId1 = credentials?.channelId || process.env.TELEGRAM_CHANNEL_ID;
     let channelId2 = credentials?.channelId2 || '@AliOffers_Dz';
     const channelChoice = credentials?.channelChoice || '1';
@@ -548,8 +550,8 @@ app.post('/api/publish-telegram', async (req, res) => {
 app.post('/api/publish-collection', async (req, res) => {
   try {
     const { message, image, credentials } = req.body;
-    
-    const botToken = credentials?.telegramToken || process.env.TELEGRAM_BOT_TOKEN;
+    const spyCfg3 = loadSpyConfig();
+    const botToken = credentials?.telegramToken || spyCfg3.botToken || process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) return res.status(400).json({ success: false, error: 'Bot token مطلوب' });
     
     const bot = new Telegraf(botToken);
@@ -1205,6 +1207,8 @@ app.post('/api/spy/config', (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
+    if (incoming.cook !== undefined && incoming.cook !== '' && incoming.cook !== '****') config.cook = incoming.cook;
+    if (incoming.botToken !== undefined && incoming.botToken !== '' && incoming.botToken !== '****') config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
