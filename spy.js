@@ -486,7 +486,7 @@ async function refineTitle(title) {
   });
 }
 
-async function processPost(config, text, _unused, sourceName) {
+async function processPost(config, text, sourceImage, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
   if (aliLinks.length === 0) return;
 
@@ -560,6 +560,11 @@ async function processPost(config, text, _unused, sourceName) {
       }
 
       markLinkProcessed(originalLink);
+
+      if (!productImage && sourceImage) {
+        productImage = { source: sourceImage };
+        console.log(`🖼 استخدام صورة المنشور الأصلي`);
+      }
 
       let productTitle = apiTitle;
       const isPhone = isPhoneProduct(apiTitle, text);
@@ -812,8 +817,21 @@ async function startSpy(config) {
         return;
       }
 
+      let sourceImage = null;
+      if (msg.media && msg.media.photo) {
+        try {
+          const buffer = await spyClient.downloadMedia(msg.media, {});
+          if (buffer && buffer.length > 0) {
+            sourceImage = buffer;
+            console.log(`🖼 صورة مستخرجة من المنشور (${Math.round(buffer.length/1024)}KB)`);
+          }
+        } catch (imgErr) {
+          console.log(`⚠️ فشل تحميل صورة المنشور: ${imgErr.message}`);
+        }
+      }
+
       console.log(`🔗 وجد ${aliLinks.length} رابط AliExpress — بدء المعالجة`);
-      await processPost(config, text, null, chatTitle);
+      await processPost(config, text, sourceImage, chatTitle);
     } catch (err) {
       console.log('❌ خطأ Userbot:', err.message);
     }
