@@ -323,6 +323,38 @@ async function fetchLinkPreview(productId) {
         console.log("LinkPreview.xyz API failed:", err.message);
     }
     
+    // 5) Try fetching OG image directly from mobile page with simple headers
+    try {
+        console.log("Trying direct mobile page for image...");
+        const mobileRes = await got(`https://m.aliexpress.com/item/${productId}.html`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html',
+                'Accept-Language': 'en'
+            },
+            timeout: { request: 12000 },
+            followRedirect: true
+        });
+        const mHtml = mobileRes.body;
+        const ogImg = mHtml.match(/<meta property="og:image" content="([^"]+)"/i);
+        const ogTitle = mHtml.match(/<meta property="og:title" content="([^"]+)"/i);
+        const titleTag = mHtml.match(/<title>([^<]+)<\/title>/i);
+        const imgUrl = ogImg ? ogImg[1] : null;
+        let mTitle = ogTitle ? ogTitle[1] : (titleTag ? titleTag[1] : '');
+        mTitle = mTitle.replace(/ - AliExpress.*$/i, '').replace(/\|.*$/i, '').trim();
+        if (imgUrl || (mTitle && mTitle.length > 5)) {
+            console.log("✅ Product fetched via mobile page - Image:", imgUrl ? 'yes' : 'no');
+            return {
+                method: "Mobile Page",
+                title: mTitle || `منتج AliExpress #${productId}`,
+                image_url: imgUrl,
+                price: "راجع الرابط"
+            };
+        }
+    } catch (mErr) {
+        console.log("Mobile page fetch failed:", mErr.message);
+    }
+
     console.log("All methods failed, using fallback");
     return {
         method: "Fallback (Default)",
