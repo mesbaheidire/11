@@ -60,7 +60,8 @@
         .log-item .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .log-item .log-source { color: #bb86fc; font-weight: 700; font-size: 13px; }
         .log-item .log-time { color: #666; font-size: 11px; direction: ltr; }
-        .log-item .log-title { font-size: 13px; color: #ddd; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .log-item .log-title { font-size: 13px; color: #ddd; margin-bottom: 4px; white-space: normal; overflow: visible; line-height: 1.5; }
+        .log-item .log-img { width: 100%; height: 140px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; display: block; }
         .log-item .log-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; display: inline-block; }
         .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
@@ -772,11 +773,12 @@
                     const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', cookie_expired: 'كوكي منتهي ⚠️', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية', daily_limit: 'تجاوز الحد اليومي' };
                     return `
                         <div class="log-item">
+                            ${entry.image ? `<img class="log-img" src="${esc(entry.image)}" alt="صورة المنتج" onerror="this.style.display='none'">` : ''}
                             <div class="log-header">
                                 <span class="log-source"><i class="fas fa-satellite-dish"></i> ${esc(entry.source) || 'غير معروف'}</span>
                                 <span class="log-time">${esc(time)}</span>
                             </div>
-                            ${entry.title ? `<div class="log-title">${esc(entry.title)}</div>` : ''}
+                            ${entry.title ? `<div class="log-title"><strong>${esc(entry.title)}</strong></div>` : ''}
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
                                 <span class="log-status ${statusClass}">${statusLabels[entry.status] || esc(entry.status)}</span>
                                 ${entry.price ? `<span class="log-price">${esc(entry.price)}</span>` : ''}

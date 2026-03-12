@@ -350,16 +350,18 @@ function stopReviewBot() {
 }
 
 async function executePublish(review) {
-  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice } = review;
+  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
   const botToken = getBotToken();
   if (!botToken) return;
+
+  const logImage = imageUrlForLog || (typeof productImage === 'string' ? productImage : null);
 
   const config = loadConfig();
   if (isDailyLimitReached(config)) {
     console.log(`🚫 تم بلوغ الحد اليومي عند النشر (${config.dailyLimit}) — إلغاء`);
     addLogEntry({
       source: sourceName, originalLink, affiliateLink,
-      title: productTitle, price: productPrice, image: productImage,
+      title: productTitle, price: productPrice, image: logImage,
       status: 'daily_limit', targets: targetIds
     });
     return;
@@ -390,7 +392,7 @@ async function executePublish(review) {
   }
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,
-    title: productTitle, price: productPrice, image: productImage,
+    title: productTitle, price: productPrice, image: logImage,
     status: finalStatus, targets: targetIds
   });
 }
@@ -581,6 +583,8 @@ async function processPost(config, text, sourceImage, sourceName) {
         console.log(`🖼 استخدام صورة المنشور الأصلي`);
       }
 
+      const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
+
       let productTitle = apiTitle;
       const isPhone = isPhoneProduct(apiTitle, text);
       if (isPhone) {
@@ -639,7 +643,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
         addLogEntry({
           source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: productImage,
+          title: productTitle, price: productPrice, image: imageUrlForLog,
           status: 'daily_limit', targets: targetIds
         });
         continue;
@@ -647,14 +651,14 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       const reviewData = {
         message, productImage, targetIds, sourceName, originalLink,
-        affiliateLink: affLink, productTitle, productPrice
+        affiliateLink: affLink, productTitle, productPrice, imageUrlForLog
       };
 
       if (config.manualReview && config.ownerId && botToken) {
         console.log(`📋 إرسال للمراجعة اليدوية...`);
         addLogEntry({
           source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: productImage,
+          title: productTitle, price: productPrice, image: imageUrlForLog,
           status: 'review', targets: targetIds
         });
         await sendForReview(botToken, config.ownerId, reviewData);
@@ -677,7 +681,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
           addLogEntry({
             source: sourceName, originalLink, affiliateLink: affLink,
-            title: productTitle, price: productPrice, image: productImage,
+            title: productTitle, price: productPrice, image: imageUrlForLog,
             status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
           });
           setTimeout(publishFn, delayMs);
@@ -687,7 +691,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       } else {
         addLogEntry({
           source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: productImage,
+          title: productTitle, price: productPrice, image: imageUrlForLog,
           status: 'detected', targets: targetIds
         });
       }
