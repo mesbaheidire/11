@@ -535,6 +535,33 @@ function callAiRefine(title, isHook) {
   });
 }
 
+async function extractPhoneNameWithAI(text) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-extract-phone-name',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.phoneName ? parsed.phoneName : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function refineTitle(title) {
   return callAiRefine(title, false);
 }
@@ -651,13 +678,27 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       const isPhone = isPhoneProduct(apiTitle, text);
       if (isPhone) {
-        const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-        const postTitle = postLines.length > 0 ? postLines[0] : null;
-        if (postTitle) {
-          productTitle = postTitle;
-          console.log(`📱 منتج هاتف — العنوان من المنشور: ${productTitle}`);
+        let phoneNameFromAI = null;
+        try {
+          phoneNameFromAI = await extractPhoneNameWithAI(text);
+          if (phoneNameFromAI) {
+            console.log(`🤖📱 اسم الهاتف مستخرج بالذكاء الاصطناعي: ${phoneNameFromAI}`);
+          }
+        } catch (e) {
+          console.log(`⚠️ فشل استخراج اسم الهاتف بالذكاء الاصطناعي: ${e.message}`);
+        }
+
+        if (phoneNameFromAI) {
+          productTitle = phoneNameFromAI;
         } else {
-          console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
+          const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
+          const postTitle = postLines.length > 0 ? postLines[0] : null;
+          if (postTitle) {
+            productTitle = postTitle;
+            console.log(`📱 احتياط — اسم الهاتف من أول سطر: ${productTitle}`);
+          } else {
+            console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
+          }
         }
       } else if (apiTitle) {
         try {
@@ -882,9 +923,9 @@ async function startSpy(config) {
   }
 
   let botId = null;
-  const botToken = getBotToken();
-  if (botToken) {
-    const tokenMatch = botToken.match(/^(\d+):/);
+  const spyBotToken = getBotToken();
+  if (spyBotToken) {
+    const tokenMatch = spyBotToken.match(/^(\d+):/);
     if (tokenMatch) botId = tokenMatch[1];
   }
 

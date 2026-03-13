@@ -837,6 +837,65 @@ ${text}`;
   }
 });
 
+app.post('/api/ai-extract-phone-name', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ success: false, error: 'النص مطلوب' });
+
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, phoneName: null, method: 'no_ai' });
+    }
+
+    try {
+      const prompt = `أنت خبير في الهواتف الذكية. استخرج اسم الهاتف الكامل والدقيق من النص التالي.
+
+قواعد صارمة:
+1. استخرج اسم الهاتف بالضبط كما هو معروف تجارياً (مثال: Samsung Galaxy S24 Ultra, iPhone 16 Pro Max, Xiaomi 14 Ultra, Redmi Note 13 Pro+ 5G).
+2. يجب أن يتضمن: الشركة المصنعة + الموديل + الرقم + اللاحقة (Pro, Ultra, Plus, Max, Lite) إن وجدت.
+3. أضف مواصفات RAM/ROM إذا ذُكرت في النص (مثال: 8GB/256GB).
+4. لا تترجم الاسم — اكتبه بالإنجليزية دائماً.
+5. أعد فقط JSON: {"phoneName":"اسم الهاتف"} أو {"phoneName":null} إذا لم تجد هاتفاً.
+6. لا تضف أي شرح — فقط JSON.
+
+النص:
+${text}`;
+
+      const rawResult = await runGeminiWithRotation(prompt);
+      let extracted = null;
+      try {
+        const jsonMatch = rawResult.match(/\{[\s\S]*?"phoneName"[\s\S]*?\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          extracted = parsed.phoneName;
+        }
+      } catch {}
+
+      if (!extracted) {
+        const fallbackLine = rawResult.replace(/^(الهاتف|Phone|الاسم|Name)[\s:]+/i, '').split('\n')[0].trim();
+        if (fallbackLine && fallbackLine !== 'null' && fallbackLine.toLowerCase() !== 'none' && fallbackLine.length >= 5 && fallbackLine.length <= 80) {
+          extracted = fallbackLine;
+        }
+      }
+
+      if (extracted) {
+        extracted = String(extracted).replace(/[*#"']/g, '').trim();
+        if (extracted.length < 5 || extracted.length > 80) {
+          return res.json({ success: true, phoneName: null, method: 'ai_invalid' });
+        }
+      }
+
+      res.json({ success: true, phoneName: extracted || null, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI phone name extraction failed:', aiError.message);
+      res.json({ success: true, phoneName: null, method: 'fallback' });
+    }
+  } catch (error) {
+    console.error('Phone name extraction error:', error.message || error);
+    res.json({ success: true, phoneName: null, method: 'error' });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {
