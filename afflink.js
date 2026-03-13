@@ -439,6 +439,7 @@ async function portaffFunction(cookie, ids) {
     }
 
     result.previews = await fetchLinkPreview(productId);
+    result.productId = productId;
 
     return result;
 }

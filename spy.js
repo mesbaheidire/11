@@ -10,6 +10,22 @@ const SESSION_FILE = path.join(__dirname, 'spy_session.json');
 const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
 
 const inFlightLinks = new Set();
+const processedMessageIds = new Set();
+const MAX_PROCESSED_MESSAGES = 500;
+
+function isMessageProcessed(chatId, msgId) {
+  const key = `${chatId}:${msgId}`;
+  return processedMessageIds.has(key);
+}
+
+function markMessageProcessed(chatId, msgId) {
+  const key = `${chatId}:${msgId}`;
+  processedMessageIds.add(key);
+  if (processedMessageIds.size > MAX_PROCESSED_MESSAGES) {
+    const first = processedMessageIds.values().next().value;
+    processedMessageIds.delete(first);
+  }
+}
 
 function loadProcessedLinks() {
   try {
@@ -585,6 +601,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           continue;
         }
         console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
+        resolvedProductId = result.productId || null;
         apiTitle = (result.previews && result.previews.title) || '';
         productImage = (result.previews && result.previews.image_url) || '';
         productPrice = priceFromPost || (result.previews && result.previews.price) || '';
@@ -604,6 +621,17 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       markLinkProcessed(originalLink);
+
+      if (resolvedProductId) {
+        const productKey = 'product:' + resolvedProductId;
+        const processed = loadProcessedLinks();
+        if (processed.some(entry => entry.link === productKey)) {
+          console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
+          continue;
+        }
+        processed.push({ link: productKey, time: Date.now() });
+        saveProcessedLinks(processed);
+      }
 
       if (!productImage && sourceImage) {
         productImage = { source: sourceImage };
@@ -882,6 +910,13 @@ async function startSpy(config) {
         });
 
       if (!isSource) return;
+
+      const msgId = msg.id;
+      if (isMessageProcessed(chatId, msgId)) {
+        console.log(`🔁 تخطي رسالة مكررة: ${chatTitle} #${msgId}`);
+        return;
+      }
+      markMessageProcessed(chatId, msgId);
 
       console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
 
