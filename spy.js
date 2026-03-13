@@ -293,7 +293,11 @@ function getBotToken() {
 
 function getCookie() {
   const config = loadConfig();
-  return config.cook || process.env.cook || '';
+  const cookie = config.cook || process.env.cook || '';
+  if (!cookie) {
+    console.log('⚠️ الكوكي غير موجود — تأكد من إدخاله في صفحة الإعدادات الرئيسية');
+  }
+  return cookie;
 }
 
 let spyClient = null;
@@ -609,6 +613,11 @@ async function processPost(config, text, sourceImage, sourceName) {
 
     try {
       const cookie = getCookie();
+      if (!cookie) {
+        addLogEntry({ source: sourceName, originalLink, status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
+        inFlightLinks.delete(normalizeAliLink(originalLink));
+        continue;
+      }
       let affLink, apiTitle, productImage, productPrice, resolvedProductId = null;
 
       if (config.useTypedLinks) {
