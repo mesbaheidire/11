@@ -578,9 +578,22 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
+      if (!productImage && sourceImage) {
+        productImage = { source: sourceImage };
+        console.log(`🖼 جميع طرق API فشلت — استخدام صورة المنشور الأصلي كاحتياط أخير`);
+      }
+
       const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
 
       let productTitle = apiTitle;
+      if (!productTitle) {
+        const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
+        if (postLines.length > 0) {
+          productTitle = postLines[0];
+          console.log(`📝 جميع طرق API فشلت — استخدام عنوان المنشور كاحتياط أخير: ${productTitle}`);
+        }
+      }
+
       const isPhone = isPhoneProduct(apiTitle, text);
       if (isPhone) {
         const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
