@@ -578,25 +578,10 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
-      if (!productImage && sourceImage) {
-        productImage = { source: sourceImage };
-        console.log(`🖼 استخدام صورة المنشور الأصلي`);
-      }
-
       const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
 
       let productTitle = apiTitle;
-      const isPhone = isPhoneProduct(apiTitle, text);
-      if (isPhone) {
-        const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-        const postTitle = postLines.length > 0 ? postLines[0] : null;
-        if (postTitle) {
-          productTitle = postTitle;
-          console.log(`📱 منتج هاتف — العنوان من المنشور: ${productTitle}`);
-        } else {
-          console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
-        }
-      } else if (apiTitle) {
+      if (apiTitle) {
         try {
           productTitle = await refineTitle(apiTitle);
           console.log(`🤖 عنوان محسّن: ${productTitle}`);
