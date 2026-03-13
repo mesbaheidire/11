@@ -778,6 +778,65 @@ ${text}`;
   }
 });
 
+app.post('/api/ai-extract-coupon', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ success: false, error: 'النص مطلوب' });
+
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, coupon: null, method: 'no_ai' });
+    }
+
+    try {
+      const prompt = `أنت محلل نصوص خبير في التسويق والعروض. استخرج كود الكوبون أو كود الخصم من النص التالي.
+
+قواعد:
+1. ابحث عن أي كود كوبون أو كود خصم مذكور في النص.
+2. الكوبونات عادة تكون مزيج من حروف كبيرة وأرقام مثل: SAVE10, US5OFF, AE200, CHOICE50, إلخ.
+3. ابحث عن كلمات مفتاحية مثل: كوبون، كود، coupon، code، خصم، discount، استخدم، use، ادخل، promo.
+4. إذا وجدت أكثر من كوبون، اختر الذي يعطي أكبر خصم.
+5. أعد الإجابة بصيغة JSON فقط: {"coupon":"الكوبون"} أو {"coupon":null} إذا لم تجد كوبوناً.
+6. لا تضف أي شرح أو نص إضافي — فقط JSON.
+
+النص:
+${text}`;
+
+      const rawResult = await runGeminiWithRotation(prompt);
+      let extracted = null;
+      try {
+        const jsonMatch = rawResult.match(/\{[\s\S]*?"coupon"[\s\S]*?\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          extracted = parsed.coupon;
+        }
+      } catch {}
+
+      if (!extracted) {
+        const fallbackLine = rawResult.replace(/^(الكوبون|Coupon|النتيجة|الكود)[\s:]+/i, '').split('\n')[0].trim();
+        if (fallbackLine && fallbackLine !== 'NONE' && fallbackLine.toLowerCase() !== 'none' && fallbackLine !== 'null' && fallbackLine.length <= 25) {
+          extracted = fallbackLine;
+        }
+      }
+
+      if (extracted) {
+        extracted = String(extracted).replace(/[*#"']/g, '').trim();
+        if (extracted.length < 3 || extracted.length > 25) {
+          return res.json({ success: true, coupon: null, method: 'ai_invalid' });
+        }
+      }
+
+      res.json({ success: true, coupon: extracted || null, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI coupon extraction failed:', aiError.message);
+      res.json({ success: true, coupon: null, method: 'fallback' });
+    }
+  } catch (error) {
+    console.error('Coupon extraction error:', error.message || error);
+    res.json({ success: true, coupon: null, method: 'error' });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {

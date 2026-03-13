@@ -465,6 +465,33 @@ async function extractPriceWithAI(text) {
   });
 }
 
+async function extractCouponWithAI(text) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-extract-coupon',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.coupon ? parsed.coupon : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 function callAiRefine(title, isHook) {
   return new Promise((resolve) => {
     const postData = JSON.stringify({ title, isHook });
@@ -625,9 +652,20 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       const t = config.messageTemplate || {};
 
-      const extractedCoupon = extractCouponFromPost(text);
-      if (extractedCoupon) {
-        console.log(`🎁 كوبون مستخرج من المنشور: ${extractedCoupon}`);
+      let extractedCoupon = null;
+      try {
+        extractedCoupon = await extractCouponWithAI(text);
+        if (extractedCoupon) {
+          console.log(`🤖 كوبون مستخرج بالذكاء الاصطناعي: ${extractedCoupon}`);
+        }
+      } catch (e) {
+        console.log('⚠️ فشل استخراج الكوبون بالذكاء الاصطناعي:', e.message);
+      }
+      if (!extractedCoupon) {
+        extractedCoupon = extractCouponFromPost(text);
+        if (extractedCoupon) {
+          console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
+        }
       }
 
       let message = '';
