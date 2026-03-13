@@ -691,13 +691,18 @@ async function processPost(config, text, sourceImage, sourceName) {
         if (phoneNameFromAI) {
           productTitle = phoneNameFromAI;
         } else {
+          const phonePatterns = [
+            /(?:samsung|galaxy|iphone|xiaomi|redmi|poco|realme|oppo|vivo|oneplus|huawei|honor|nokia|motorola|pixel|nothing|zte|infinix|tecno|itel|find\s*x|reno|gt\s*neo|note\s*\d)/i
+          ];
           const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-          const postTitle = postLines.length > 0 ? postLines[0] : null;
-          if (postTitle) {
-            productTitle = postTitle;
-            console.log(`📱 احتياط — اسم الهاتف من أول سطر: ${productTitle}`);
+          const phoneLine = postLines.find(line => phonePatterns.some(p => p.test(line)));
+          if (phoneLine) {
+            productTitle = phoneLine.replace(/^[⭐🔥📱✅⚡💥🎯👇🪙💰🏷️☀️❤️💯✨🌟🎉💎👉➡️★☆●►▶️·\-–—•|:,;\s]+/, '').trim();
+            console.log(`📱 احتياط — اسم الهاتف من سطر مطابق: ${productTitle}`);
+          } else if (apiTitle) {
+            console.log(`📱 منتج هاتف — الإبقاء على العنوان من API: ${apiTitle}`);
           } else {
-            console.log(`📱 منتج هاتف — الإبقاء على العنوان الأصلي`);
+            console.log(`📱 منتج هاتف — لا يوجد اسم متاح`);
           }
         }
       } else if (apiTitle) {
