@@ -857,6 +857,43 @@ async function startSpy(config) {
     return ch;
   });
 
+  const targetUsernames = new Set();
+  const targetIdSet = new Set();
+  for (const ch of (config.targetChannels || [])) {
+    if (ch.startsWith('-')) {
+      targetIdSet.add(ch);
+      targetIdSet.add(ch.replace(/^-100/, ''));
+    } else if (ch.startsWith('@')) {
+      targetUsernames.add(ch.substring(1).toLowerCase());
+    } else if (ch.includes('t.me/')) {
+      const match = ch.match(/t\.me\/([^\/\?]+)/);
+      if (match) targetUsernames.add(match[1].toLowerCase());
+    } else {
+      targetUsernames.add(ch.toLowerCase());
+    }
+  }
+
+  for (const tgt of targetUsernames) {
+    try {
+      const entity = await spyClient.getEntity(tgt);
+      const entityId = String(entity.id?.value ?? entity.id);
+      targetIdSet.add(entityId);
+    } catch (e) {}
+  }
+
+  let botId = null;
+  const botToken = getBotToken();
+  if (botToken) {
+    const tokenMatch = botToken.match(/^(\d+):/);
+    if (tokenMatch) botId = tokenMatch[1];
+  }
+
+  let meId = null;
+  try {
+    const me = await spyClient.getMe();
+    meId = String(me.id?.value ?? me.id);
+  } catch (e) {}
+
   const resolvedSourceIds = new Set();
   for (const src of sourceUsernames) {
     try {
@@ -873,12 +910,20 @@ async function startSpy(config) {
     console.log('⚠️ لم يتم حل أي قناة مصدر — تأكد أن الحساب مشترك في القنوات');
   }
 
+  console.log(`🛡 حماية التكرار: ${targetIdSet.size} قنوات هدف محظورة، botId=${botId || 'غير معروف'}`);
+
   let msgCount = 0;
 
   spyClient.addEventHandler(async (event) => {
     try {
       const msg = event.message;
       if (!msg || !msg.peerId) return;
+
+      if (msg.out) return;
+
+      const senderId = msg.fromId ? String(msg.fromId?.userId?.value ?? msg.fromId?.userId ?? msg.fromId?.channelId?.value ?? msg.fromId?.channelId ?? '') : '';
+      if (senderId && botId && senderId === botId) return;
+      if (senderId && meId && senderId === meId) return;
 
       msgCount++;
       if (msgCount <= 5 || msgCount % 50 === 0) {
@@ -896,6 +941,10 @@ async function startSpy(config) {
       const chatUsername = (chatEntity.username || '').toLowerCase();
       const chatTitle = chatEntity.title || chatEntity.username || '';
       const chatId = String(chatEntity.id?.value ?? chatEntity.id);
+
+      if (targetIdSet.has(chatId) || targetUsernames.has(chatUsername)) {
+        return;
+      }
 
       if (msgCount <= 10) {
         console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
