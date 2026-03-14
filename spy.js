@@ -737,6 +737,33 @@ async function refineTitle(title) {
   return callAiRefine(title, false);
 }
 
+async function extractSellerCouponWithAI(text) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-extract-seller-coupon',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.sellerCoupon ? parsed.sellerCoupon : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(12000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function generateHook(title) {
   return callAiRefine(title, true);
 }
@@ -942,8 +969,21 @@ async function processPost(config, text, sourceImage, sourceName) {
         const label = t.couponLabel || 'كوبون';
         message += `${label}: ${extractedCoupon}\n`;
       }
-      if (t.sellerCoupon && t.sellerCoupon.trim()) {
-        message += `\n🎁 ${t.sellerCoupon.trim()}\n`;
+
+      let sellerCouponText = t.sellerCoupon || '';
+      if (!sellerCouponText.trim()) {
+        try {
+          const aiCoupon = await extractSellerCouponWithAI(text);
+          if (aiCoupon) {
+            console.log(`🤖🎁 قسيمة البائع المستخرجة بالذكاء الاصطناعي: ${aiCoupon}`);
+            sellerCouponText = aiCoupon;
+          }
+        } catch (e) {
+          console.log(`⚠️ فشل استخراج قسيمة البائع: ${e.message}`);
+        }
+      }
+      if (sellerCouponText && sellerCouponText.trim()) {
+        message += `\n🎁 ${sellerCouponText.trim()}\n`;
       }
       message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;

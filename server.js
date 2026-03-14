@@ -1051,6 +1051,54 @@ ${text}`;
   }
 });
 
+// Extract seller coupon from post text
+app.post('/api/ai-extract-seller-coupon', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.json({ success: true, sellerCoupon: null });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const prompt = `أنت خبير استخراج المعلومات من نصوص المنتجات بالعربية.
+استخرج قسيمة أو عرض البائع من نص المنشور التالي إن وجد. مثال على القسائم:
+- "احصل على خصم 10% عند الشراء من المتجر"
+- "عرض حصري على متجر البائع"
+- "قسيمة البائع: -15%"
+- "عرض خاص من المحل: شحن مجاني"
+
+النص:
+${text}
+
+رد بـ JSON فقط (بدون markdown):
+{"sellerCoupon": "النص أو الرابط المستخرج أو null إذا لم يوجد"}`;
+
+    const result = await model.generateContent(prompt);
+    let rawResult = result.response.text().trim();
+    if (rawResult.startsWith('```')) {
+      rawResult = rawResult.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '');
+    }
+
+    try {
+      const parsed = JSON.parse(rawResult);
+      const coupon = parsed.sellerCoupon || null;
+      if (coupon && typeof coupon === 'string' && coupon.length > 3) {
+        console.log(`✅ قسيمة البائع المستخرجة: ${coupon}`);
+        res.json({ success: true, sellerCoupon: coupon });
+      } else {
+        res.json({ success: true, sellerCoupon: null });
+      }
+    } catch {
+      res.json({ success: true, sellerCoupon: null });
+    }
+  } catch (error) {
+    console.error('Seller coupon extraction error:', error.message || error);
+    res.json({ success: true, sellerCoupon: null });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {
