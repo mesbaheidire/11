@@ -983,10 +983,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
       if (sellerCouponText && sellerCouponText.trim()) {
-        let couponDisplay = sellerCouponText.trim();
-        if (t.sellerCouponCode && t.sellerCouponCode.trim()) {
-          couponDisplay += ` ${t.sellerCouponCode.trim()}`;
-        }
+        let couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponText.trim();
         message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
       }
       message += '\n';
