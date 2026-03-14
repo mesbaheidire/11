@@ -11,58 +11,54 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Cairo', sans-serif; background: #0f0f1a; min-height: 100vh; color: #fff; }
-        .header { background: linear-gradient(135deg, #2d1b69, #1a0a3e); padding: 60px 20px 40px; border-radius: 0 0 30px 30px; text-align: center; position: relative; box-shadow: 0 10px 30px rgba(45, 27, 105, 0.4); }
-        .header h1 { font-size: 28px; font-weight: 800; margin-bottom: 5px; }
-        .header p { opacity: 0.8; font-size: 13px; }
-        .back-btn { position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.15); border: none; border-radius: 50%; width: 40px; height: 40px; color: #fff; font-size: 18px; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
-        .content { padding: 20px; max-width: 600px; margin: 0 auto; }
+        .header { background: linear-gradient(135deg, #2d1b69, #1a0a3e); padding: 50px 20px 30px; border-radius: 0 0 30px 30px; text-align: center; position: relative; box-shadow: 0 10px 30px rgba(45, 27, 105, 0.4); }
+        .header h1 { font-size: 24px; font-weight: 800; margin-bottom: 3px; }
+        .header p { opacity: 0.8; font-size: 12px; }
+        .back-btn { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.15); border: none; border-radius: 50%; width: 36px; height: 36px; color: #fff; font-size: 16px; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center; }
+        .content { padding: 15px; max-width: 600px; margin: 0 auto; }
 
-        .status-card { background: linear-gradient(135deg, #16213e, #1a1a2e); border-radius: 16px; padding: 20px; margin: 20px 0; border: 2px solid #2d2d44; display: flex; align-items: center; justify-content: space-between; }
-        .status-info { display: flex; align-items: center; gap: 12px; }
-        .status-dot { width: 14px; height: 14px; border-radius: 50%; }
+        .status-card { background: linear-gradient(135deg, #16213e, #1a1a2e); border-radius: 14px; padding: 14px 18px; margin: 15px 0; border: 2px solid #2d2d44; display: flex; align-items: center; justify-content: space-between; }
+        .status-info { display: flex; align-items: center; gap: 10px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; }
         .status-dot.active { background: #4CAF50; box-shadow: 0 0 12px rgba(76, 175, 80, 0.6); animation: pulse 2s infinite; }
         .status-dot.inactive { background: #ff4444; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .status-text { font-weight: 700; font-size: 16px; }
+        .status-text { font-weight: 700; font-size: 15px; }
 
-        .toggle-btn { padding: 12px 28px; border: none; border-radius: 12px; font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
+        .toggle-btn { padding: 10px 24px; border: none; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
         .toggle-btn.start { background: linear-gradient(135deg, #4CAF50, #388E3C); color: #fff; }
         .toggle-btn.stop { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
         .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .section { margin: 25px 0; }
-        .section-title { font-size: 17px; font-weight: 700; margin-bottom: 12px; color: #bb86fc; display: flex; align-items: center; gap: 8px; }
-        .section-title i { font-size: 18px; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 4px; color: #aaa; font-size: 12px; font-weight: 600; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 11px 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 13px; direction: rtl; transition: border-color 0.3s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #bb86fc; }
+        .form-hint { font-size: 11px; color: #666; margin-top: 3px; }
 
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; color: #aaa; font-size: 13px; font-weight: 600; }
-        .form-group input, .form-group select { width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; direction: rtl; transition: border-color 0.3s; }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: #bb86fc; }
-        .form-hint { font-size: 11px; color: #666; margin-top: 4px; }
-
-        .channels-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-        .channel-item { display: flex; align-items: center; justify-content: space-between; background: #16213e; padding: 10px 14px; border-radius: 10px; border: 1px solid #2d2d44; }
-        .channel-item span { font-size: 14px; direction: ltr; }
-        .remove-ch-btn { background: #ff4444; border: none; border-radius: 8px; width: 32px; height: 32px; color: #fff; cursor: pointer; font-size: 14px; }
+        .channels-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+        .channel-item { display: flex; align-items: center; justify-content: space-between; background: #16213e; padding: 8px 12px; border-radius: 10px; border: 1px solid #2d2d44; }
+        .channel-item span { font-size: 13px; direction: ltr; }
+        .remove-ch-btn { background: #ff4444; border: none; border-radius: 8px; width: 30px; height: 30px; color: #fff; cursor: pointer; font-size: 13px; }
         .add-ch-row { display: flex; gap: 8px; }
         .add-ch-row input { flex: 1; }
-        .add-ch-btn { padding: 14px 18px; background: #bb86fc; border: none; border-radius: 10px; color: #1a1a2e; font-size: 18px; cursor: pointer; font-weight: 700; }
+        .add-ch-btn { padding: 11px 16px; background: #bb86fc; border: none; border-radius: 10px; color: #1a1a2e; font-size: 16px; cursor: pointer; font-weight: 700; }
 
-        .link-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .link-type-option { background: #16213e; border: 2px solid #2d2d44; border-radius: 10px; padding: 12px 8px; text-align: center; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s; }
+        .link-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+        .link-type-option { background: #16213e; border: 2px solid #2d2d44; border-radius: 10px; padding: 10px 6px; text-align: center; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s; }
         .link-type-option.selected { border-color: #bb86fc; background: rgba(187, 134, 252, 0.15); color: #bb86fc; }
 
-        .save-btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #bb86fc, #9c27b0); border: none; border-radius: 12px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all 0.3s; }
+        .save-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #bb86fc, #9c27b0); border: none; border-radius: 12px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all 0.3s; }
         .save-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(187, 134, 252, 0.3); }
 
-        .log-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
-        .log-item { background: #16213e; border-radius: 12px; padding: 14px; border: 1px solid #2d2d44; }
-        .log-item .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .log-item .log-source { color: #bb86fc; font-weight: 700; font-size: 13px; }
+        .log-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
+        .log-item { background: #16213e; border-radius: 12px; padding: 12px; border: 1px solid #2d2d44; }
+        .log-item .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .log-item .log-source { color: #bb86fc; font-weight: 700; font-size: 12px; }
         .log-item .log-time { color: #666; font-size: 11px; direction: ltr; }
-        .log-item .log-title { font-size: 13px; color: #ddd; margin-bottom: 4px; white-space: normal; overflow: visible; line-height: 1.5; }
-        .log-item .log-img { width: 100%; height: 140px; object-fit: cover; border-radius: 10px; margin-bottom: 8px; display: block; }
-        .log-item .log-status { font-size: 12px; padding: 3px 10px; border-radius: 20px; display: inline-block; }
+        .log-item .log-title { font-size: 12px; color: #ddd; margin-bottom: 4px; white-space: normal; overflow: visible; line-height: 1.5; }
+        .log-item .log-img { width: 100%; height: 120px; object-fit: cover; border-radius: 10px; margin-bottom: 6px; display: block; }
+        .log-item .log-status { font-size: 11px; padding: 2px 10px; border-radius: 20px; display: inline-block; }
         .log-item .log-status.published { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .log-item .log-status.detected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.failed, .log-item .log-status.error, .log-item .log-status.publish_failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
@@ -72,36 +68,60 @@
         .log-item .log-status.skipped { background: rgba(158, 158, 158, 0.2); color: #9E9E9E; }
         .log-item .log-status.expired { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.daily_limit { background: rgba(121, 85, 72, 0.2); color: #BCAAA4; }
-        .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 14px; }
-        .empty-log { text-align: center; color: #555; padding: 40px 20px; }
-        .empty-log i { font-size: 48px; margin-bottom: 10px; display: block; }
+        .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 13px; }
+        .empty-log { text-align: center; color: #555; padding: 30px 20px; }
+        .empty-log i { font-size: 40px; margin-bottom: 8px; display: block; }
 
-        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 14px 28px; border-radius: 25px; display: none; z-index: 2000; font-weight: 600; font-size: 14px; }
+        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 24px; border-radius: 25px; display: none; z-index: 2000; font-weight: 600; font-size: 13px; }
         .toast.show { display: block; animation: fadeInOut 3s ease-in-out; }
         .toast.success { background: #4CAF50; }
         .toast.error { background: #ff4444; }
         @keyframes fadeInOut { 0%, 100% { opacity: 0; } 10%, 90% { opacity: 1; } }
 
-        .info-box { background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 12px; padding: 14px; margin: 15px 0; font-size: 12px; color: #ccc; line-height: 1.8; }
-        .info-box i { color: #bb86fc; margin-left: 5px; }
+        .info-box { background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 11px; color: #ccc; line-height: 1.7; }
+        .info-box i { color: #bb86fc; margin-left: 4px; }
         .info-box a { color: #bb86fc; }
 
-        .tab-bar { display: flex; gap: 0; margin: 20px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2d2d44; }
-        .tab-btn { flex: 1; padding: 12px; background: #16213e; border: none; color: #888; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .tab-bar { display: flex; gap: 0; margin: 15px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2d2d44; }
+        .tab-btn { flex: 1; padding: 10px; background: #16213e; border: none; color: #888; font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
         .tab-btn.active { background: #bb86fc; color: #1a1a2e; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        .auth-section { background: #16213e; border-radius: 14px; padding: 18px; border: 2px solid #2d2d44; margin: 15px 0; }
+        .auth-section { background: #16213e; border-radius: 12px; padding: 14px; border: 2px solid #2d2d44; margin: 10px 0; }
         .auth-step { display: none; }
         .auth-step.active { display: block; }
-        .auth-btn { width: 100%; padding: 14px; border: none; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 10px; }
+        .auth-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.3s; margin-top: 8px; }
         .auth-btn.primary { background: linear-gradient(135deg, #bb86fc, #9c27b0); color: #fff; }
         .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .session-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+        .session-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         .session-badge.connected { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
         .session-badge.disconnected { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+
+        .collapse-section { background: #16213e; border-radius: 12px; border: 1px solid #2d2d44; margin-bottom: 10px; overflow: hidden; }
+        .collapse-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; transition: background 0.2s; }
+        .collapse-header:hover { background: rgba(187, 134, 252, 0.05); }
+        .collapse-header .title { font-size: 14px; font-weight: 700; color: #bb86fc; display: flex; align-items: center; gap: 8px; }
+        .collapse-header .title i { font-size: 14px; }
+        .collapse-header .arrow { color: #666; font-size: 12px; transition: transform 0.3s; }
+        .collapse-header .arrow.open { transform: rotate(180deg); }
+        .collapse-body { padding: 0 16px 14px; display: none; }
+        .collapse-body.open { display: block; }
+
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-row-label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ddd; font-weight: 600; flex: 1; }
+        .toggle-row-label i { color: #bb86fc; font-size: 13px; width: 20px; text-align: center; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2d2d44; transition: 0.3s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #666; transition: 0.3s; border-radius: 50%; }
+        input:checked + .slider { background: #bb86fc; }
+        input:checked + .slider:before { transform: translateX(20px); background: #fff; }
+
+        .inline-fields { display: flex; gap: 10px; }
+        .inline-fields .form-group { flex: 1; margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -122,12 +142,6 @@
             </button>
         </div>
 
-        <div class="info-box">
-            <i class="fas fa-info-circle"></i>
-            يستخدم حسابك الشخصي في تيليجرام لمراقبة أي قناة عامة أنت مشترك فيها — <strong>بدون أن تكون مشرف</strong>.
-            توكن البوت والكوكي يُستخدمان تلقائياً من إعدادات التطبيق الرئيسية.
-        </div>
-
         <div class="tab-bar">
             <button class="tab-btn active" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
             <button class="tab-btn" onclick="switchTab('template')"><i class="fas fa-edit"></i> القالب</button>
@@ -135,266 +149,251 @@
         </div>
 
         <div class="tab-content active" id="tab-settings">
-            <div class="section">
-                <div class="section-title"><i class="fas fa-key"></i> تسجيل دخول تيليجرام</div>
-                <div class="info-box">
-                    <i class="fas fa-info-circle"></i>
-                    <strong>خطوات الإعداد:</strong><br>
-                    1. اذهب إلى <a href="https://my.telegram.org" target="_blank">my.telegram.org</a><br>
-                    2. سجّل دخول برقم هاتفك<br>
-                    3. اختر "API development tools"<br>
-                    4. انسخ الـ <strong>API ID</strong> و <strong>API Hash</strong>
-                </div>
-                <div class="form-group">
-                    <label>API ID:</label>
-                    <input type="text" id="apiId" placeholder="مثال: 12345678" style="direction: ltr;">
-                </div>
-                <div class="form-group">
-                    <label>API Hash:</label>
-                    <input type="text" id="apiHash" placeholder="مثال: 0123456789abcdef..." style="direction: ltr;">
-                </div>
-                <div class="form-group">
-                    <label>رقم الهاتف (مع رمز الدولة):</label>
-                    <input type="text" id="phoneNumber" placeholder="مثال: +213XXXXXXXXX" style="direction: ltr;">
-                </div>
 
-                <div id="sessionStatus" style="margin: 12px 0;"></div>
-
-                <div class="auth-section" id="authSection">
-                    <div class="auth-step active" id="auth-step-send">
-                        <button class="auth-btn primary" onclick="sendCode()" id="sendCodeBtn">
-                            <i class="fas fa-paper-plane"></i> إرسال رمز التحقق
-                        </button>
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fas fa-key"></i> تسجيل دخول تيليجرام</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                </div>
+                <div class="collapse-body">
+                    <div class="info-box">
+                        <i class="fas fa-info-circle"></i>
+                        1. اذهب إلى <a href="https://my.telegram.org" target="_blank">my.telegram.org</a>
+                        2. سجّل دخول → 3. اختر "API development tools" → 4. انسخ <strong>API ID</strong> و <strong>API Hash</strong>
                     </div>
-                    <div class="auth-step" id="auth-step-code">
+                    <div class="inline-fields" style="margin-bottom:10px;">
                         <div class="form-group">
-                            <label>رمز التحقق:</label>
-                            <input type="text" id="verifyCode" placeholder="أدخل الرمز من تيليجرام" style="direction: ltr; text-align: center; font-size: 20px; letter-spacing: 8px;">
+                            <label>API ID:</label>
+                            <input type="text" id="apiId" placeholder="12345678" style="direction: ltr;">
                         </div>
-                        <button class="auth-btn primary" onclick="verifyLoginCode()" id="verifyCodeBtn">
-                            <i class="fas fa-check"></i> تأكيد الرمز
-                        </button>
-                    </div>
-                    <div class="auth-step" id="auth-step-password">
                         <div class="form-group">
-                            <label>كلمة مرور الحساب (Two-Step Verification):</label>
-                            <input type="password" id="twoStepPassword" placeholder="أدخل كلمة المرور">
-                        </div>
-                        <button class="auth-btn primary" onclick="verifyPassword()" id="verifyPassBtn">
-                            <i class="fas fa-lock-open"></i> تأكيد كلمة المرور
-                        </button>
-                    </div>
-                    <div class="auth-step" id="auth-step-done">
-                        <div style="text-align: center; padding: 10px;">
-                            <i class="fas fa-check-circle" style="font-size: 36px; color: #4CAF50; margin-bottom: 8px; display: block;"></i>
-                            <p style="font-weight: 700; color: #4CAF50;">تم تسجيل الدخول بنجاح!</p>
+                            <label>API Hash:</label>
+                            <input type="text" id="apiHash" placeholder="0123456789abcdef..." style="direction: ltr;">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف (مع رمز الدولة):</label>
+                        <input type="text" id="phoneNumber" placeholder="+213XXXXXXXXX" style="direction: ltr;">
+                    </div>
+                    <div id="sessionStatus" style="margin: 8px 0;"></div>
+                    <div class="auth-section" id="authSection">
+                        <div class="auth-step active" id="auth-step-send">
+                            <button class="auth-btn primary" onclick="sendCode()" id="sendCodeBtn">
+                                <i class="fas fa-paper-plane"></i> إرسال رمز التحقق
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-code">
+                            <div class="form-group">
+                                <label>رمز التحقق:</label>
+                                <input type="text" id="verifyCode" placeholder="أدخل الرمز من تيليجرام" style="direction: ltr; text-align: center; font-size: 20px; letter-spacing: 8px;">
+                            </div>
+                            <button class="auth-btn primary" onclick="verifyLoginCode()" id="verifyCodeBtn">
+                                <i class="fas fa-check"></i> تأكيد الرمز
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-password">
+                            <div class="form-group">
+                                <label>كلمة مرور الحساب (Two-Step Verification):</label>
+                                <input type="password" id="twoStepPassword" placeholder="أدخل كلمة المرور">
+                            </div>
+                            <button class="auth-btn primary" onclick="verifyPassword()" id="verifyPassBtn">
+                                <i class="fas fa-lock-open"></i> تأكيد كلمة المرور
+                            </button>
+                        </div>
+                        <div class="auth-step" id="auth-step-done">
+                            <div style="text-align: center; padding: 8px;">
+                                <i class="fas fa-check-circle" style="font-size: 30px; color: #4CAF50; margin-bottom: 6px; display: block;"></i>
+                                <p style="font-weight: 700; color: #4CAF50; font-size: 14px;">تم تسجيل الدخول بنجاح!</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="section">
-                <div class="section-title"><i class="fas fa-cookie-bite"></i> الكوكي وتوكن البوت</div>
-                <div class="info-box">
-                    <i class="fas fa-info-circle"></i>
-                    يُستخدم الكوكي لتحويل الروابط، والتوكن لنشر المنشورات. يمكنك إدخالهما هنا أو من الإعدادات الرئيسية.
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fas fa-cookie-bite"></i> الكوكي وتوكن البوت</span>
+                    <i class="fas fa-chevron-down arrow"></i>
                 </div>
-                <div class="form-group">
-                    <label>🍪 AliExpress Cookie:</label>
-                    <input type="password" id="spyCookieInput" placeholder="الصق الكوكي هنا..." style="direction: ltr;">
-                    <div style="display:flex;gap:8px;margin-top:8px;">
-                        <button class="auth-btn primary" onclick="saveSpyCookie()" style="flex:1;padding:10px;font-size:14px;">
-                            <i class="fas fa-save"></i> حفظ الكوكي
+                <div class="collapse-body">
+                    <div class="form-group">
+                        <label>🍪 AliExpress Cookie:</label>
+                        <input type="password" id="spyCookieInput" placeholder="الصق الكوكي هنا..." style="direction: ltr;">
+                        <div style="display:flex;gap:8px;margin-top:6px;">
+                            <button class="auth-btn primary" onclick="saveSpyCookie()" style="flex:1;padding:8px;font-size:13px;">
+                                <i class="fas fa-save"></i> حفظ
+                            </button>
+                            <button class="auth-btn" onclick="testSpyCookie()" id="testCookieBtn" style="flex:1;padding:8px;font-size:13px;background:#2d2d3d;border:1px solid #555;">
+                                <i class="fas fa-vial"></i> اختبار
+                            </button>
+                        </div>
+                        <p id="cookieStatus" style="font-size:11px;margin-top:4px;"></p>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>🤖 توكن البوت:</label>
+                        <input type="password" id="spyBotTokenInput" placeholder="123456:ABC-DEF..." style="direction: ltr;">
+                        <button class="auth-btn primary" onclick="saveSpyBotToken()" style="width:100%;margin-top:6px;padding:8px;font-size:13px;">
+                            <i class="fas fa-save"></i> حفظ التوكن
                         </button>
-                        <button class="auth-btn" onclick="testSpyCookie()" id="testCookieBtn" style="flex:1;padding:10px;font-size:14px;background:#2d2d3d;border:1px solid #555;">
-                            <i class="fas fa-vial"></i> اختبار
-                        </button>
-                    </div>
-                    <p id="cookieStatus" style="font-size:12px;margin-top:6px;"></p>
-                </div>
-                <div class="form-group">
-                    <label>🤖 توكن البوت:</label>
-                    <input type="password" id="spyBotTokenInput" placeholder="مثال: 123456:ABC-DEF..." style="direction: ltr;">
-                    <button class="auth-btn primary" onclick="saveSpyBotToken()" style="width:100%;margin-top:8px;padding:10px;font-size:14px;">
-                        <i class="fas fa-save"></i> حفظ التوكن
-                    </button>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleChannelList('source')">
-                    <span><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة) <span id="sourceCount" style="background:#bb86fc;color:#1a1a2e;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:6px;">0</span></span>
-                    <i class="fas fa-chevron-down" id="sourceArrow" style="transition:transform 0.3s;"></i>
-                </div>
-                <div id="sourceChannelsWrap" style="display:none;">
-                <div class="channels-list" id="sourceChannelsList" style="max-height:200px;overflow-y:auto;"></div>
-                <div class="add-ch-row">
-                    <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
-                    <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
-                </div>
-                <textarea id="bulkSourceChannels" placeholder="الصق قائمة قنوات هنا (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:14px;resize:vertical;display:none;"></textarea>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:13px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة واحدة</button>
-                    <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
-                </div>
-                <p class="form-hint">أضف اسم القنوات العامة التي تريد مراقبتها (يجب أن تكون مشتركاً فيها)</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleChannelList('target')">
-                    <span><i class="fas fa-bullhorn"></i> القنوات الهدف (للنشر) <span id="targetCount" style="background:#bb86fc;color:#1a1a2e;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:6px;">0</span></span>
-                    <i class="fas fa-chevron-down" id="targetArrow" style="transition:transform 0.3s;"></i>
-                </div>
-                <div id="targetChannelsWrap" style="display:none;">
-                <div class="channels-list" id="targetChannelsList" style="max-height:200px;overflow-y:auto;"></div>
-                <div class="add-ch-row">
-                    <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
-                    <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
-                </div>
-                <textarea id="bulkTargetChannels" placeholder="الصق قائمة قنوات هنا (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:14px;resize:vertical;display:none;"></textarea>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:13px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة واحدة</button>
-                    <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:13px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
-                </div>
-                <p class="form-hint">أضف قنواتك التي سيُنشر فيها - البوت يجب أن يكون مشرف فيها</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-title"><i class="fas fa-link"></i> نوع الرابط</div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
-                        <input type="checkbox" id="useTypedLinks" style="width: 20px; height: 20px; accent-color: #bb86fc;">
-                        تفعيل تحويل حسب النوع (Coin, Point, Super...)
-                    </label>
-                    <p class="form-hint">عند الإيقاف: تحويل مباشر للرابط كما هو. عند التفعيل: اختر النوع المطلوب أدناه.</p>
-                </div>
-                <div id="linkTypeGrid" class="link-type-grid" style="display: none;">
-                    <div class="link-type-option selected" data-type="coin" onclick="selectLinkType('coin')">🪙 Coin</div>
-                    <div class="link-type-option" data-type="point" onclick="selectLinkType('point')">⭐ Point</div>
-                    <div class="link-type-option" data-type="super" onclick="selectLinkType('super')">🔥 Super</div>
-                    <div class="link-type-option" data-type="limit" onclick="selectLinkType('limit')">⚡ Limited</div>
-                    <div class="link-type-option" data-type="ther3" onclick="selectLinkType('ther3')">📦 Bundle</div>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
-                        <input type="checkbox" id="autoPublish" checked style="width: 20px; height: 20px; accent-color: #bb86fc;">
-                        نشر تلقائي في القنوات الهدف
-                    </label>
-                    <p class="form-hint">عند التعطيل، سيتم فقط تسجيل المنشورات في السجل بدون نشرها</p>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="section-title"><i class="fas fa-clock"></i> تأخير النشر</div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
-                        <input type="checkbox" id="publishDelay" style="width: 20px; height: 20px; accent-color: #bb86fc;">
-                        تأخير عشوائي قبل النشر
-                    </label>
-                    <p class="form-hint">يجعل النشر يبدو طبيعياً ويتجنب الحظر</p>
-                </div>
-                <div id="delayRange" style="display: flex; gap: 12px; align-items: center; margin-top: 8px;">
-                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                        <label>الحد الأدنى (دقيقة):</label>
-                        <input type="number" id="delayMin" value="1" min="1" max="30" style="direction: ltr;">
-                    </div>
-                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                        <label>الحد الأقصى (دقيقة):</label>
-                        <input type="number" id="delayMax" value="5" min="1" max="60" style="direction: ltr;">
                     </div>
                 </div>
             </div>
 
-            <div class="section">
-                <div class="section-title"><i class="fas fa-chart-bar"></i> الحد اليومي للنشر</div>
-                <div class="form-group">
-                    <label>الحد الأقصى للمنشورات يومياً:</label>
-                    <input type="number" id="dailyLimit" value="0" min="0" max="200" style="direction: ltr;">
-                    <p class="form-hint">اتركه 0 لإلغاء الحد. عند بلوغ الحد، تُسجّل المنتجات في السجل فقط بدون نشر حتى اليوم التالي.</p>
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fas fa-eye"></i> القنوات المصدر <span id="sourceCount" style="background:#bb86fc;color:#1a1a2e;padding:1px 8px;border-radius:10px;font-size:11px;margin-right:4px;">0</span></span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                </div>
+                <div class="collapse-body">
+                    <div class="channels-list" id="sourceChannelsList" style="max-height:180px;overflow-y:auto;"></div>
+                    <div class="add-ch-row">
+                        <input type="text" id="newSourceChannel" placeholder="@channel أو اسم القناة">
+                        <button class="add-ch-btn" onclick="addChannel('source')"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <textarea id="bulkSourceChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة</button>
+                        <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
+                    </div>
+                    <p class="form-hint">يجب أن تكون مشتركاً في هذه القنوات</p>
                 </div>
             </div>
 
-            <div class="section">
-                <div class="section-title"><i class="fas fa-clipboard-check"></i> المراجعة اليدوية</div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
-                        <input type="checkbox" id="manualReview" style="width: 20px; height: 20px; accent-color: #bb86fc;">
-                        تفعيل وضع المراجعة اليدوية
-                    </label>
-                    <p class="form-hint">كل منتج يُرسل لك أولاً مع زري "نشر" و"تخطي" — أنت تتحكم بكل منشور قبل خروجه. تنتهي صلاحية المراجعة بعد 30 دقيقة.</p>
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fas fa-bullhorn"></i> القنوات الهدف <span id="targetCount" style="background:#bb86fc;color:#1a1a2e;padding:1px 8px;border-radius:10px;font-size:11px;margin-right:4px;">0</span></span>
+                    <i class="fas fa-chevron-down arrow"></i>
                 </div>
-                <div class="info-box">
-                    <i class="fas fa-exclamation-triangle" style="color: #FF9800;"></i>
-                    عند تفعيل المراجعة اليدوية، يتم تجاهل النشر التلقائي والتأخير. يجب إدخال <strong>معرف حسابك (Chat ID)</strong> في قسم الإشعارات أدناه.
+                <div class="collapse-body">
+                    <div class="channels-list" id="targetChannelsList" style="max-height:180px;overflow-y:auto;"></div>
+                    <div class="add-ch-row">
+                        <input type="text" id="newTargetChannel" placeholder="@channel أو معرف القناة">
+                        <button class="add-ch-btn" onclick="addChannel('target')"><i class="fas fa-plus"></i></button>
+                    </div>
+                    <textarea id="bulkTargetChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:6px;">
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة</button>
+                        <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
+                    </div>
+                    <p class="form-hint">البوت يجب أن يكون مشرف فيها</p>
                 </div>
             </div>
 
-            <div class="section">
-                <div class="section-title"><i class="fas fa-bell"></i> إشعارات فورية</div>
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 15px;">
-                        <input type="checkbox" id="notifyOwner" style="width: 20px; height: 20px; accent-color: #bb86fc;">
-                        إرسال إشعار عند رصد منتج جديد
-                    </label>
-                    <p class="form-hint">ستصلك رسالة شخصية من البوت عند كل منتج جديد</p>
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fas fa-sliders-h"></i> خيارات النشر</span>
+                    <i class="fas fa-chevron-down arrow"></i>
                 </div>
-                <div class="form-group">
-                    <label>معرف حسابك (Chat ID):</label>
-                    <input type="text" id="ownerId" placeholder="مثال: 123456789" style="direction: ltr;">
-                    <p class="form-hint">أرسل <span style="color: #bb86fc;">/start</span> للبوت ثم <span style="color: #bb86fc;">/id</span> لمعرفة معرفك — أو استخدم <span style="color: #bb86fc;">@userinfobot</span></p>
+                <div class="collapse-body">
+                    <div class="toggle-row">
+                        <label class="toggle-row-label" for="autoPublish"><i class="fas fa-paper-plane"></i> نشر تلقائي</label>
+                        <label class="switch"><input type="checkbox" id="autoPublish" checked><span class="slider"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-row-label" for="useTypedLinks"><i class="fas fa-link"></i> تحويل حسب النوع</label>
+                        <label class="switch"><input type="checkbox" id="useTypedLinks"><span class="slider"></span></label>
+                    </div>
+                    <div id="linkTypeGrid" class="link-type-grid" style="display: none; margin-bottom: 10px;">
+                        <div class="link-type-option selected" data-type="coin" onclick="selectLinkType('coin')">🪙 Coin</div>
+                        <div class="link-type-option" data-type="point" onclick="selectLinkType('point')">⭐ Point</div>
+                        <div class="link-type-option" data-type="super" onclick="selectLinkType('super')">🔥 Super</div>
+                        <div class="link-type-option" data-type="limit" onclick="selectLinkType('limit')">⚡ Limited</div>
+                        <div class="link-type-option" data-type="ther3" onclick="selectLinkType('ther3')">📦 Bundle</div>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-row-label" for="publishDelay"><i class="fas fa-clock"></i> تأخير عشوائي</label>
+                        <label class="switch"><input type="checkbox" id="publishDelay"><span class="slider"></span></label>
+                    </div>
+                    <div id="delayRange" style="display:none; padding: 8px 0;">
+                        <div class="inline-fields">
+                            <div class="form-group">
+                                <label>الحد الأدنى (دقيقة):</label>
+                                <input type="number" id="delayMin" value="1" min="1" max="30" style="direction: ltr;">
+                            </div>
+                            <div class="form-group">
+                                <label>الحد الأقصى (دقيقة):</label>
+                                <input type="number" id="delayMax" value="5" min="1" max="60" style="direction: ltr;">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-row-label" for="manualReview"><i class="fas fa-clipboard-check"></i> مراجعة يدوية</label>
+                        <label class="switch"><input type="checkbox" id="manualReview"><span class="slider"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-row-label" for="notifyOwner"><i class="fas fa-bell"></i> إشعارات فورية</label>
+                        <label class="switch"><input type="checkbox" id="notifyOwner"><span class="slider"></span></label>
+                    </div>
+                    <div style="padding-top: 8px;">
+                        <div class="inline-fields">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>الحد اليومي:</label>
+                                <input type="number" id="dailyLimit" value="0" min="0" max="200" style="direction: ltr;">
+                                <p class="form-hint">0 = بلا حد</p>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label>Chat ID:</label>
+                                <input type="text" id="ownerId" placeholder="معرف حسابك" style="direction: ltr;">
+                                <p class="form-hint">للإشعارات والمراجعة</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="tab-content" id="tab-template">
-            <div class="section">
-                <div class="section-title"><i class="fas fa-pen-fancy"></i> قالب الرسالة</div>
-                <div class="form-group">
-                    <label>مقدمة عامة (تظهر أعلى كل منشور):</label>
-                    <textarea id="tmplHeaderText" rows="3" placeholder="مثال: 🔥 عروض اليوم من AliOffersDz 🔥&#10;تابعونا للمزيد من العروض الحصرية" style="width: 100%; resize: vertical; font-family: 'Cairo', sans-serif;"></textarea>
-                    <p class="form-hint">اكتب نصاً ثابتاً يظهر في بداية كل منشور. اتركه فارغاً لعدم إضافة مقدمة.</p>
+            <div class="collapse-section" style="margin-bottom:0;">
+                <div class="collapse-header" onclick="toggleCollapse(this)" style="cursor:default;">
+                    <span class="title"><i class="fas fa-pen-fancy"></i> قالب الرسالة</span>
                 </div>
-                <div class="form-group">
-                    <label>بادئة العنوان:</label>
-                    <input type="text" id="tmplPrefix" placeholder="🔥 عرض حصري">
-                </div>
-                <div class="form-group">
-                    <label>عنوان السعر:</label>
-                    <input type="text" id="tmplPriceLabel" placeholder="💰 السعر:">
-                </div>
-                <div class="form-group">
-                    <label>عنوان الرابط:</label>
-                    <input type="text" id="tmplLinkLabel" placeholder="🛒 رابط الشراء:">
-                </div>
-                <div class="form-group">
-                    <label>عنوان الكوبون:</label>
-                    <input type="text" id="tmplCouponLabel" placeholder="كوبون">
-                    <p class="form-hint">اتركه فارغاً لإخفاء سطر الكوبون</p>
-                </div>
-                <div class="form-group">
-                    <label>التذييل:</label>
-                    <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
-                </div>
-                <div class="form-group">
-                    <label>رابط البوت:</label>
-                    <input type="text" id="tmplBotLink" placeholder="@AliOffersDZ_bot">
-                </div>
-                <div class="form-group">
-                    <label>الهاشتاقات:</label>
-                    <input type="text" id="tmplHashtags" placeholder="#Aliexpress #تخفيضات">
+                <div class="collapse-body open">
+                    <div class="form-group">
+                        <label>مقدمة عامة (تظهر أعلى كل منشور):</label>
+                        <textarea id="tmplHeaderText" rows="2" placeholder="🔥 عروض اليوم من AliOffersDz 🔥" style="resize: vertical; font-family: 'Cairo', sans-serif;"></textarea>
+                    </div>
+                    <div class="inline-fields" style="margin-bottom:10px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>بادئة العنوان:</label>
+                            <input type="text" id="tmplPrefix" placeholder="🔥 عرض حصري">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>عنوان السعر:</label>
+                            <input type="text" id="tmplPriceLabel" placeholder="💰 السعر:">
+                        </div>
+                    </div>
+                    <div class="inline-fields" style="margin-bottom:10px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>عنوان الرابط:</label>
+                            <input type="text" id="tmplLinkLabel" placeholder="🛒 رابط الشراء:">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>عنوان الكوبون:</label>
+                            <input type="text" id="tmplCouponLabel" placeholder="كوبون">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>التذييل:</label>
+                        <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
+                    </div>
+                    <div class="inline-fields">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>رابط البوت:</label>
+                            <input type="text" id="tmplBotLink" placeholder="@AliOffersDZ_bot">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>الهاشتاقات:</label>
+                            <input type="text" id="tmplHashtags" placeholder="#Aliexpress #تخفيضات">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="tab-content" id="tab-log">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div class="section-title" style="margin: 0;"><i class="fas fa-history"></i> سجل النشاط</div>
-                <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 8px 14px; color: #bb86fc; font-family: 'Cairo'; font-size: 12px; cursor: pointer;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div class="title" style="font-size:14px;font-weight:700;color:#bb86fc;display:flex;align-items:center;gap:8px;"><i class="fas fa-history"></i> سجل النشاط</div>
+                <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 6px 12px; color: #bb86fc; font-family: 'Cairo'; font-size: 11px; cursor: pointer;">
                     <i class="fas fa-sync-alt"></i> تحديث
                 </button>
             </div>
@@ -429,6 +428,7 @@
             useTypedLinks: false,
             linkType: 'coin',
             messageTemplate: {
+                headerText: '',
                 prefix: '🔥 عرض حصري',
                 priceLabel: '💰 السعر:',
                 linkLabel: '🛒 رابط الشراء:',
@@ -462,6 +462,14 @@
             if (tab === 'log') refreshLog();
         }
 
+        function toggleCollapse(header) {
+            const body = header.nextElementSibling;
+            const arrow = header.querySelector('.arrow');
+            const isOpen = body.classList.contains('open');
+            body.classList.toggle('open');
+            if (arrow) arrow.classList.toggle('open');
+        }
+
         function selectLinkType(type) {
             config.linkType = type;
             document.querySelectorAll('.link-type-option').forEach(el => {
@@ -469,20 +477,14 @@
             });
         }
 
-        function toggleLinkTypeGrid() {
-            const checked = document.getElementById('useTypedLinks').checked;
-            document.getElementById('linkTypeGrid').style.display = checked ? 'flex' : 'none';
-            config.useTypedLinks = checked;
-        }
-        document.getElementById('useTypedLinks').addEventListener('change', toggleLinkTypeGrid);
+        document.getElementById('useTypedLinks').addEventListener('change', function() {
+            document.getElementById('linkTypeGrid').style.display = this.checked ? 'grid' : 'none';
+            config.useTypedLinks = this.checked;
+        });
 
-        function toggleChannelList(type) {
-            const wrap = document.getElementById(type + 'ChannelsWrap');
-            const arrow = document.getElementById(type + 'Arrow');
-            const show = wrap.style.display === 'none';
-            wrap.style.display = show ? 'block' : 'none';
-            arrow.style.transform = show ? 'rotate(180deg)' : '';
-        }
+        document.getElementById('publishDelay').addEventListener('change', function() {
+            document.getElementById('delayRange').style.display = this.checked ? 'block' : 'none';
+        });
 
         function renderChannels(type) {
             const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
@@ -499,42 +501,41 @@
 
         function addChannel(type) {
             const inputId = type === 'source' ? 'newSourceChannel' : 'newTargetChannel';
-            const value = document.getElementById(inputId).value.trim();
-            if (!value) return;
-            if (type === 'source') config.sourceChannels.push(value);
-            else config.targetChannels.push(value);
+            const val = document.getElementById(inputId).value.trim();
+            if (!val) return;
+            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
+            if (!arr.includes(val)) {
+                arr.push(val);
+                renderChannels(type);
+            }
             document.getElementById(inputId).value = '';
-            renderChannels(type);
         }
 
-        function removeChannel(type, index) {
-            if (type === 'source') config.sourceChannels.splice(index, 1);
-            else config.targetChannels.splice(index, 1);
+        function removeChannel(type, idx) {
+            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
+            arr.splice(idx, 1);
             renderChannels(type);
         }
 
         function toggleBulk(type) {
-            const ta = document.getElementById(type === 'source' ? 'bulkSourceChannels' : 'bulkTargetChannels');
-            const btn = document.getElementById(type === 'source' ? 'bulkSourceBtn' : 'bulkTargetBtn');
+            const ta = document.getElementById('bulk' + type.charAt(0).toUpperCase() + type.slice(1) + 'Channels');
+            const btn = document.getElementById('bulk' + type.charAt(0).toUpperCase() + type.slice(1) + 'Btn');
             const show = ta.style.display === 'none';
             ta.style.display = show ? 'block' : 'none';
             btn.style.display = show ? 'block' : 'none';
         }
 
         function addBulkChannels(type) {
-            const taId = type === 'source' ? 'bulkSourceChannels' : 'bulkTargetChannels';
-            const raw = document.getElementById(taId).value;
-            const lines = raw.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
+            const ta = document.getElementById('bulk' + type.charAt(0).toUpperCase() + type.slice(1) + 'Channels');
+            const lines = ta.value.split('\n').map(l => l.trim()).filter(l => l);
             const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
             let added = 0;
-            for (const ch of lines) {
-                if (!arr.includes(ch)) { arr.push(ch); added++; }
-            }
-            document.getElementById(taId).value = '';
-            document.getElementById(taId).style.display = 'none';
-            document.getElementById(type === 'source' ? 'bulkSourceBtn' : 'bulkTargetBtn').style.display = 'none';
+            lines.forEach(ch => { if (!arr.includes(ch)) { arr.push(ch); added++; } });
             renderChannels(type);
-            if (added > 0) showToast(`تمت إضافة ${added} قناة`);
+            ta.value = '';
+            ta.style.display = 'none';
+            document.getElementById('bulk' + type.charAt(0).toUpperCase() + type.slice(1) + 'Btn').style.display = 'none';
+            showToast(`تمت إضافة ${added} قناة`, 'success');
         }
 
         function collectConfig() {
@@ -571,12 +572,13 @@
             document.getElementById('publishDelay').checked = !!config.publishDelay;
             document.getElementById('delayMin').value = config.delayMin || 1;
             document.getElementById('delayMax').value = config.delayMax || 5;
+            document.getElementById('delayRange').style.display = config.publishDelay ? 'block' : 'none';
             document.getElementById('notifyOwner').checked = !!config.notifyOwner;
             document.getElementById('ownerId').value = config.ownerId || '';
             document.getElementById('manualReview').checked = !!config.manualReview;
             document.getElementById('dailyLimit').value = config.dailyLimit || 0;
             document.getElementById('useTypedLinks').checked = !!config.useTypedLinks;
-            document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'flex' : 'none';
+            document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'grid' : 'none';
             selectLinkType(config.linkType || 'coin');
             renderChannels('source');
             renderChannels('target');
@@ -608,144 +610,114 @@
             }
         }
 
-        function showAuthStep(step) {
-            document.querySelectorAll('.auth-step').forEach(el => el.classList.remove('active'));
-            const el = document.getElementById('auth-step-' + step);
-            if (el) el.classList.add('active');
-        }
-
-        function updateSessionStatus(hasSession) {
-            const el = document.getElementById('sessionStatus');
-            if (hasSession) {
-                el.innerHTML = '<span class="session-badge connected"><i class="fas fa-check-circle"></i> الحساب متصل</span>';
-                showAuthStep('done');
-            } else {
-                el.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> يجب تسجيل الدخول</span>';
-                showAuthStep('send');
-            }
-        }
-
-        async function loadStatus() {
+        async function toggleSpy() {
+            const btn = document.getElementById('toggleBtn');
+            btn.disabled = true;
             try {
                 const res = await fetch('/api/spy/status');
-                const data = await res.json();
-                if (data.success) {
-                    if (data.config) {
-                        const c = data.config;
-                        config.sourceChannels = c.sourceChannels || [];
-                        config.targetChannels = c.targetChannels || [];
-                        config.autoPublish = c.autoPublish !== false;
-                        config.linkType = c.linkType || 'coin';
-                        config.messageTemplate = c.messageTemplate || config.messageTemplate;
-                        config.publishDelay = !!c.publishDelay;
-                        config.delayMin = c.delayMin || 1;
-                        config.delayMax = c.delayMax || 5;
-                        config.notifyOwner = !!c.notifyOwner;
-                        config.ownerId = c.ownerId || '';
-                        config.manualReview = !!c.manualReview;
-                        config.dailyLimit = c.dailyLimit || 0;
-                        config.useTypedLinks = !!c.useTypedLinks;
-                        config.enabled = c.enabled;
-                        populateUI();
-                        const cookieStatus = document.getElementById('cookieStatus');
-                        if (c.cook === true || c.cook) {
-                            cookieStatus.innerHTML = '<span style="color:#4CAF50;">✅ كوكي محفوظ</span>';
-                        } else {
-                            cookieStatus.innerHTML = '<span style="color:#ffa500;">⚠️ لا يوجد كوكي — أدخله لتحويل الروابط</span>';
-                        }
+                const st = await res.json();
+                if (st.running) {
+                    await fetch('/api/spy/stop', { method: 'POST' });
+                    updateStatusUI(false);
+                    showToast('تم إيقاف التجسس', 'success');
+                } else {
+                    collectConfig();
+                    const r = await fetch('/api/spy/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    });
+                    const d = await r.json();
+                    if (d.success) {
+                        updateStatusUI(true);
+                        showToast('تم تشغيل التجسس!', 'success');
+                    } else {
+                        showToast(d.error || 'فشل التشغيل', 'error');
                     }
-                    updateStatusUI(data.running);
-                    updateSessionStatus(data.hasSession);
                 }
             } catch (e) {
-                console.log('Error loading status:', e);
-            }
-        }
-
-        async function saveSpyCookie() {
-            const cookieVal = document.getElementById('spyCookieInput').value.trim();
-            if (!cookieVal) { showToast('أدخل الكوكي أولاً', 'error'); return; }
-            try {
-                const res = await fetch('/api/spy/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cook: cookieVal })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('تم حفظ الكوكي ✅', 'success');
-                    document.getElementById('cookieStatus').innerHTML = '<span style="color:#4CAF50;">✅ تم الحفظ</span>';
-                } else {
-                    showToast('فشل الحفظ', 'error');
-                }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
-        }
-
-        async function testSpyCookie() {
-            const btn = document.getElementById('testCookieBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const statusEl = document.getElementById('cookieStatus');
-            try {
-                const testUrl = 'https://www.aliexpress.com/item/1005007486937040.html';
-                const cookieVal = document.getElementById('spyCookieInput').value.trim();
-                const body = { url: testUrl };
-                if (cookieVal) body.credentials = { cook: cookieVal };
-                const res = await fetch('/api/affiliate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const data = await res.json();
-                if (data.success) {
-                    statusEl.innerHTML = '<span style="color:#4CAF50;">✅ الكوكي يعمل بنجاح</span>';
-                    showToast('الكوكي يعمل ✅', 'success');
-                } else {
-                    statusEl.innerHTML = '<span style="color:#f44336;">❌ الكوكي لا يعمل: ' + (data.error || 'خطأ') + '</span>';
-                    showToast('الكوكي لا يعمل', 'error');
-                }
-            } catch (e) {
-                statusEl.innerHTML = '<span style="color:#f44336;">❌ خطأ في الاتصال</span>';
+                showToast('خطأ في الاتصال', 'error');
             }
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-vial"></i> اختبار';
         }
 
-        async function saveSpyBotToken() {
-            const tokenVal = document.getElementById('spyBotTokenInput').value.trim();
-            if (!tokenVal) { showToast('أدخل التوكن أولاً', 'error'); return; }
+        async function saveAndApply() {
+            collectConfig();
             try {
-                const res = await fetch('/api/spy/config', {
+                const r = await fetch('/api/spy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ botToken: tokenVal })
+                    body: JSON.stringify(config)
                 });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('تم حفظ التوكن ✅', 'success');
-                } else {
-                    showToast('فشل الحفظ', 'error');
+                const d = await r.json();
+                if (d.success) showToast('تم حفظ الإعدادات', 'success');
+                else showToast('فشل الحفظ', 'error');
+            } catch (e) {
+                showToast('خطأ في الحفظ', 'error');
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const r = await fetch('/api/spy/config');
+                const d = await r.json();
+                if (d.config) {
+                    const c = d.config;
+                    config.sourceChannels = c.sourceChannels || [];
+                    config.targetChannels = c.targetChannels || [];
+                    config.apiId = c.apiId || '';
+                    config.apiHash = c.apiHash || '';
+                    config.phoneNumber = c.phoneNumber || '';
+                    config.autoPublish = c.autoPublish !== false;
+                    config.publishDelay = !!c.publishDelay;
+                    config.delayMin = c.delayMin || 1;
+                    config.delayMax = c.delayMax || 5;
+                    config.notifyOwner = !!c.notifyOwner;
+                    config.ownerId = c.ownerId || '';
+                    config.manualReview = !!c.manualReview;
+                    config.dailyLimit = c.dailyLimit || 0;
+                    config.useTypedLinks = !!c.useTypedLinks;
+                    config.linkType = c.linkType || 'coin';
+                    config.messageTemplate = c.messageTemplate || config.messageTemplate;
                 }
-            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+                populateUI();
+            } catch (e) {
+                console.log('Failed to load config');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const r = await fetch('/api/spy/status');
+                const d = await r.json();
+                updateStatusUI(d.running);
+                if (d.session) {
+                    const ss = document.getElementById('sessionStatus');
+                    ss.innerHTML = d.session === 'connected'
+                        ? '<span class="session-badge connected"><i class="fas fa-check-circle"></i> متصل</span>'
+                        : '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> غير متصل</span>';
+                }
+            } catch (e) {}
         }
 
         async function sendCode() {
             const btn = document.getElementById('sendCodeBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الإرسال...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الإرسال...';
+            collectConfig();
             try {
-                const cfg = collectConfig();
-                const res = await fetch('/api/spy/send-code', {
+                const r = await fetch('/api/spy/send-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(cfg)
+                    body: JSON.stringify({ apiId: config.apiId, apiHash: config.apiHash, phoneNumber: config.phoneNumber })
                 });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('تم إرسال رمز التحقق', 'success');
-                    showAuthStep('code');
+                const d = await r.json();
+                if (d.success) {
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-code').classList.add('active');
+                    showToast('تم إرسال الرمز!', 'success');
                 } else {
-                    showToast(data.error || 'خطأ', 'error');
+                    showToast(d.error || 'فشل الإرسال', 'error');
                 }
             } catch (e) {
                 showToast('خطأ في الاتصال', 'error');
@@ -756,149 +728,143 @@
 
         async function verifyLoginCode() {
             const btn = document.getElementById('verifyCodeBtn');
-            const code = document.getElementById('verifyCode').value.trim();
-            if (!code) return showToast('أدخل رمز التحقق', 'error');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            const code = document.getElementById('verifyCode').value.trim();
+            if (!code) { showToast('أدخل الرمز', 'error'); btn.disabled = false; return; }
             try {
-                const res = await fetch('/api/spy/verify-code', {
+                const r = await fetch('/api/spy/verify-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code })
                 });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    showAuthStep('done');
-                    updateSessionStatus(true);
-                } else if (data.needPassword) {
-                    showToast(data.message, 'error');
-                    showAuthStep('password');
+                const d = await r.json();
+                if (d.success) {
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-done').classList.add('active');
+                    showToast('تم تسجيل الدخول!', 'success');
+                } else if (d.needPassword) {
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-password').classList.add('active');
+                    showToast('أدخل كلمة مرور الحساب', '');
                 } else {
-                    showToast(data.error || 'خطأ', 'error');
+                    showToast(d.error || 'رمز خاطئ', 'error');
                 }
             } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
+                showToast('خطأ', 'error');
             }
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check"></i> تأكيد الرمز';
         }
 
         async function verifyPassword() {
             const btn = document.getElementById('verifyPassBtn');
-            const password = document.getElementById('twoStepPassword').value;
-            if (!password) return showToast('أدخل كلمة المرور', 'error');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق...';
+            const password = document.getElementById('twoStepPassword').value;
             try {
-                const res = await fetch('/api/spy/verify-code', {
+                const r = await fetch('/api/spy/verify-password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password })
                 });
-                const data = await res.json();
-                if (data.success) {
-                    showToast(data.message, 'success');
-                    showAuthStep('done');
-                    updateSessionStatus(true);
+                const d = await r.json();
+                if (d.success) {
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-done').classList.add('active');
+                    showToast('تم تسجيل الدخول!', 'success');
                 } else {
-                    showToast(data.error || 'خطأ', 'error');
+                    showToast(d.error || 'كلمة المرور خاطئة', 'error');
                 }
             } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            }
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-lock-open"></i> تأكيد كلمة المرور';
-        }
-
-        async function toggleSpy() {
-            const btn = document.getElementById('toggleBtn');
-            btn.disabled = true;
-            try {
-                const status = await (await fetch('/api/spy/status')).json();
-                if (status.running) {
-                    const res = await fetch('/api/spy/stop', { method: 'POST' });
-                    const data = await res.json();
-                    if (data.success) {
-                        updateStatusUI(false);
-                        showToast('تم إيقاف التجسس', 'success');
-                    } else {
-                        showToast(data.error || 'خطأ', 'error');
-                    }
-                } else {
-                    const cfg = collectConfig();
-                    const res = await fetch('/api/spy/start', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(cfg)
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        updateStatusUI(true);
-                        showToast('تم تشغيل التجسس', 'success');
-                    } else {
-                        if (data.error && data.error.includes('SESSION_REQUIRED')) {
-                            showToast('يجب تسجيل الدخول أولاً', 'error');
-                        } else {
-                            showToast(data.error || 'خطأ', 'error');
-                        }
-                    }
-                }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
+                showToast('خطأ', 'error');
             }
             btn.disabled = false;
         }
 
-        async function saveAndApply() {
-            const cfg = collectConfig();
+        async function refreshLog() {
             try {
-                const res = await fetch('/api/spy/config', {
+                const r = await fetch('/api/spy/log');
+                const entries = await r.json();
+                const list = document.getElementById('logList');
+                if (!entries.length) {
+                    list.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
+                    return;
+                }
+                list.innerHTML = entries.reverse().slice(0, 50).map(e => {
+                    const statusMap = {
+                        published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ',
+                        publish_failed: 'فشل النشر', cookie_expired: 'كوكي منتهي', pending: 'قيد الانتظار',
+                        review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية',
+                        daily_limit: 'حد يومي', duplicate: 'مكرر', no_link: 'بدون رابط'
+                    };
+                    const time = e.timestamp ? new Date(e.timestamp).toLocaleString('ar-DZ') : '';
+                    return `<div class="log-item">
+                        ${e.image ? `<img src="${esc(typeof e.image === 'string' ? e.image : '')}" class="log-img" onerror="this.style.display='none'">` : ''}
+                        <div class="log-header">
+                            <span class="log-source">${esc(e.source || '')}</span>
+                            <span class="log-time">${time}</span>
+                        </div>
+                        <div class="log-title">${esc(e.title || '')}</div>
+                        ${e.price ? `<span class="log-price">${esc(e.price)}</span>` : ''}
+                        <span class="log-status ${e.status || ''}">${statusMap[e.status] || e.status || ''}</span>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                console.log('Failed to load log');
+            }
+        }
+
+        async function saveSpyCookie() {
+            const val = document.getElementById('spyCookieInput').value.trim();
+            if (!val) { showToast('أدخل الكوكي أولاً', 'error'); return; }
+            try {
+                const r = await fetch('/api/save-credentials', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(cfg)
+                    body: JSON.stringify({ cookie: val })
                 });
-                const data = await res.json();
-                if (data.success) showToast('تم حفظ الإعدادات', 'success');
-                else showToast(data.error || 'خطأ', 'error');
+                const d = await r.json();
+                showToast(d.success ? 'تم حفظ الكوكي' : 'فشل الحفظ', d.success ? 'success' : 'error');
             } catch (e) {
                 showToast('خطأ في الحفظ', 'error');
             }
         }
 
-        async function refreshLog() {
+        async function testSpyCookie() {
+            const btn = document.getElementById('testCookieBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const st = document.getElementById('cookieStatus');
             try {
-                const res = await fetch('/api/spy/log');
-                const data = await res.json();
-                const logList = document.getElementById('logList');
-                if (!data.success || !data.log || data.log.length === 0) {
-                    logList.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
-                    return;
-                }
-                logList.innerHTML = data.log.slice().reverse().map(entry => {
-                    const time = entry.timestamp ? new Date(entry.timestamp).toLocaleString('ar-DZ') : '';
-                    const statusClass = entry.status || 'detected';
-                    const statusLabels = { published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ', cookie_expired: 'كوكي منتهي ⚠️', publish_failed: 'فشل النشر', pending: 'في الانتظار', review: 'بانتظار المراجعة', skipped: 'تم التخطي', expired: 'منتهي الصلاحية', daily_limit: 'تجاوز الحد اليومي' };
-                    return `
-                        <div class="log-item">
-                            ${entry.image ? `<img class="log-img" src="${esc(entry.image)}" alt="صورة المنتج" onerror="this.style.display='none'">` : ''}
-                            <div class="log-header">
-                                <span class="log-source"><i class="fas fa-satellite-dish"></i> ${esc(entry.source) || 'غير معروف'}</span>
-                                <span class="log-time">${esc(time)}</span>
-                            </div>
-                            ${entry.title ? `<div class="log-title"><strong>${esc(entry.title)}</strong></div>` : ''}
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-                                <span class="log-status ${statusClass}">${statusLabels[entry.status] || esc(entry.status)}</span>
-                                ${entry.price ? `<span class="log-price">${esc(entry.price)}</span>` : ''}
-                            </div>
-                            ${entry.scheduledDelay ? `<div style="color: #2196F3; font-size: 11px; margin-top: 4px;"><i class="fas fa-clock"></i> سيُنشر بعد ${entry.scheduledDelay} دقيقة</div>` : ''}
-                            ${entry.error ? `<div style="color: #ff6b6b; font-size: 11px; margin-top: 4px;">${esc(entry.error)}</div>` : ''}
-                        </div>`;
-                }).join('');
-            } catch (e) {}
+                const r = await fetch('/api/test-cookie');
+                const d = await r.json();
+                st.innerHTML = d.valid
+                    ? '<span style="color:#4CAF50;">✅ الكوكي يعمل</span>'
+                    : '<span style="color:#ff4444;">❌ الكوكي لا يعمل</span>';
+            } catch (e) {
+                st.innerHTML = '<span style="color:#ff4444;">خطأ في الاختبار</span>';
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-vial"></i> اختبار';
         }
 
-        document.addEventListener('DOMContentLoaded', loadStatus);
+        async function saveSpyBotToken() {
+            const val = document.getElementById('spyBotTokenInput').value.trim();
+            if (!val) { showToast('أدخل التوكن أولاً', 'error'); return; }
+            try {
+                const r = await fetch('/api/save-credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ botToken: val })
+                });
+                const d = await r.json();
+                showToast(d.success ? 'تم حفظ التوكن' : 'فشل الحفظ', d.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('خطأ في الحفظ', 'error');
+            }
+        }
+
+        loadConfig();
+        checkStatus();
+        setInterval(checkStatus, 15000);
     </script>
 </body>
 </html>

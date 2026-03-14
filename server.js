@@ -1380,6 +1380,15 @@ app.get('/api/spy/status', (req, res) => {
   }
 });
 
+app.get('/api/spy/config', (req, res) => {
+  try {
+    const config = loadSpyConfig();
+    res.json({ config });
+  } catch (e) {
+    res.json({ config: {} });
+  }
+});
+
 app.post('/api/spy/config', (req, res) => {
   try {
     const stored = loadSpyConfig();
