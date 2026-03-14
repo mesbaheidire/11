@@ -942,6 +942,9 @@ async function processPost(config, text, sourceImage, sourceName) {
         const label = t.couponLabel || 'كوبون';
         message += `${label}: ${extractedCoupon}\n`;
       }
+      if (t.sellerCoupon && t.sellerCoupon.trim()) {
+        message += `\n🎁 ${t.sellerCoupon.trim()}\n`;
+      }
       message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
