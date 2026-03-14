@@ -773,13 +773,19 @@ app.post('/api/ai-refine-title', async (req, res) => {
       
       // Use rotation-enabled function
       const rawResult = await runGeminiWithRotation(prompt);
+      console.log(`🔍 AI raw result: "${rawResult.substring(0, 150)}"`);
       let refinedTitle = rawResult
-        .replace(/```[\w]*\n?/g, '')
-        .replace(/```/g, '')
-        .replace(/^(هوك مقترح|المقدمة|النتيجة|العنوان|Refined Title|json)[\s:]+/i, '')
-        .split('\n')[0].trim()
-        .replace(/[*#"'{}]/g, '').trim();
+        .replace(/`{1,3}[\w]*\s*/g, '')
+        .replace(/`/g, '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l && !l.startsWith('{') && !l.startsWith('}') && !/^(json|```)/i.test(l))
+        .join(' ')
+        .replace(/^(هوك مقترح|المقدمة|النتيجة|العنوان|Refined Title|Result|json)[\s:]+/i, '')
+        .replace(/[*#"'{}[\]`]/g, '')
+        .trim();
       if (!refinedTitle || refinedTitle.length < 2) refinedTitle = title;
+      console.log(`✅ Refined title: "${refinedTitle}"`);
       res.json({ success: true, refinedTitle, method: 'ai' });
     } catch (aiError) {
       // If AI fails (quota exceeded, etc.), use fallback

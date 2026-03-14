@@ -600,6 +600,20 @@ async function extractCouponWithAI(text) {
   });
 }
 
+function cleanTitle(t) {
+  if (!t) return t;
+  return t
+    .replace(/`{1,3}[\w]*\s*/g, '')
+    .replace(/`/g, '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('{') && !l.startsWith('}') && !/^(json|```)$/i.test(l))
+    .join(' ')
+    .replace(/^(json|result|العنوان|النتيجة)[\s:]+/i, '')
+    .replace(/[*#"'{}[\]`]/g, '')
+    .trim();
+}
+
 function callAiRefine(title, isHook) {
   return new Promise((resolve) => {
     const postData = JSON.stringify({ title, isHook });
@@ -830,6 +844,8 @@ async function processPost(config, text, sourceImage, sourceName) {
           console.log(`⚠️ لم يتم العثور على كوبون في النص`);
         }
       }
+
+      productTitle = cleanTitle(productTitle);
 
       let message = '';
       if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n\n`;
