@@ -286,14 +286,27 @@ function extractPrice(text) {
   return null;
 }
 
+const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
+
+function loadSharedCredentials() {
+  try {
+    if (fs.existsSync(SHARED_CREDS_FILE)) {
+      return JSON.parse(fs.readFileSync(SHARED_CREDS_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return {};
+}
+
 function getBotToken() {
+  const shared = loadSharedCredentials();
   const config = loadConfig();
-  return config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
+  return shared.botToken || config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
 }
 
 function getCookie() {
+  const shared = loadSharedCredentials();
   const config = loadConfig();
-  const cookie = config.cook || process.env.cook || '';
+  const cookie = shared.cook || config.cook || process.env.cook || '';
   if (!cookie) {
     console.log('⚠️ الكوكي غير موجود — تأكد من إدخاله في صفحة الإعدادات الرئيسية');
   }
