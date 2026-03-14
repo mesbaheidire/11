@@ -694,6 +694,15 @@ app.post('/api/schedule-post', (req, res) => {
 });
 
 // Simple title cleanup function (fallback when AI is unavailable)
+function stripAIFormatting(text) {
+  if (!text) return text;
+  return text
+    .replace(/`{1,3}[\w]*\s*/g, '')
+    .replace(/`/g, '')
+    .replace(/[*#"'{}[\]]/g, '')
+    .trim();
+}
+
 function cleanupTitle(title) {
   let cleaned = title
     .replace(/\s+/g, ' ')
@@ -757,18 +766,15 @@ app.post('/api/ai-refine-title', async (req, res) => {
         العنوان: ${title}
       `;
       } else {
-        prompt = `
-        Refine the following AliExpress product title to be attractive and professional for an English-speaking audience.
-        Requirements:
-        1. Keep it in English.
-        2. Keep it short and concise (3-6 words).
-        3. Remove junk words (Global Version, 2024, 2025, Free Shipping, etc.).
-        4. Focus on the core product name.
-        5. Start with a relevant emoji.
-        
-        Original Title: ${title}
-        Result: (Refined title only)
-      `;
+        prompt = `Refine this AliExpress product title to be short and attractive.
+Rules:
+1. English only, 3-6 words max.
+2. Remove junk (Global Version, 2024, Free Shipping, etc.).
+3. Focus on core product name.
+4. Start with a relevant emoji.
+5. Reply with ONLY the refined title text. No JSON, no markdown, no code blocks, no backticks, no quotes, no formatting.
+
+Title: ${title}`;
       }
       
       // Use rotation-enabled function
@@ -845,7 +851,7 @@ ${text}`;
       }
 
       if (extracted) {
-        extracted = String(extracted).replace(/[*#]/g, '').trim();
+        extracted = stripAIFormatting(String(extracted));
         const hasNumber = /\d/.test(extracted);
         if (!hasNumber || extracted.length > 50) {
           return res.json({ success: true, price: null, method: 'ai_invalid' });
@@ -906,7 +912,7 @@ ${text}`;
       }
 
       if (extracted) {
-        extracted = String(extracted).replace(/[*#"']/g, '').trim();
+        extracted = stripAIFormatting(String(extracted));
         if (extracted.length < 3 || extracted.length > 100) {
           return res.json({ success: true, coupon: null, method: 'ai_invalid' });
         }
@@ -965,7 +971,7 @@ ${text}`;
       }
 
       if (extracted) {
-        extracted = String(extracted).replace(/[*#"']/g, '').trim();
+        extracted = stripAIFormatting(String(extracted));
         if (extracted.length < 5 || extracted.length > 80) {
           return res.json({ success: true, phoneName: null, method: 'ai_invalid' });
         }
