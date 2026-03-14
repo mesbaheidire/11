@@ -845,6 +845,18 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
+      const fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
+      if (fixedCoupons.length > 0) {
+        const existingCoupons = extractedCoupon ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()) : [];
+        const newCoupons = fixedCoupons.filter(fc => !existingCoupons.includes(fc));
+        if (newCoupons.length > 0) {
+          extractedCoupon = extractedCoupon
+            ? extractedCoupon + ' | ' + newCoupons.join(' | ')
+            : newCoupons.join(' | ');
+          console.log(`📌 كوبونات ثابتة مضافة: ${newCoupons.join(', ')}`);
+        }
+      }
+
       productTitle = cleanTitle(productTitle);
 
       let message = '';

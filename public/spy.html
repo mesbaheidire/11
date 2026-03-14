@@ -372,6 +372,11 @@
                             <input type="text" id="tmplCouponLabel" placeholder="كوبون">
                         </div>
                     </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                        <label>كوبونات ثابتة (تُضاف دائماً):</label>
+                        <input type="text" id="tmplFixedCoupons" placeholder="AFAS5, ZNQ005" style="direction:ltr; text-align:left;">
+                        <small style="color:#999; font-size:10px;">افصل بين الكوبونات بفاصلة — تُضاف تلقائياً لكل منشور</small>
+                    </div>
                     <div class="form-group">
                         <label>التذييل:</label>
                         <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
@@ -557,6 +562,7 @@
                 priceLabel: document.getElementById('tmplPriceLabel').value,
                 linkLabel: document.getElementById('tmplLinkLabel').value,
                 couponLabel: document.getElementById('tmplCouponLabel').value,
+                fixedCoupons: document.getElementById('tmplFixedCoupons').value,
                 footer: document.getElementById('tmplFooter').value,
                 botLink: document.getElementById('tmplBotLink').value,
                 hashtags: document.getElementById('tmplHashtags').value
@@ -588,6 +594,7 @@
             document.getElementById('tmplPriceLabel').value = t.priceLabel || '';
             document.getElementById('tmplLinkLabel').value = t.linkLabel || '';
             document.getElementById('tmplCouponLabel').value = t.couponLabel || '';
+            document.getElementById('tmplFixedCoupons').value = t.fixedCoupons || '';
             document.getElementById('tmplFooter').value = t.footer || '';
             document.getElementById('tmplBotLink').value = t.botLink || '';
             document.getElementById('tmplHashtags').value = t.hashtags || '';
