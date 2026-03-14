@@ -1496,6 +1496,17 @@ app.post('/api/spy/verify-code', async (req, res) => {
   }
 });
 
+app.post('/api/spy/verify-password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const config = loadSpyConfig();
+    const result = await verifyCode(config, null, password);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Auto-start spy if it was enabled
 (async () => {
   try {
