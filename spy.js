@@ -983,11 +983,11 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
       if (sellerCouponText && sellerCouponText.trim()) {
-        message += `\n🎁 إحجز قسيمة البائع: ${sellerCouponText.trim()}`;
+        let couponDisplay = sellerCouponText.trim();
         if (t.sellerCouponCode && t.sellerCouponCode.trim()) {
-          message += `\n${t.sellerCouponCode.trim()}`;
+          couponDisplay += ` ${t.sellerCouponCode.trim()}`;
         }
-        message += '\n';
+        message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
       }
       message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
