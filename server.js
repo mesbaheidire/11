@@ -265,7 +265,9 @@ async function runGeminiWithRotation(prompt, maxRetries = 3) {
     try {
       const result = await currentModel.generateContent(prompt);
       const response = await result.response;
-      return response.text().trim();
+      const text = response.text().trim();
+      rotateGeminiKey();
+      return text;
     } catch (error) {
       const errorMsg = error.message || '';
       const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
