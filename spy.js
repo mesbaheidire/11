@@ -630,15 +630,36 @@ function callAiRefine(title, isHook) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed.success ? parsed.refinedTitle : (isHook ? '' : title));
-        } catch { resolve(isHook ? '' : title); }
+          const result = parsed.success ? parsed.refinedTitle : null;
+          console.log(`📨 AI refine response: method=${parsed.method}, result="${(result || '').substring(0, 80)}"`);
+          resolve(result || (isHook ? '' : title));
+        } catch (e) {
+          console.log(`⚠️ AI refine parse error: ${e.message}`);
+          resolve(isHook ? '' : title);
+        }
       });
     });
-    req.on('error', () => resolve(isHook ? '' : title));
-    req.setTimeout(15000, () => { req.destroy(); resolve(isHook ? '' : title); });
+    req.on('error', (e) => {
+      console.log(`⚠️ AI refine request error: ${e.message}`);
+      resolve(isHook ? '' : title);
+    });
+    req.setTimeout(15000, () => {
+      console.log(`⚠️ AI refine timeout (15s)`);
+      req.destroy();
+      resolve(isHook ? '' : title);
+    });
     req.write(postData);
     req.end();
   });
+}
+
+function shortenTitleFallback(title) {
+  if (!title || title.length <= 60) return title;
+  const junk = /\b(for|with|and|the|a|an|in|on|at|to|of|by|from|Global Version|Free Shipping|Original|New Arrival|Hot Sale|2024|2025|2026|High Quality)\b/gi;
+  let short = title.replace(junk, ' ').replace(/\s{2,}/g, ' ').trim();
+  const words = short.split(/\s+/);
+  if (words.length > 8) short = words.slice(0, 8).join(' ');
+  return short;
 }
 
 async function extractPhoneNameWithAI(text) {
@@ -817,11 +838,18 @@ async function processPost(config, text, sourceImage, sourceName) {
           }
         }
       } else if (apiTitle) {
+        console.log(`📝 عنوان API الأصلي (${apiTitle.length} حرف): ${apiTitle}`);
         try {
-          productTitle = await refineTitle(apiTitle);
-          console.log(`🤖 عنوان محسّن: ${productTitle}`);
+          const refined = await refineTitle(apiTitle);
+          console.log(`🤖 عنوان محسّن (${(refined||'').length} حرف): ${refined}`);
+          productTitle = refined || apiTitle;
         } catch (aiErr) {
-          console.log(`⚠️ فشل تحسين العنوان، استخدام الأصلي: ${aiErr.message}`);
+          console.log(`⚠️ فشل تحسين العنوان: ${aiErr.message}`);
+        }
+        if (productTitle && productTitle.length > 60) {
+          console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
+          productTitle = shortenTitleFallback(productTitle);
+          console.log(`✂️ بعد التقصير: ${productTitle}`);
         }
       }
 
