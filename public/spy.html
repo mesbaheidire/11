@@ -387,6 +387,11 @@
                         <input type="text" id="tmplSellerCoupon" placeholder="مثال: احصل على خصم 10% عند الشراء من المتجر" style="direction:rtl;">
                         <small style="color:#999; font-size:10px;">رابط أو نص ثابت لقسيمة البائع — يُضاف في آخر الرسالة</small>
                     </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                        <label>كود الخصم:</label>
+                        <input type="text" id="tmplSellerCouponCode" placeholder="مثال: SALE10" style="direction:ltr; text-align:left;">
+                        <small style="color:#999; font-size:10px;">الكود الذي يُضاف بعد قسيمة البائع مباشرة</small>
+                    </div>
                     <div class="form-group">
                         <label>التذييل:</label>
                         <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
@@ -575,6 +580,7 @@
                 fixedCoupons: document.getElementById('tmplFixedCoupons').value,
                 couponFilter: document.getElementById('tmplCouponFilter').value,
                 sellerCoupon: document.getElementById('tmplSellerCoupon').value,
+                sellerCouponCode: document.getElementById('tmplSellerCouponCode').value,
                 footer: document.getElementById('tmplFooter').value,
                 botLink: document.getElementById('tmplBotLink').value,
                 hashtags: document.getElementById('tmplHashtags').value
@@ -609,6 +615,7 @@
             document.getElementById('tmplFixedCoupons').value = t.fixedCoupons || '';
             document.getElementById('tmplCouponFilter').value = t.couponFilter || '';
             document.getElementById('tmplSellerCoupon').value = t.sellerCoupon || '';
+            document.getElementById('tmplSellerCouponCode').value = t.sellerCouponCode || '';
             document.getElementById('tmplFooter').value = t.footer || '';
             document.getElementById('tmplBotLink').value = t.botLink || '';
             document.getElementById('tmplHashtags').value = t.hashtags || '';
