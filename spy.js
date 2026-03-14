@@ -195,20 +195,35 @@ function addLogEntry(entry) {
 
 function extractCouponFromPost(text) {
   if (!text) return null;
+  const coupons = new Set();
+
   const patterns = [
-    /(?:كوبون|قسيمة|coupon|code|كود|رمز)[:\s]*([A-Z0-9]{4,20})/i,
-    /(?:خصم|discount|off)[:\s]*(\d+%?\s*(?:خصم|off)?)/i,
-    /([A-Z]{2,6}\d{2,10})/,
-    /(?:استخدم|use|ادخل)[:\s]*([A-Z0-9]{4,20})/i
+    /(?:كوبون|قسيمة|coupon|code|كود|رمز|حصل)[:\s]*(?:البائع\s*)?(?:\$?\d+\s*)?([A-Z0-9]{4,20})/gi,
+    /(?:استخدم|use|ادخل|enter)[:\s]*([A-Z0-9]{4,20})/gi,
+    /\b(?:CODE)\s+([A-Z0-9]{4,20})/gi,
   ];
+
   for (const pat of patterns) {
-    const match = text.match(pat);
-    if (match && match[1]) {
-      const code = match[1].trim();
-      if (code.length >= 3 && code.length <= 25) return code;
+    let match;
+    while ((match = pat.exec(text)) !== null) {
+      const code = (match[2] || match[1]).trim();
+      if (code.length >= 4 && code.length <= 20 && code !== 'CODE' && code !== 'HTTP' && code !== 'HTTPS') {
+        coupons.add(code);
+      }
     }
   }
-  return null;
+
+  const codePattern = /\b([A-Z]{2,8}[0-9]{1,6})\b/g;
+  let m;
+  while ((m = codePattern.exec(text)) !== null) {
+    const code = m[1];
+    if (code.length >= 4 && code.length <= 15 && !['HTTP', 'HTTPS', 'HTML', 'AMOLED', 'BLUETOOTH', 'GPS'].includes(code)) {
+      coupons.add(code);
+    }
+  }
+
+  if (coupons.size === 0) return null;
+  return Array.from(coupons).join(' | ');
 }
 
 function isPhoneProduct(title, text) {
