@@ -139,7 +139,45 @@ async function idCatcher(input) {
 
 
 async function fetchLinkPreview(productId) {
-    // 1) Try AliExpress API first
+    // 1) Microlink.io API first
+    try {
+        console.log("Trying microlink.io API...");
+        const apiRes = await got('https://api.microlink.io', {
+            searchParams: {
+                url: `https://m.aliexpress.com/item/${productId}.html`
+            },
+            responseType: 'json',
+            timeout: { request: 20000 }
+        });
+        
+        const data = apiRes.body;
+        if (data.status === 'success' && data.data) {
+            let title = data.data.title || '';
+            const imageUrl = data.data.image?.url || null;
+            
+            title = title.replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim();
+            
+            const isValidTitle = title && 
+                title.length > 10 && 
+                !title.includes('AliExpress') && 
+                !title.includes('Smarter Shopping') &&
+                !title.match(/^\d+\.html$/);
+            
+            if (isValidTitle) {
+                console.log("✅ Product fetched via microlink.io - Title:", title.substring(0, 50) + "...");
+                return {
+                    method: "Microlink API",
+                    title: title,
+                    image_url: imageUrl,
+                    price: "راجع الرابط"
+                };
+            }
+        }
+    } catch (apiErr) {
+        console.log("microlink.io API failed:", apiErr.message);
+    }
+
+    // 2) AliExpress API
     try {
         const apiResult = await getProductDetails(productId);
         
@@ -162,47 +200,7 @@ async function fetchLinkPreview(productId) {
         console.log("API fetch failed, falling back to other methods:", apiErr.message);
     }
 
-    // 2) Second option: External API (microlink.io) - use mobile domain for better results
-    try {
-        console.log("Trying microlink.io API...");
-        const apiRes = await got('https://api.microlink.io', {
-            searchParams: {
-                url: `https://m.aliexpress.com/item/${productId}.html`
-            },
-            responseType: 'json',
-            timeout: { request: 20000 }
-        });
-        
-        const data = apiRes.body;
-        if (data.status === 'success' && data.data) {
-            let title = data.data.title || '';
-            const imageUrl = data.data.image?.url || null;
-            
-            // Clean title from AliExpress suffix
-            title = title.replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim();
-            
-            // Validate: title should be real product name, not just ID
-            const isValidTitle = title && 
-                title.length > 10 && 
-                !title.includes('AliExpress') && 
-                !title.includes('Smarter Shopping') &&
-                !title.match(/^\d+\.html$/);
-            
-            if (isValidTitle) {
-                console.log("✅ Product fetched via microlink.io - Title:", title.substring(0, 50) + "...");
-                return {
-                    method: "Microlink API",
-                    title: title,
-                    image_url: imageUrl,
-                    price: "راجع الرابط"
-                };
-            }
-        }
-    } catch (apiErr) {
-        console.log("microlink.io API failed:", apiErr.message);
-    }
-
-    // 3) Third option: Fallback to scraping - try multiple URL formats
+    // 3) Web Scraping - try multiple URL formats
     const urlsToTry = [
         `https://www.aliexpress.com/item/${productId}.html`,
         `https://www.aliexpress.us/item/${productId}.html`,
@@ -227,7 +225,6 @@ async function fetchLinkPreview(productId) {
 
             const html = res.body;
             
-            // Skip if 404 page
             if (html.includes('error/404') || html.includes('Page Not Found') || html.includes('id="error-notice"')) {
                 continue;
             }
@@ -238,7 +235,6 @@ async function fetchLinkPreview(productId) {
                 title = titleMatch[1].replace(/ - AliExpress.*$/i, '').replace(/\|.*$/i, '').replace('AliExpress', '').trim();
             }
 
-            // Enhanced Scraping for JSON data in HTML
             const jsonPatterns = [
                 /window\.runParams\s*=\s*(\{.+?\});/s,
                 /_expDataLayer\.push\((\{.+?\})\);/s,
@@ -252,13 +248,11 @@ async function fetchLinkPreview(productId) {
                 if (match) {
                     try {
                         let jsonStr = match[1];
-                        // Handle potential trailing characters if the regex was too greedy
                         if (jsonStr.lastIndexOf('}') !== jsonStr.length - 1) {
                             jsonStr = jsonStr.substring(0, jsonStr.lastIndexOf('}') + 1);
                         }
                         const jsonData = JSON.parse(jsonStr);
                         
-                        // Extract from common structures
                         const itemDetail = jsonData.productInfoComponent || 
                                          jsonData.data?.productInfoComponent ||
                                          jsonData.item ||
@@ -277,7 +271,6 @@ async function fetchLinkPreview(productId) {
                 }
             }
 
-            // Fallback for meta tags if JSON parsing failed
             const metaTitle = html.match(/<meta property="og:title" content="([^"]+)"/i);
             const metaImage = html.match(/<meta property="og:image" content="([^"]+)"/i);
             
@@ -299,7 +292,7 @@ async function fetchLinkPreview(productId) {
         }
     }
 
-    // 4) New option: LinkPreview.xyz API (as used in the bot)
+    // 4) LinkPreview.xyz API
     try {
         console.log("Trying LinkPreview.xyz API...");
         const res = await got("https://linkpreview.xyz/api/get-meta-tags", {
@@ -323,7 +316,7 @@ async function fetchLinkPreview(productId) {
         console.log("LinkPreview.xyz API failed:", err.message);
     }
     
-    // 5) Try fetching OG image directly from mobile page with simple headers
+    // 5) Mobile page fallback
     try {
         console.log("Trying direct mobile page for image...");
         const mobileRes = await got(`https://m.aliexpress.com/item/${productId}.html`, {
