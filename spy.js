@@ -736,16 +736,6 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
-      let hook = '';
-      if (productTitle) {
-        try {
-          hook = await generateHook(productTitle);
-          if (hook) console.log(`🎯 هوك: ${hook}`);
-        } catch (hookErr) {
-          console.log(`⚠️ فشل توليد الهوك: ${hookErr.message}`);
-        }
-      }
-
       const t = config.messageTemplate || {};
 
       let extractedCoupon = null;
@@ -767,7 +757,6 @@ async function processPost(config, text, sourceImage, sourceName) {
       let message = '';
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
       else if (productTitle) message += `${productTitle}\n\n`;
-      if (hook) message += `🔥 ${hook}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
       if (t.couponLabel && extractedCoupon) {
         message += `${t.couponLabel}: ${extractedCoupon}\n`;

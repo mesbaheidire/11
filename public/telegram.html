@@ -60,18 +60,9 @@
             </button>
         </div>
         
-        <div class="form-group">
-            <label>مقدمة جزائرية (اختياري):</label>
-            <input type="text" id="algerianHook" placeholder="يا خاوتي شوفو هاد لافير..." style="margin-bottom: 10px;">
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <button type="button" id="generateHookBtn" style="flex: 1; padding: 12px 15px; background: linear-gradient(135deg, #E91E63, #C2185B); border: none; border-radius: 10px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <i class="fas fa-comment-dots"></i> توليد (AI)
-                </button>
-                <button type="button" id="refineHookBtn" style="flex: 1; padding: 12px 15px; background: linear-gradient(135deg, #2196F3, #1976D2); border: none; border-radius: 10px; color: #fff; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <i class="fas fa-magic"></i> تحسين (AI)
-                </button>
-            </div>
-            <p style="font-size: 11px; color: #888; margin-top: 5px;">جملة افتتاحية بالدارجة الجزائرية لجذب المتابعين</p>
+        <div class="form-group" style="display:none;">
+            <input type="hidden" id="algerianHook" value="">
+            <button type="button" id="generateHookBtn" style="display:none;"></button>
         </div>
         
         <div class="form-group">
@@ -314,10 +305,7 @@
             const salePriceVal = salePrice.value || '0.00';
             const link = purchaseLink.value || 'https://...';
             const coupon = couponCode.value;
-            const hook = algerianHook.value;
-
             let message = '';
-            if (hook) message += `${hook}\n\n`;
             message += `${s.prefix} ${title}\n`;
             message += `${s.salePrice} ${salePriceVal}\n`;
             message += `${s.linkText}\n${link}\n`;
