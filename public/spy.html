@@ -194,6 +194,34 @@
             </div>
 
             <div class="section">
+                <div class="section-title"><i class="fas fa-cookie-bite"></i> الكوكي وتوكن البوت</div>
+                <div class="info-box">
+                    <i class="fas fa-info-circle"></i>
+                    يُستخدم الكوكي لتحويل الروابط، والتوكن لنشر المنشورات. يمكنك إدخالهما هنا أو من الإعدادات الرئيسية.
+                </div>
+                <div class="form-group">
+                    <label>🍪 AliExpress Cookie:</label>
+                    <input type="password" id="spyCookieInput" placeholder="الصق الكوكي هنا..." style="direction: ltr;">
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="auth-btn primary" onclick="saveSpyCookie()" style="flex:1;padding:10px;font-size:14px;">
+                            <i class="fas fa-save"></i> حفظ الكوكي
+                        </button>
+                        <button class="auth-btn" onclick="testSpyCookie()" id="testCookieBtn" style="flex:1;padding:10px;font-size:14px;background:#2d2d3d;border:1px solid #555;">
+                            <i class="fas fa-vial"></i> اختبار
+                        </button>
+                    </div>
+                    <p id="cookieStatus" style="font-size:12px;margin-top:6px;"></p>
+                </div>
+                <div class="form-group">
+                    <label>🤖 توكن البوت:</label>
+                    <input type="password" id="spyBotTokenInput" placeholder="مثال: 123456:ABC-DEF..." style="direction: ltr;">
+                    <button class="auth-btn primary" onclick="saveSpyBotToken()" style="width:100%;margin-top:8px;padding:10px;font-size:14px;">
+                        <i class="fas fa-save"></i> حفظ التوكن
+                    </button>
+                </div>
+            </div>
+
+            <div class="section">
                 <div class="section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="toggleChannelList('source')">
                     <span><i class="fas fa-eye"></i> القنوات المصدر (للمراقبة) <span id="sourceCount" style="background:#bb86fc;color:#1a1a2e;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:6px;">0</span></span>
                     <i class="fas fa-chevron-down" id="sourceArrow" style="transition:transform 0.3s;"></i>
@@ -612,6 +640,12 @@
                         config.useTypedLinks = !!c.useTypedLinks;
                         config.enabled = c.enabled;
                         populateUI();
+                        const cookieStatus = document.getElementById('cookieStatus');
+                        if (c.cook === true || c.cook) {
+                            cookieStatus.innerHTML = '<span style="color:#4CAF50;">✅ كوكي محفوظ</span>';
+                        } else {
+                            cookieStatus.innerHTML = '<span style="color:#ffa500;">⚠️ لا يوجد كوكي — أدخله لتحويل الروابط</span>';
+                        }
                     }
                     updateStatusUI(data.running);
                     updateSessionStatus(data.hasSession);
@@ -619,6 +653,73 @@
             } catch (e) {
                 console.log('Error loading status:', e);
             }
+        }
+
+        async function saveSpyCookie() {
+            const cookieVal = document.getElementById('spyCookieInput').value.trim();
+            if (!cookieVal) { showToast('أدخل الكوكي أولاً', 'error'); return; }
+            try {
+                const res = await fetch('/api/spy/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cook: cookieVal })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم حفظ الكوكي ✅', 'success');
+                    document.getElementById('cookieStatus').innerHTML = '<span style="color:#4CAF50;">✅ تم الحفظ</span>';
+                } else {
+                    showToast('فشل الحفظ', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+        }
+
+        async function testSpyCookie() {
+            const btn = document.getElementById('testCookieBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const statusEl = document.getElementById('cookieStatus');
+            try {
+                const testUrl = 'https://www.aliexpress.com/item/1005007486937040.html';
+                const cookieVal = document.getElementById('spyCookieInput').value.trim();
+                const body = { url: testUrl };
+                if (cookieVal) body.credentials = { cook: cookieVal };
+                const res = await fetch('/api/affiliate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    statusEl.innerHTML = '<span style="color:#4CAF50;">✅ الكوكي يعمل بنجاح</span>';
+                    showToast('الكوكي يعمل ✅', 'success');
+                } else {
+                    statusEl.innerHTML = '<span style="color:#f44336;">❌ الكوكي لا يعمل: ' + (data.error || 'خطأ') + '</span>';
+                    showToast('الكوكي لا يعمل', 'error');
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span style="color:#f44336;">❌ خطأ في الاتصال</span>';
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-vial"></i> اختبار';
+        }
+
+        async function saveSpyBotToken() {
+            const tokenVal = document.getElementById('spyBotTokenInput').value.trim();
+            if (!tokenVal) { showToast('أدخل التوكن أولاً', 'error'); return; }
+            try {
+                const res = await fetch('/api/spy/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ botToken: tokenVal })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('تم حفظ التوكن ✅', 'success');
+                } else {
+                    showToast('فشل الحفظ', 'error');
+                }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
         }
 
         async function sendCode() {
