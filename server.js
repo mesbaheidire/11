@@ -988,6 +988,69 @@ ${text}`;
   }
 });
 
+app.post('/api/ai-extract-product-info', async (req, res) => {
+  try {
+    const { text, apiTitle } = req.body;
+    if (!text) return res.status(400).json({ success: false, error: 'النص مطلوب' });
+
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, productInfo: null, method: 'no_ai' });
+    }
+
+    try {
+      const prompt = `You are a product identification expert. Analyze this post from a deals/offers channel and extract the product information.
+
+Rules:
+1. Identify the EXACT product name as it's commercially known (brand + model + variant).
+2. If it's a phone/smartphone, include: Brand + Model + Number + Suffix (Pro/Ultra/Plus/Max/Lite) + RAM/ROM if mentioned.
+3. If it's NOT a phone, give a short attractive product name (3-8 words max).
+4. Write product name in English only.
+5. Determine if the product is a phone/smartphone or not.
+6. Return ONLY JSON, no explanation, no markdown, no code blocks:
+{"productName":"exact product name","isPhone":true/false}
+7. If you cannot identify the product at all, return: {"productName":null,"isPhone":false}
+
+${apiTitle ? `API Title (may be wrong): ${apiTitle}\n` : ''}
+Post text:
+${text}`;
+
+      const rawResult = await runGeminiWithRotation(prompt);
+      console.log(`🔍 AI product info raw: "${rawResult.substring(0, 150)}"`);
+      let productInfo = null;
+      try {
+        const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
+        const jsonMatch = cleaned.match(/\{[\s\S]*?"productName"[\s\S]*?\}/);
+        if (jsonMatch) {
+          productInfo = JSON.parse(jsonMatch[0]);
+          if (productInfo.productName) {
+            productInfo.productName = stripAIFormatting(String(productInfo.productName));
+          }
+        }
+      } catch {}
+
+      if (!productInfo) {
+        const lines = rawResult.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('{') && !l.startsWith('`'));
+        if (lines.length > 0) {
+          const name = stripAIFormatting(lines[0]);
+          if (name && name.length >= 3 && name.length <= 80) {
+            productInfo = { productName: name, isPhone: false };
+          }
+        }
+      }
+
+      console.log(`✅ AI product info: ${JSON.stringify(productInfo)}`);
+      res.json({ success: true, productInfo, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI product info extraction failed:', aiError.message);
+      res.json({ success: true, productInfo: null, method: 'fallback' });
+    }
+  } catch (error) {
+    console.error('Product info extraction error:', error.message || error);
+    res.json({ success: true, productInfo: null, method: 'error' });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {

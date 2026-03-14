@@ -706,6 +706,33 @@ async function extractPhoneNameWithAI(text) {
   });
 }
 
+async function extractProductInfoWithAI(text, apiTitle) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text, apiTitle });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-extract-product-info',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.productInfo ? parsed.productInfo : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(12000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function refineTitle(title) {
   return callAiRefine(title, false);
 }
@@ -825,53 +852,37 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
-      let isPhone = isPhoneProduct(apiTitle, text);
-      let phoneNameFromAI = null;
-
       try {
-        phoneNameFromAI = await extractPhoneNameWithAI(text);
-        if (phoneNameFromAI) {
-          if (!isPhone) console.log(`🤖📱 AI كشف هاتف لم يُكتشف بالكلمات المفتاحية: ${phoneNameFromAI}`);
-          isPhone = true;
-          console.log(`🤖📱 اسم الهاتف مستخرج بالذكاء الاصطناعي: ${phoneNameFromAI}`);
-        }
-      } catch (e) {
-        console.log(`⚠️ فشل استخراج اسم الهاتف بالذكاء الاصطناعي: ${e.message}`);
-      }
-
-      if (isPhone) {
-
-        if (phoneNameFromAI) {
-          productTitle = phoneNameFromAI;
+        const aiInfo = await extractProductInfoWithAI(text, apiTitle);
+        if (aiInfo && aiInfo.productName) {
+          productTitle = aiInfo.productName;
+          console.log(`🤖 AI استخرج المنتج: "${productTitle}" (هاتف: ${aiInfo.isPhone ? 'نعم' : 'لا'})`);
         } else {
-          const phonePatterns = [
-            /(?:samsung|galaxy|iphone|xiaomi|redmi|poco|realme|oppo|vivo|oneplus|huawei|honor|nokia|motorola|pixel|nothing|zte|infinix|tecno|itel|meizu|lenovo|asus|rog|sony|xperia|nubia|cubot|doogee|ulefone|umidigi|oukitel|blackview|oscal|fossibot|hotwav|agm|unihertz|tcl|alcatel|wiko|fairphone|hisense|coolpad|find\s*x|reno|gt\s*neo|note\s*\d)/i
-          ];
-          const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-          const phoneLine = postLines.find(line => phonePatterns.some(p => p.test(line)));
-          if (phoneLine) {
-            productTitle = phoneLine.replace(/^[⭐🔥📱✅⚡💥🎯👇🪙💰🏷️☀️❤️💯✨🌟🎉💎👉➡️★☆●►▶️·\-–—•|:,;\s]+/, '').trim();
-            console.log(`📱 احتياط — اسم الهاتف من سطر مطابق: ${productTitle}`);
-          } else if (apiTitle) {
-            console.log(`📱 منتج هاتف — الإبقاء على العنوان من API: ${apiTitle}`);
-          } else {
-            console.log(`📱 منتج هاتف — لا يوجد اسم متاح`);
+          console.log(`⚠️ AI لم يتعرف على المنتج — محاولة تحسين عنوان API`);
+          if (apiTitle) {
+            try {
+              const refined = await refineTitle(apiTitle);
+              productTitle = refined || apiTitle;
+              console.log(`🤖 عنوان محسّن: ${productTitle}`);
+            } catch (aiErr) {
+              console.log(`⚠️ فشل تحسين العنوان: ${aiErr.message}`);
+            }
           }
         }
-      } else if (apiTitle) {
-        console.log(`📝 عنوان API الأصلي (${apiTitle.length} حرف): ${apiTitle}`);
-        try {
-          const refined = await refineTitle(apiTitle);
-          console.log(`🤖 عنوان محسّن (${(refined||'').length} حرف): ${refined}`);
-          productTitle = refined || apiTitle;
-        } catch (aiErr) {
-          console.log(`⚠️ فشل تحسين العنوان: ${aiErr.message}`);
+      } catch (e) {
+        console.log(`⚠️ فشل استخراج معلومات المنتج: ${e.message}`);
+        if (apiTitle) {
+          try {
+            const refined = await refineTitle(apiTitle);
+            productTitle = refined || apiTitle;
+          } catch (aiErr) {}
         }
-        if (productTitle && productTitle.length > 60) {
-          console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
-          productTitle = shortenTitleFallback(productTitle);
-          console.log(`✂️ بعد التقصير: ${productTitle}`);
-        }
+      }
+
+      if (productTitle && productTitle.length > 60) {
+        console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
+        productTitle = shortenTitleFallback(productTitle);
+        console.log(`✂️ بعد التقصير: ${productTitle}`);
       }
 
       const t = config.messageTemplate || {};
