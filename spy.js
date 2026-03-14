@@ -974,15 +974,9 @@ async function startSpy(config) {
       const msg = event.message;
       if (!msg || !msg.peerId) return;
 
-      if (msg.out) return;
-
-      const senderId = msg.fromId ? String(msg.fromId?.userId?.value ?? msg.fromId?.userId ?? msg.fromId?.channelId?.value ?? msg.fromId?.channelId ?? '') : '';
-      if (senderId && botId && senderId === botId) return;
-      if (senderId && meId && senderId === meId) return;
-
       msgCount++;
-      if (msgCount <= 5 || msgCount % 50 === 0) {
-        console.log(`📨 رسالة #${msgCount} — peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
+      if (msgCount <= 10 || msgCount % 50 === 0) {
+        console.log(`📨 رسالة #${msgCount} — out:${msg.out} peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
       }
 
       let chatEntity;
@@ -997,12 +991,13 @@ async function startSpy(config) {
       const chatTitle = chatEntity.title || chatEntity.username || '';
       const chatId = String(chatEntity.id?.value ?? chatEntity.id);
 
-      if (targetIdSet.has(chatId) || targetUsernames.has(chatUsername)) {
-        return;
-      }
-
       if (msgCount <= 10) {
         console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
+      }
+
+      if (targetIdSet.has(chatId) || targetUsernames.has(chatUsername)) {
+        if (msgCount <= 20) console.log(`🚫 تخطي رسالة من قناة الهدف: ${chatTitle}`);
+        return;
       }
 
       const isSource = resolvedSourceIds.has(chatId) ||
