@@ -809,6 +809,8 @@ async function processPost(config, text, sourceImage, sourceName) {
         extractedCoupon = extractCouponFromPost(text);
         if (extractedCoupon) {
           console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
+        } else {
+          console.log(`⚠️ لم يتم العثور على كوبون في النص`);
         }
       }
 
@@ -817,8 +819,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
       else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
-      if (t.couponLabel && extractedCoupon) {
-        message += `${t.couponLabel}: ${extractedCoupon}\n`;
+      if (extractedCoupon) {
+        const label = t.couponLabel || 'كوبون';
+        message += `${label}: ${extractedCoupon}\n`;
       }
       message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
