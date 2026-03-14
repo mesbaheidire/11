@@ -985,7 +985,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (sellerCouponText && sellerCouponText.trim()) {
         message += `\n🎁 إحجز قسيمة البائع: ${sellerCouponText.trim()}`;
         if (t.sellerCouponCode && t.sellerCouponCode.trim()) {
-          message += `\nكود: ${t.sellerCouponCode.trim()}`;
+          message += `\n${t.sellerCouponCode.trim()}`;
         }
         message += '\n';
       }
