@@ -379,6 +379,51 @@ function startReviewBot(botToken) {
       console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
     });
 
+    reviewBot.action('spy_approve_all', async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const count = pendingReviews.size;
+      if (count === 0) {
+        await ctx.answerCbQuery('لا توجد منشورات معلقة');
+        return;
+      }
+      await ctx.answerCbQuery(`جاري نشر ${count} منشور...`);
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `✅ تم نشر الكل (${count})`, callback_data: 'noop' }]] });
+      const allReviews = Array.from(pendingReviews.entries());
+      pendingReviews.clear();
+      for (const [rid, review] of allReviews) {
+        try {
+          await executePublish(review);
+          console.log(`✅ نشر (الكل): ${rid}`);
+        } catch (e) {
+          console.log(`❌ فشل نشر (الكل) ${rid}: ${e.message}`);
+        }
+      }
+    });
+
+    reviewBot.action('spy_skip_all', async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const count = pendingReviews.size;
+      if (count === 0) {
+        await ctx.answerCbQuery('لا توجد منشورات معلقة');
+        return;
+      }
+      await ctx.answerCbQuery(`تم تخطي ${count} منشور`);
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `⏭ تم تخطي الكل (${count})`, callback_data: 'noop' }]] });
+      for (const [rid, review] of pendingReviews.entries()) {
+        addLogEntry({ status: 'skipped', title: review.productTitle || 'تم التخطي', source: review.sourceName });
+      }
+      pendingReviews.clear();
+      console.log(`⏭ تم تخطي الكل (${count})`);
+    });
+
     reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
 
     reviewBot.launch({ dropPendingUpdates: true });
@@ -450,23 +495,27 @@ async function sendForReview(botToken, ownerId, review) {
   const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
   pendingReviews.set(reviewId, review);
 
-
+  const pendingCount = pendingReviews.size;
   const bot = new Telegraf(botToken);
-  let msg = `📋 *منتج جديد للمراجعة*\n\n`;
+  let msg = `📋 *منتج جديد للمراجعة* (${pendingCount} في الانتظار)\n\n`;
   msg += `📡 المصدر: ${review.sourceName || 'غير معروف'}\n`;
   if (review.productTitle) msg += `📦 ${review.productTitle}\n`;
   if (review.productPrice) msg += `💰 السعر: ${review.productPrice}\n`;
   if (review.affiliateLink) msg += `🔗 ${review.affiliateLink}\n`;
   msg += `\n📢 القنوات الهدف: ${(review.targetIds || []).join(', ')}`;
 
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
-        { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
-      ]
-    ]
-  };
+  const buttons = [
+    { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
+    { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
+  ];
+  const rows = [buttons];
+  if (pendingCount > 1) {
+    rows.push([
+      { text: `📢 نشر الكل (${pendingCount})`, callback_data: 'spy_approve_all' },
+      { text: `🗑 تخطي الكل`, callback_data: 'spy_skip_all' }
+    ]);
+  }
+  const keyboard = { inline_keyboard: rows };
 
   try {
     if (review.productImage) {
