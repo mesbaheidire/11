@@ -212,18 +212,42 @@ app.post('/api/gemini-keys', (req, res) => {
   }
 });
 
-app.get('/api/gemini-status', (req, res) => {
+app.get('/api/gemini-status', async (req, res) => {
   try {
     const data = loadGeminiKeys();
-    const envKey = process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-    const totalKeys = data.keys.length + (envKey ? 1 : 0);
-    
+    const envKeys = getEnvKeys();
+    const allKeys = [...data.keys, ...envKeys];
+    const totalKeys = allKeys.length;
+
+    let workingCount = 0;
+    const keyResults = [];
+    for (let i = 0; i < allKeys.length; i++) {
+      const key = allKeys[i];
+      const masked = key.substring(0, 8) + '...' + key.substring(key.length - 4);
+      const source = i < data.keys.length ? 'saved' : 'env';
+      try {
+        const testAI = new GoogleGenerativeAI(key);
+        const testModel = testAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+        await testModel.generateContent('test');
+        keyResults.push({ key: masked, source, status: 'working' });
+        workingCount++;
+      } catch (e) {
+        const err = e.message || '';
+        let status = 'error';
+        if (err.includes('quota') || err.includes('429') || err.includes('RESOURCE_EXHAUSTED')) status = 'quota_exceeded';
+        else if (err.includes('API_KEY_INVALID') || err.includes('not valid')) status = 'invalid';
+        else if (err.includes('403') || err.includes('Forbidden') || err.includes('leaked')) status = 'forbidden';
+        keyResults.push({ key: masked, source, status, error: err.substring(0, 80) });
+      }
+    }
+
     res.json({
       success: true,
       count: data.keys.length,
-      currentIndex: data.currentIndex,
-      hasEnvKey: !!envKey,
-      totalAvailable: totalKeys
+      envCount: envKeys.length,
+      totalAvailable: totalKeys,
+      workingCount,
+      keys: keyResults
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -244,14 +268,25 @@ async function runGeminiWithRotation(prompt, maxRetries = 3) {
       return response.text().trim();
     } catch (error) {
       const errorMsg = error.message || '';
-      // Check if it's a quota error
-      if (errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('403') || errorMsg.includes('leaked') || errorMsg.includes('Forbidden') || errorMsg.includes('400') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('not valid')) {
-        console.log(`⚠️ Gemini quota exceeded on attempt ${attempt + 1}, rotating key...`);
+      const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
+      const isKeyError = errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('not valid') || errorMsg.includes('leaked') || errorMsg.includes('403') || errorMsg.includes('Forbidden');
+      const isBadRequest = errorMsg.includes('400');
+
+      if (isKeyError) {
+        console.log(`❌ مفتاح Gemini غير صالح (محاولة ${attempt + 1}): ${errorMsg.substring(0, 100)}`);
+      } else if (isQuotaError) {
+        console.log(`⚠️ حصة Gemini منتهية (محاولة ${attempt + 1})`);
+      } else if (isBadRequest) {
+        console.log(`⚠️ طلب غير صالح Gemini (محاولة ${attempt + 1}): ${errorMsg.substring(0, 100)}`);
+      } else {
+        console.log(`❌ خطأ Gemini (محاولة ${attempt + 1}): ${errorMsg.substring(0, 150)}`);
+      }
+
+      if (isQuotaError || isKeyError) {
         if (rotateGeminiKey()) {
-          continue; // Try with next key
+          continue;
         }
       }
-      // If last attempt or non-quota error, throw
       if (attempt === maxRetries - 1) {
         throw error;
       }
