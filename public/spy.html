@@ -782,7 +782,8 @@
         async function refreshLog() {
             try {
                 const r = await fetch('/api/spy/log');
-                const entries = await r.json();
+                const data = await r.json();
+                const entries = Array.isArray(data) ? data : (data.log || []);
                 const list = document.getElementById('logList');
                 if (!entries.length) {
                     list.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
