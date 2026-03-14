@@ -250,10 +250,27 @@ function isPhoneProduct(title, text) {
     'smartphone', 'phone', 'iphone', 'samsung', 'galaxy', 'xiaomi', 'redmi',
     'poco', 'realme', 'oppo', 'vivo', 'oneplus', 'huawei', 'honor', 'nokia',
     'motorola', 'pixel', 'nothing phone', 'zte', 'infinix', 'tecno', 'itel',
-    'هاتف', 'موبايل', 'جوال', 'تلفون', 'سمارتفون',
-    '5g phone', '4g phone', 'cellphone', 'cell phone', 'mobile phone'
+    'meizu', 'lenovo', 'asus', 'rog phone', 'sony xperia', 'google pixel',
+    'nubia', 'cubot', 'doogee', 'ulefone', 'umidigi', 'oukitel', 'blackview',
+    'oscal', 'fossibot', 'hotwav', 'agm', 'unihertz', 'cat phone',
+    'tcl', 'alcatel', 'wiko', 'fairphone', 'sharp aquos', 'hisense',
+    'coolpad', 'micromax', 'lava', 'karbonn', 'gionee', 'leagoo',
+    'vernee', 'elephone', 'bluboo', 'homtom', 'leeco', 'letv',
+    'snapdragon', 'dimensity', 'mediatek', 'helio', 'exynos', 'kirin',
+    'amoled', 'هاتف', 'موبايل', 'جوال', 'تلفون', 'سمارتفون',
+    '5g phone', '4g phone', 'cellphone', 'cell phone', 'mobile phone',
+    'dual sim', 'sim card', 'nfc phone'
   ];
-  return phoneKeywords.some(kw => combined.includes(kw));
+  if (phoneKeywords.some(kw => combined.includes(kw))) return true;
+
+  const phonePatterns = [
+    /\b\d+mp\s*\+\s*\d+mp/i,
+    /\b\d+mp\s+(camera|rear|front|main)/i,
+    /\b\d+\s*gb\s*[\/+]\s*\d+\s*(gb|tb)\b/i,
+    /\b\d{4,5}\s*mah\b/i,
+    /\b[a-z]+\s+\d{1,3}\s*(pro|ultra|plus|max|lite|mini|se|gt|neo|note|prime|star|play|power|turbo|edge|fold|flip|zoom|fe)\b/i,
+  ];
+  return phonePatterns.some(p => p.test(combined));
 }
 
 function detectLinkType(url, text) {
@@ -808,23 +825,27 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
-      const isPhone = isPhoneProduct(apiTitle, text);
-      if (isPhone) {
-        let phoneNameFromAI = null;
-        try {
-          phoneNameFromAI = await extractPhoneNameWithAI(text);
-          if (phoneNameFromAI) {
-            console.log(`🤖📱 اسم الهاتف مستخرج بالذكاء الاصطناعي: ${phoneNameFromAI}`);
-          }
-        } catch (e) {
-          console.log(`⚠️ فشل استخراج اسم الهاتف بالذكاء الاصطناعي: ${e.message}`);
+      let isPhone = isPhoneProduct(apiTitle, text);
+      let phoneNameFromAI = null;
+
+      try {
+        phoneNameFromAI = await extractPhoneNameWithAI(text);
+        if (phoneNameFromAI) {
+          if (!isPhone) console.log(`🤖📱 AI كشف هاتف لم يُكتشف بالكلمات المفتاحية: ${phoneNameFromAI}`);
+          isPhone = true;
+          console.log(`🤖📱 اسم الهاتف مستخرج بالذكاء الاصطناعي: ${phoneNameFromAI}`);
         }
+      } catch (e) {
+        console.log(`⚠️ فشل استخراج اسم الهاتف بالذكاء الاصطناعي: ${e.message}`);
+      }
+
+      if (isPhone) {
 
         if (phoneNameFromAI) {
           productTitle = phoneNameFromAI;
         } else {
           const phonePatterns = [
-            /(?:samsung|galaxy|iphone|xiaomi|redmi|poco|realme|oppo|vivo|oneplus|huawei|honor|nokia|motorola|pixel|nothing|zte|infinix|tecno|itel|find\s*x|reno|gt\s*neo|note\s*\d)/i
+            /(?:samsung|galaxy|iphone|xiaomi|redmi|poco|realme|oppo|vivo|oneplus|huawei|honor|nokia|motorola|pixel|nothing|zte|infinix|tecno|itel|meizu|lenovo|asus|rog|sony|xperia|nubia|cubot|doogee|ulefone|umidigi|oukitel|blackview|oscal|fossibot|hotwav|agm|unihertz|tcl|alcatel|wiko|fairphone|hisense|coolpad|find\s*x|reno|gt\s*neo|note\s*\d)/i
           ];
           const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
           const phoneLine = postLines.find(line => phonePatterns.some(p => p.test(line)));
