@@ -845,6 +845,20 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
+      const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
+      if (couponPrefixes.length > 0 && extractedCoupon) {
+        const filtered = extractedCoupon.split(' | ')
+          .map(c => c.trim())
+          .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
+        if (filtered.length > 0) {
+          extractedCoupon = filtered.join(' | ');
+          console.log(`🔍 كوبونات بعد الفلترة: ${extractedCoupon}`);
+        } else {
+          console.log(`🚫 كل الكوبونات المستخرجة لا تطابق الفلتر — تم تجاهلها`);
+          extractedCoupon = null;
+        }
+      }
+
       const fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
       if (fixedCoupons.length > 0) {
         const existingCoupons = extractedCoupon ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()) : [];
