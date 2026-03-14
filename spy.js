@@ -151,6 +151,7 @@ function loadConfig() {
     autoPublish: true,
     linkType: 'coin',
     messageTemplate: {
+      headerText: '',
       prefix: '🔥 عرض حصري',
       priceLabel: '💰 السعر:',
       linkLabel: '🛒 رابط الشراء:',
@@ -770,6 +771,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       let message = '';
+      if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n\n`;
       if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
       else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;

@@ -355,7 +355,12 @@
             <div class="section">
                 <div class="section-title"><i class="fas fa-pen-fancy"></i> قالب الرسالة</div>
                 <div class="form-group">
-                    <label>المقدمة:</label>
+                    <label>مقدمة عامة (تظهر أعلى كل منشور):</label>
+                    <textarea id="tmplHeaderText" rows="3" placeholder="مثال: 🔥 عروض اليوم من AliOffersDz 🔥&#10;تابعونا للمزيد من العروض الحصرية" style="width: 100%; resize: vertical; font-family: 'Cairo', sans-serif;"></textarea>
+                    <p class="form-hint">اكتب نصاً ثابتاً يظهر في بداية كل منشور. اتركه فارغاً لعدم إضافة مقدمة.</p>
+                </div>
+                <div class="form-group">
+                    <label>بادئة العنوان:</label>
                     <input type="text" id="tmplPrefix" placeholder="🔥 عرض حصري">
                 </div>
                 <div class="form-group">
@@ -546,6 +551,7 @@
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
             config.messageTemplate = {
+                headerText: document.getElementById('tmplHeaderText').value,
                 prefix: document.getElementById('tmplPrefix').value,
                 priceLabel: document.getElementById('tmplPriceLabel').value,
                 linkLabel: document.getElementById('tmplLinkLabel').value,
@@ -575,6 +581,7 @@
             renderChannels('source');
             renderChannels('target');
             const t = config.messageTemplate || {};
+            document.getElementById('tmplHeaderText').value = t.headerText || '';
             document.getElementById('tmplPrefix').value = t.prefix || '';
             document.getElementById('tmplPriceLabel').value = t.priceLabel || '';
             document.getElementById('tmplLinkLabel').value = t.linkLabel || '';
