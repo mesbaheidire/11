@@ -983,7 +983,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
       if (sellerCouponText && sellerCouponText.trim()) {
-        message += `\n🎁 ${sellerCouponText.trim()}\n`;
+        message += `\n🎁 إحجز قسيمة البائع: ${sellerCouponText.trim()}\n`;
       }
       message += '\n';
       if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
