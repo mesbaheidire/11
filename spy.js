@@ -198,19 +198,38 @@ function extractCouponFromPost(text) {
   if (!text) return null;
   const coupons = new Set();
 
+  const excludeWords = new Set([
+    'CODE', 'HTTP', 'HTTPS', 'HTML', 'AMOLED', 'BLUETOOTH', 'GPS',
+    'HONOR', 'SAMSUNG', 'XIAOMI', 'REDMI', 'POCO', 'REALME', 'OPPO',
+    'VIVO', 'HUAWEI', 'NOKIA', 'IPHONE', 'PIXEL', 'NOTHING', 'GLOBAL',
+    'VERSION', 'SPRING', 'SALE', 'TIME', 'STORE', 'FLASH', 'FREE',
+    'TYPE', 'USB', 'HDMI', 'WIFI', 'OLED', 'MINI', 'PLUS', 'ULTRA',
+    'LITE', 'NOTE', 'BAND', 'WATCH', 'BUDS', 'PODS', 'CASE', 'SUPER',
+    'FAST', 'CHARGING', 'CABLE', 'ADAPTER'
+  ]);
+
+  function isValidCoupon(code) {
+    if (!code || code.length < 4 || code.length > 20) return false;
+    if (!/[A-Z]/.test(code)) return false;
+    if (/^[a-z]/.test(code)) return false;
+    if (excludeWords.has(code.toUpperCase())) return false;
+    const upper = code.replace(/[^A-Z0-9]/g, '');
+    if (upper !== code) return false;
+    return true;
+  }
+
   const patterns = [
-    /(?:كوبون|قسيمة|coupon|code|كود|رمز|حصل)[:\s]*(?:البائع\s*)?(?:\$?\d+\s*)?([A-Z0-9]{4,20})/gi,
-    /(?:استخدم|use|ادخل|enter)[:\s]*([A-Z0-9]{4,20})/gi,
+    /(?:كوبون|قسيمة|coupon|code|كود|رمز|حصل)[:\s]*(?:البائع\s*)?(?:\$?\d+\s*)?([A-Z][A-Z0-9]{3,19})/gi,
+    /(?:استخدم|use|ادخل|enter)[:\s]*([A-Z][A-Z0-9]{3,19})/gi,
     /\b(?:CODE)\s+([A-Z0-9]{4,20})/gi,
   ];
 
   for (const pat of patterns) {
     let match;
     while ((match = pat.exec(text)) !== null) {
-      const code = (match[2] || match[1]).trim();
-      if (code.length >= 4 && code.length <= 20 && code !== 'CODE' && code !== 'HTTP' && code !== 'HTTPS') {
-        coupons.add(code);
-      }
+      const raw = (match[2] || match[1]).trim();
+      const code = raw.toUpperCase();
+      if (isValidCoupon(code)) coupons.add(code);
     }
   }
 
@@ -218,9 +237,7 @@ function extractCouponFromPost(text) {
   let m;
   while ((m = codePattern.exec(text)) !== null) {
     const code = m[1];
-    if (code.length >= 4 && code.length <= 15 && !['HTTP', 'HTTPS', 'HTML', 'AMOLED', 'BLUETOOTH', 'GPS'].includes(code)) {
-      coupons.add(code);
-    }
+    if (isValidCoupon(code)) coupons.add(code);
   }
 
   if (coupons.size === 0) return null;
