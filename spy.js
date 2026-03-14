@@ -450,13 +450,6 @@ async function sendForReview(botToken, ownerId, review) {
   const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
   pendingReviews.set(reviewId, review);
 
-  setTimeout(() => {
-    if (pendingReviews.has(reviewId)) {
-      pendingReviews.delete(reviewId);
-      addLogEntry({ status: 'expired', title: review.productTitle, source: review.sourceName });
-      console.log(`⏰ انتهت صلاحية المراجعة: ${reviewId}`);
-    }
-  }, 30 * 60 * 1000);
 
   const bot = new Telegraf(botToken);
   let msg = `📋 *منتج جديد للمراجعة*\n\n`;
