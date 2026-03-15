@@ -1066,14 +1066,12 @@ app.post('/api/ai-extract-seller-coupon', async (req, res) => {
 استخرج قسيمة أو عرض البائع من نص المنشور التالي إن وجد. مثال على القسائم:
 - أكواد: "ASAF7", "SALE10", "ZNQ005"
 - أرقام: "1000", "500", "100" (قد تكون خصم أو نقاط)
-- جمل: "احصل على خصم إضافي", "عرض حصري من المتجر"
-- روابط قسائم البائع
 
 النص:
 ${text}
 
 رد بـ JSON فقط (بدون markdown):
-{"sellerCoupon": "القسيمة المستخرجة (رقم أو كود أو نص) أو null إذا لم يوجد"}`;
+{"sellerCoupon": "القسيمة المستخرجة (رقم أو كود فقط) أو null إذا لم يوجد"}`;
 
     const result = await model.generateContent(prompt);
     let rawResult = result.response.text().trim();
