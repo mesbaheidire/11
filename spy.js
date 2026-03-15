@@ -1153,21 +1153,39 @@ async function startSpy(config) {
   }
 
   console.log('🔄 جاري مزامنة المحادثات...');
+  let totalDialogs = 0;
   try {
-    const dialogs = await spyClient.getDialogs({ limit: 100 });
-    console.log(`📋 تمت مزامنة ${dialogs.length} محادثة`);
+    let allDialogs = [];
+    let batch;
+    let offsetDate = 0;
+    do {
+      batch = await spyClient.getDialogs({ limit: 100, offsetDate });
+      if (batch.length > 0) {
+        allDialogs = allDialogs.concat(batch);
+        const lastDialog = batch[batch.length - 1];
+        if (lastDialog.date) {
+          offsetDate = lastDialog.date;
+        } else {
+          break;
+        }
+      }
+    } while (batch.length >= 100 && allDialogs.length < 500);
+    totalDialogs = allDialogs.length;
+    console.log(`📋 تمت مزامنة ${totalDialogs} محادثة`);
   } catch (e) {
     console.log(`⚠️ فشل مزامنة المحادثات: ${e.message}`);
   }
 
-  const sourceUsernames = config.sourceChannels.map(ch => {
+  function extractUsername(ch) {
     if (ch.startsWith('@')) return ch.substring(1);
     if (ch.includes('t.me/')) {
       const match = ch.match(/t\.me\/([^\/\?]+)/);
       if (match) return match[1];
     }
     return ch;
-  });
+  }
+
+  const sourceUsernames = config.sourceChannels.map(extractUsername);
 
   const targetUsernames = new Set();
   const targetIdSet = new Set();
@@ -1207,11 +1225,13 @@ async function startSpy(config) {
   } catch (e) {}
 
   const resolvedSourceIds = new Set();
+  const sourceIdToName = {};
   for (const src of sourceUsernames) {
     try {
       const entity = await spyClient.getEntity(src);
       const entityId = String(entity.id?.value ?? entity.id);
       resolvedSourceIds.add(entityId);
+      sourceIdToName[entityId] = entity.title || src;
       console.log(`✅ تم حل القناة: ${src} → ${entity.title || src} (ID: ${entityId})`);
     } catch (e) {
       console.log(`❌ فشل حل القناة "${src}": ${e.message}`);
@@ -1232,37 +1252,57 @@ async function startSpy(config) {
       if (!msg || !msg.peerId) return;
 
       msgCount++;
-      if (msgCount <= 10 || msgCount % 50 === 0) {
-        console.log(`📨 رسالة #${msgCount} — out:${msg.out} peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
+
+      let peerId = '';
+      const peer = msg.peerId;
+      if (peer.channelId) {
+        peerId = String(peer.channelId?.value ?? peer.channelId);
+      } else if (peer.chatId) {
+        peerId = String(peer.chatId?.value ?? peer.chatId);
+      } else if (peer.userId) {
+        peerId = String(peer.userId?.value ?? peer.userId);
       }
 
-      let chatEntity;
+      const isSourceByPeerId = resolvedSourceIds.has(peerId);
+
+      if (!isSourceByPeerId && msgCount > 10) return;
+
+      let chatEntity = null;
+      let chatUsername = '';
+      let chatTitle = '';
+      let chatId = peerId;
+
       try {
         chatEntity = await spyClient.getEntity(msg.peerId);
+        chatUsername = (chatEntity.username || '').toLowerCase();
+        chatTitle = chatEntity.title || chatEntity.username || '';
+        chatId = String(chatEntity.id?.value ?? chatEntity.id);
       } catch (e) {
-        if (msgCount <= 10) console.log(`⚠️ فشل حل الكيان: ${e.message}`);
-        return;
+        if (isSourceByPeerId) {
+          chatTitle = sourceIdToName[peerId] || `Channel(${peerId})`;
+        } else {
+          if (msgCount <= 10) console.log(`⚠️ فشل حل الكيان (peerId=${peerId}): ${e.message}`);
+          return;
+        }
       }
 
-      const chatUsername = (chatEntity.username || '').toLowerCase();
-      const chatTitle = chatEntity.title || chatEntity.username || '';
-      const chatId = String(chatEntity.id?.value ?? chatEntity.id);
-
-      if (msgCount <= 10) {
-        console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
+      if (msgCount <= 10 || msgCount % 50 === 0) {
+        console.log(`📨 رسالة #${msgCount} من: ${chatTitle} | username: ${chatUsername} | id: ${chatId} | peerId: ${peerId}`);
       }
 
-      if (targetIdSet.has(chatId) || targetUsernames.has(chatUsername)) {
+      if (targetIdSet.has(chatId) || targetIdSet.has(peerId) || targetUsernames.has(chatUsername)) {
         if (msgCount <= 20) console.log(`🚫 تخطي رسالة من قناة الهدف: ${chatTitle}`);
         return;
       }
 
-      const isSource = resolvedSourceIds.has(chatId) ||
+      const isSource = isSourceByPeerId || resolvedSourceIds.has(chatId) ||
         sourceUsernames.some(src => {
           const srcLower = src.toLowerCase();
           return chatUsername === srcLower ||
                  chatId === src ||
-                 ('-100' + chatId) === src;
+                 peerId === src ||
+                 ('-100' + chatId) === src ||
+                 ('-100' + peerId) === src;
         });
 
       if (!isSource) return;
@@ -1274,7 +1314,7 @@ async function startSpy(config) {
       }
       markMessageProcessed(chatId, msgId);
 
-      console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
+      console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle} (peerId=${peerId})`);
 
       const text = msg.message || '';
       if (!text) {
