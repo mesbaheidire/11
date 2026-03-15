@@ -884,6 +884,7 @@
                     showToast('تم إيقاف التجسس', 'success');
                 } else {
                     collectConfig();
+                    await saveAndApply();
                     const r = await fetch('/api/spy/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -969,6 +970,7 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الإرسال...';
             collectConfig();
+            await saveAndApply();
             try {
                 const r = await fetch('/api/spy/send-code', {
                     method: 'POST',
