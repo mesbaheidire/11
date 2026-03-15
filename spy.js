@@ -969,22 +969,30 @@ async function processPost(config, text, sourceImage, sourceName) {
 }
 
 async function startSpy(config) {
+  console.log('🔄 بدء البوت...');
   if (spyRunning) {
+    console.log('⚠️ البوت يعمل بالفعل، إيقاف النسخة القديمة...');
     await stopSpy();
   }
 
   if (!config.targetChannels || config.targetChannels.length === 0) {
+    console.log('❌ لا توجد قنوات هدف — يجب إضافة قناة على الأقل');
     throw new Error('يجب إضافة قناة هدف واحدة على الأقل');
   }
 
   const botToken = getBotToken();
   if (!botToken) {
+    console.log('❌ لا يوجد توكن بوت');
     throw new Error('توكن البوت غير موجود - أضفه في إعدادات التطبيق الرئيسية');
   }
 
+  console.log('✅ التوكن موجود، بدء البوت...');
   const bot = new Telegraf(botToken);
 
+  console.log('⚙️ إعداد معالجات الأوامر والرسائل...');
+
   bot.command('start', async (ctx) => {
+    console.log('🚀 /start أمر مستقبل');
     try {
       const cfg = loadConfig();
       if (!cfg.targetChannels || cfg.targetChannels.length === 0) {
@@ -999,8 +1007,12 @@ async function startSpy(config) {
 
   bot.on('message', async (ctx) => {
     try {
+      console.log(`📨 رسالة جديدة من ${ctx.from.id} (${ctx.from.first_name || ctx.from.username})`);
       const currentCfg = loadConfig();
-      if (currentCfg.ownerId && String(ctx.from.id) !== String(currentCfg.ownerId)) {
+      if (!currentCfg.ownerId) {
+        console.log(`⚠️ لم يتم تعيين ownerId - جميع المستخدمين مسموح لهم`);
+      } else if (String(ctx.from.id) !== String(currentCfg.ownerId)) {
+        console.log(`❌ رفض: المستخدم ${ctx.from.id} ليس ownerId ${currentCfg.ownerId}`);
         await ctx.reply('❌ ليس لديك صلاحية استخدام هذا البوت');
         return;
       }
@@ -1008,13 +1020,18 @@ async function startSpy(config) {
       const text = ctx.message.text || ctx.message.caption || '';
       const forwardFrom = ctx.message.forward_from_chat;
       const sourceName = forwardFrom ? (forwardFrom.title || forwardFrom.username || 'محوّل') : (ctx.from.first_name || 'مباشر');
+      console.log(`📝 النص: ${text.substring(0, 100)}...`);
 
       if (!text) {
+        console.log('⚠️ رسالة بدون نص، يتم تجاهلها');
         return;
       }
 
+      console.log(`🔍 جاري البحث عن روابط AliExpress...`);
       const aliLinks = extractAliExpressLinks(text);
+      console.log(`🔗 وجدت ${aliLinks.length} رابط AliExpress`);
       if (aliLinks.length === 0) {
+        console.log('❌ لا توجد روابط AliExpress');
         await ctx.reply('⚠️ لا توجد روابط AliExpress في الرسالة\n\nأرسل أو حوّل منشوراً يحتوي على رابط AliExpress');
         return;
       }
@@ -1132,12 +1149,14 @@ async function startSpy(config) {
 
   bot.action('noop', (ctx) => ctx.answerCbQuery());
 
+  console.log('🚀 جاري تشغيل البوت...');
   await bot.launch({ dropPendingUpdates: true });
   spyClient = bot;
   spyRunning = true;
 
-  console.log('🤖 البوت يعمل — أرسل أو حوّل منشورات تحتوي على روابط AliExpress');
-  console.log(`📢 القنوات الهدف: ${config.targetChannels.join(', ')}`);
+  console.log('✅✅✅ البوت يعمل الآن! ✅✅✅');
+  console.log('📢 القنوات الهدف: ' + config.targetChannels.join(', '));
+  console.log('🤖 البوت جاهز لاستقبال الرسائل والمنشورات!');
 }
 
 async function stopSpy() {

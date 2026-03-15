@@ -128,14 +128,20 @@
 
         <div class="tab-content active" id="tab-settings">
 
+            <div class="info-box" style="margin-bottom:12px; background: rgba(255, 152, 0, 0.1); border-left-color: #ff9800;">
+                <i class="fas fa-exclamation-triangle" style="color: #ff9800;"></i>
+                <strong style="color: #ffb74d;">⚠️ الخطوة الأولى:</strong><br>
+                أضف قناة هدف واحدة على الأقل أدناه ثم اضغط "حفظ"
+            </div>
+
             <div class="info-box" style="margin-bottom:12px;">
                 <i class="fas fa-info-circle"></i>
                 <strong>طريقة الاستخدام:</strong><br>
-                ✅ 1. أضف قنوات الهدف أدناه (مهم جداً)<br>
-                ✅ 2. حفظ الإعدادات والقالب من الأسفل<br>
-                ✅ 3. افتح البوت وأرسل /start للتحقق<br>
-                ✅ 4. حوّل/أرسل منشورات AliExpress للبوت<br>
-                ⏳ 5. البوت يعالج الرابط ينشره تلقائياً
+                1️⃣ أضف قنوات الهدف أدناه (مثال: @myChannel)<br>
+                2️⃣ اضغط زر "حفظ الإعدادات" أدناه<br>
+                3️⃣ افتح البوت في تيليجرام واكتب /start<br>
+                4️⃣ حوّل/أرسل منشورات AliExpress للبوت<br>
+                ✅ البوت يعالج الرابط وينشره تلقائياً
             </div>
 
             <div class="collapse-section">
@@ -641,21 +647,22 @@
         async function autoStartBot() {
             try {
                 collectConfig();
-                if (!config.targetChannels || config.targetChannels.length === 0) {
-                    return;
-                }
-                await fetch('/api/spy/start', {
+                const r = await fetch('/api/spy/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config)
                 });
+                const d = await r.json();
+                if (!d.success) {
+                    console.log('ℹ️ البوت:', d.error);
+                }
             } catch (e) {
-                console.log('Failed to auto-start bot');
+                console.log('Error:', e.message);
             }
         }
 
         loadConfig();
-        setTimeout(autoStartBot, 500);
+        autoStartBot();
     </script>
 </body>
 </html>
