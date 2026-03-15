@@ -953,12 +953,11 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
-      console.log(`🔍 Coupon filter config: "${t.couponFilter}" → prefixes: [${couponPrefixes.join(', ')}]`);
       if (couponPrefixes.length > 0 && extractedCoupon) {
         console.log(`🔍 Filtering coupon: "${extractedCoupon}" with prefixes: [${couponPrefixes.join(', ')}]`);
         const filtered = extractedCoupon.split(' | ')
-          .map(c => c.trim())
-          .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
+          .map(c => c.trim().toUpperCase())
+          .filter(c => couponPrefixes.some(prefix => c.startsWith(prefix)));
         if (filtered.length > 0) {
           extractedCoupon = filtered.join(' | ');
           console.log(`🔍 كوبونات بعد الفلترة: ${extractedCoupon}`);
@@ -995,7 +994,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
       if (extractedCoupon) {
-        const label = t.couponLabel || 'كوبون';
+        const label = (t.couponLabel && t.couponLabel.trim()) ? t.couponLabel.trim() : 'كوبون';
         message += `${label}: ${extractedCoupon}\n`;
       }
 
