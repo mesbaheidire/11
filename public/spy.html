@@ -284,6 +284,8 @@
                     <textarea id="bulkSourceChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px;">
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة</button>
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="selectAllChannels('source')"><i class="fas fa-check-double"></i> تحديد الكل</button>
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="clearAllChannels('source')"><i class="fas fa-times"></i> إلغاء</button>
                         <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
                     <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('source')"><i class="fas fa-download"></i> استخراج من الحساب</button>
@@ -305,6 +307,8 @@
                     <textarea id="bulkTargetChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px;">
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة</button>
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="selectAllChannels('target')"><i class="fas fa-check-double"></i> تحديد الكل</button>
+                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="clearAllChannels('target')"><i class="fas fa-times"></i> إلغاء</button>
                         <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
                     <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('target')"><i class="fas fa-download"></i> استخراج من الحساب</button>
@@ -592,6 +596,27 @@
             const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
             arr.splice(idx, 1);
             renderChannels(type);
+        }
+
+        function selectAllChannels(type) {
+            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
+            if (arr.length === 0) {
+                showToast('لا توجد قنوات لتحديدها', 'error');
+                return;
+            }
+            showToast(`تم تحديد ${arr.length} قناة`, 'success');
+        }
+
+        function clearAllChannels(type) {
+            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
+            if (arr.length === 0) {
+                showToast('لا توجد قنوات لإلغاءها', 'error');
+                return;
+            }
+            const count = arr.length;
+            arr.length = 0;
+            renderChannels(type);
+            showToast(`تم حذف ${count} قناة`, 'success');
         }
 
         function toggleBulk(type) {
