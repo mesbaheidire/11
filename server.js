@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -1533,7 +1533,6 @@ app.post('/api/spy/config', (req, res) => {
       saveSharedCredentials(shared);
     }
     const config = { ...stored };
-    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
@@ -1549,9 +1548,6 @@ app.post('/api/spy/config', (req, res) => {
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.cook !== undefined && incoming.cook !== '' && incoming.cook !== '****') config.cook = incoming.cook;
     if (incoming.botToken !== undefined && incoming.botToken !== '' && incoming.botToken !== '****') config.botToken = incoming.botToken;
-    if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
-    if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     saveSpyConfig(config);
     res.json({ success: true });
   } catch (error) {
@@ -1564,7 +1560,6 @@ app.post('/api/spy/start', async (req, res) => {
     const stored = loadSpyConfig();
     const incoming = req.body || {};
     const config = { ...stored };
-    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
@@ -1578,12 +1573,9 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
-    if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
-    if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     saveSpyConfig(config);
     await startSpy(config);
-    res.json({ success: true, message: 'تم تشغيل نظام التجسس' });
+    res.json({ success: true, message: 'تم تشغيل البوت' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1607,49 +1599,16 @@ app.get('/api/spy/log', (req, res) => {
   }
 });
 
-app.post('/api/spy/send-code', async (req, res) => {
-  try {
-    const config = req.body;
-    saveSpyConfig(config);
-    const result = await sendLoginCode(config);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/spy/verify-code', async (req, res) => {
-  try {
-    const { code, password } = req.body;
-    const config = loadSpyConfig();
-    const result = await verifyCode(config, code, password);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/spy/verify-password', async (req, res) => {
-  try {
-    const { password } = req.body;
-    const config = loadSpyConfig();
-    const result = await verifyCode(config, null, password);
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Auto-start spy if it was enabled
+// Auto-start bot if it was enabled
 (async () => {
   try {
     const spyConfig = loadSpyConfig();
-    if (spyConfig.enabled && spyConfig.apiId) {
-      console.log('🕵️ إعادة تشغيل نظام التجسس تلقائياً...');
+    if (spyConfig.enabled) {
+      console.log('🤖 إعادة تشغيل البوت تلقائياً...');
       await startSpy(spyConfig);
     }
   } catch (e) {
-    console.log('⚠️ فشل تشغيل نظام التجسس تلقائياً:', e.message);
+    console.log('⚠️ فشل تشغيل البوت تلقائياً:', e.message);
   }
 })();
 
