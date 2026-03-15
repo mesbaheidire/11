@@ -961,7 +961,14 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
-      const fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
+      let fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
+      
+      if (couponPrefixes.length > 0 && fixedCoupons.length > 0) {
+        const filteredFixed = fixedCoupons.filter(fc => couponPrefixes.some(prefix => fc.startsWith(prefix)));
+        console.log(`🔍 كوبونات ثابتة قبل الفلترة: ${fixedCoupons.join(', ')} → بعد: ${filteredFixed.join(', ')}`);
+        fixedCoupons = filteredFixed;
+      }
+      
       if (fixedCoupons.length > 0) {
         const existingCoupons = extractedCoupon ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()) : [];
         const newCoupons = fixedCoupons.filter(fc => !existingCoupons.includes(fc));
@@ -969,7 +976,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           extractedCoupon = extractedCoupon
             ? extractedCoupon + ' | ' + newCoupons.join(' | ')
             : newCoupons.join(' | ');
-          console.log(`📌 كوبونات ثابتة مضافة: ${newCoupons.join(', ')}`);
+          console.log(`📌 كوبونات ثابتة مضافة بعد الفلترة: ${newCoupons.join(', ')}`);
         }
       }
 
