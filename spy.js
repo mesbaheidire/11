@@ -298,7 +298,16 @@ function detectLinkType(url, text) {
   return null;
 }
 
+function cleanTextForParsing(text) {
+  if (!text) return '';
+  return text
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+    .normalize('NFKD');
+}
+
 function extractAliExpressLinks(text) {
+  text = cleanTextForParsing(text);
   if (!text) return [];
   const patterns = [
     /https?:\/\/[^\s]*aliexpress\.com[^\s]*/gi,
@@ -1316,9 +1325,19 @@ async function startSpy(config) {
 
       console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle} (peerId=${peerId})`);
 
-      const text = msg.message || '';
+      let text = msg.message || '';
       if (!text) {
         console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
+        return;
+      }
+
+      text = text
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+        .trim();
+
+      if (!text) {
+        console.log('⚠️ رسالة تحتوي على emoji فقط بدون نص');
         return;
       }
 
