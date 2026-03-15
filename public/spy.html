@@ -662,7 +662,10 @@
         }
 
         loadConfig();
-        autoStartBot();
+        setTimeout(() => {
+            console.log('🔄 بدء البوت...');
+            autoStartBot();
+        }, 100);
     </script>
 </body>
 </html>

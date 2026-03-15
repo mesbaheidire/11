@@ -1600,6 +1600,19 @@ app.get('/api/spy/log', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`✅ Server running on port ${PORT}`);
+  
+  // بدء البوت تلقائياً
+  try {
+    const cfg = loadSpyConfig();
+    if (cfg.botToken && cfg.targetChannels && cfg.targetChannels.length > 0) {
+      console.log('🤖 بدء البوت التلقائي...');
+      await startSpy(cfg);
+    } else {
+      console.log('⚠️ لم يتم بدء البوت - تأكد من وجود توكن والقنوات الهدف');
+    }
+  } catch (e) {
+    console.log('⚠️ خطأ في بدء البوت:', e.message);
+  }
 });
