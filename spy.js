@@ -1162,25 +1162,9 @@ async function startSpy(config) {
   }
 
   console.log('🔄 جاري مزامنة المحادثات...');
-  let totalDialogs = 0;
   try {
-    let allDialogs = [];
-    let batch;
-    let offsetDate = 0;
-    do {
-      batch = await spyClient.getDialogs({ limit: 100, offsetDate });
-      if (batch.length > 0) {
-        allDialogs = allDialogs.concat(batch);
-        const lastDialog = batch[batch.length - 1];
-        if (lastDialog.date) {
-          offsetDate = lastDialog.date;
-        } else {
-          break;
-        }
-      }
-    } while (batch.length >= 100 && allDialogs.length < 500);
-    totalDialogs = allDialogs.length;
-    console.log(`📋 تمت مزامنة ${totalDialogs} محادثة`);
+    const dialogs = await spyClient.getDialogs({ limit: 100 });
+    console.log(`📋 تمت مزامنة ${dialogs.length} محادثة`);
   } catch (e) {
     console.log(`⚠️ فشل مزامنة المحادثات: ${e.message}`);
   }
@@ -1248,12 +1232,17 @@ async function startSpy(config) {
   }
 
   if (resolvedSourceIds.size === 0) {
-    console.log('⚠️ لم يتم حل أي قناة مصدر — تأكد أن الحساب مشترك في القنوات');
+    console.log('❌ خطأ حرج: لم يتم حل أي قناة مصدر!');
+    console.log('📋 قنوات المصدر المطلوبة:', sourceUsernames.slice(0, 10).join(', '), '...');
+    console.log('⚠️ تأكد أن الحساب مشترك في هذه القنوات!');
+    throw new Error('NO_SOURCE_CHANNELS_RESOLVED');
   }
 
   console.log(`🛡 حماية التكرار: ${targetIdSet.size} قنوات هدف محظورة، botId=${botId || 'غير معروف'}`);
 
   let msgCount = 0;
+
+  console.log(`🕵️ نظام التجسس الآن يستمع للرسائل من ${resolvedSourceIds.size} قناة...`);
 
   spyClient.addEventHandler(async (event) => {
     try {
@@ -1273,6 +1262,10 @@ async function startSpy(config) {
       }
 
       const isSourceByPeerId = resolvedSourceIds.has(peerId);
+      
+      if (msgCount <= 3) {
+        console.log(`📨 رسالة #${msgCount}: peerId=${peerId}, source=${isSourceByPeerId ? 'YES' : 'NO'}`);
+      }
 
       let chatEntity = null;
       let chatUsername = '';
