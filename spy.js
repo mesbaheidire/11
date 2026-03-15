@@ -1331,9 +1331,16 @@ async function startSpy(config) {
 
   console.log(`🕵️ نظام التجسس الآن يستمع للرسائل من ${resolvedSourceIds.size} قناة...`);
 
-  spyClient.addEventHandler(async (event) => {
+  // معالج الأحداث الخام - يستقبل UpdateNewChannelMessage و UpdateNewMessage
+  spyClient.addEventHandler(async (update) => {
     try {
-      const msg = event.message;
+      if (!update || !update.message) return;
+      
+      const event = { message: update.message };
+      if (update.className === 'UpdateNewChannelMessage') event.className = 'UpdateNewChannelMessage';
+      if (update.className === 'UpdateNewMessage') event.className = 'UpdateNewMessage';
+      
+      const msg = update.message;
       if (!msg || !msg.peerId) return;
 
       msgCount++;
@@ -1449,7 +1456,7 @@ async function startSpy(config) {
     } catch (err) {
       console.log('❌ خطأ Userbot:', err.message);
     }
-  }, new NewMessage({}));
+  }); // لا filters - استقبل جميع التحديثات
 
   console.log(`🔍 مراقبة القنوات: ${sourceUsernames.join(', ')}`);
 
