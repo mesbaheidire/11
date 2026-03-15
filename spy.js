@@ -1146,6 +1146,7 @@ async function startSpy(config) {
   const session = new StringSession(sessionStr);
   spyClient = new TelegramClient(session, apiId, apiHash, {
     connectionRetries: 5,
+    autoReconnect: true,
   });
 
   await spyClient.connect();
@@ -1167,6 +1168,34 @@ async function startSpy(config) {
     console.log(`📋 تمت مزامنة ${dialogs.length} محادثة`);
   } catch (e) {
     console.log(`⚠️ فشل مزامنة المحادثات: ${e.message}`);
+  }
+
+  let rawEventCount = 0;
+  spyClient.addEventHandler((update) => {
+    rawEventCount++;
+    if (rawEventCount <= 5) {
+      console.log(`📡 حدث خام #${rawEventCount}: ${update?.className || update?.constructor?.name || typeof update}`);
+    }
+    if (rawEventCount === 1) {
+      console.log('✅ التحديثات تعمل! بدأ استقبال الأحداث');
+    }
+  });
+
+  try {
+    const { Api } = require('telegram');
+    const state = await spyClient.invoke(new Api.updates.GetState());
+    console.log(`📡 تم تفعيل استقبال التحديثات (pts=${state.pts}, date=${state.date})`);
+  } catch (e) {
+    console.log(`⚠️ تفعيل التحديثات: ${e.message}`);
+  }
+
+  try {
+    if (typeof spyClient.catchUp === 'function') {
+      await spyClient.catchUp();
+      console.log('📡 تم مزامنة التحديثات (catchUp)');
+    }
+  } catch (e) {
+    console.log(`⚠️ catchUp: ${e.message}`);
   }
 
   function extractUsername(ch) {
@@ -1219,17 +1248,75 @@ async function startSpy(config) {
 
   const resolvedSourceIds = new Set();
   const sourceIdToName = {};
+  const resolvedPeers = {};
+
+  const CACHE_FILE = 'channel_cache.json';
+  let channelCache = {};
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      channelCache = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    }
+  } catch (e) {}
+
+  let cachedCount = 0;
+  let resolvedCount = 0;
+  let needAccessHash = [];
   for (const src of sourceUsernames) {
+    const cacheKey = src.toLowerCase().replace(/^@/, '');
+    if (channelCache[cacheKey]) {
+      const c = channelCache[cacheKey];
+      resolvedSourceIds.add(c.id);
+      sourceIdToName[c.id] = c.title;
+      if (c.accessHash) {
+        resolvedPeers[c.id] = { id: BigInt(c.id), accessHash: BigInt(c.accessHash) };
+      } else {
+        needAccessHash.push({ src, cacheKey, id: c.id });
+      }
+      cachedCount++;
+      continue;
+    }
     try {
       const entity = await spyClient.getEntity(src);
       const entityId = String(entity.id?.value ?? entity.id);
+      const accessHash = String(entity.accessHash?.value ?? entity.accessHash ?? '0');
       resolvedSourceIds.add(entityId);
       sourceIdToName[entityId] = entity.title || src;
-      console.log(`✅ تم حل القناة: ${src} → ${entity.title || src} (ID: ${entityId})`);
+      resolvedPeers[entityId] = entity;
+      channelCache[cacheKey] = { id: entityId, title: entity.title || src, accessHash };
+      resolvedCount++;
+      if (resolvedCount <= 10 || resolvedCount % 20 === 0) {
+        console.log(`✅ تم حل القناة: ${src} → ${entity.title || src} (ID: ${entityId})`);
+      }
     } catch (e) {
       console.log(`❌ فشل حل القناة "${src}": ${e.message}`);
     }
   }
+
+  if (needAccessHash.length > 0) {
+    console.log(`🔄 جلب accessHash لـ ${needAccessHash.length} قناة...`);
+    let ahResolved = 0;
+    for (const { src, cacheKey, id } of needAccessHash) {
+      try {
+        const entity = await spyClient.getEntity(src.startsWith('-') ? src : '@' + cacheKey);
+        const accessHash = String(entity.accessHash?.value ?? entity.accessHash ?? '0');
+        resolvedPeers[id] = entity;
+        channelCache[cacheKey].accessHash = accessHash;
+        ahResolved++;
+      } catch (e) {
+        if (e.seconds) {
+          console.log(`⏳ FLOOD ${e.seconds}s — تخطي باقي القنوات`);
+          break;
+        }
+      }
+    }
+    console.log(`✅ تم جلب accessHash لـ ${ahResolved}/${needAccessHash.length} قناة`);
+  }
+
+  try {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(channelCache, null, 2));
+  } catch (e) {}
+
+  console.log(`📋 القنوات: ${cachedCount} من الكاش + ${resolvedCount} جديدة = ${resolvedSourceIds.size} إجمالي`);
 
   if (resolvedSourceIds.size === 0) {
     console.log('❌ خطأ حرج: لم يتم حل أي قناة مصدر!');
@@ -1367,11 +1454,264 @@ async function startSpy(config) {
     startReviewBot(botToken);
   }
 
+  const { Api } = require('telegram');
+  let diffPts = null;
+  let diffDate = null;
+  let diffQseq = 0;
+  let pollCycle = 0;
+  const POLL_INTERVAL = 20000;
+  const channelPtsMap = {};
+  let pollInProgress = false;
+
+  try {
+    const state = await spyClient.invoke(new Api.updates.GetState());
+    diffPts = state.pts;
+    diffDate = state.date;
+    diffQseq = state.qts;
+    console.log(`📡 حالة التحديثات: pts=${diffPts}, date=${diffDate}`);
+  } catch (e) {
+    console.log(`⚠️ فشل جلب حالة التحديثات: ${e.message}`);
+  }
+
+  async function pollWithGetDifference() {
+    if (!spyRunning || !spyClient || !diffPts) return;
+    if (pollInProgress) return;
+    pollInProgress = true;
+    pollCycle++;
+    let newMsgsTotal = 0;
+
+    try {
+      const diff = await spyClient.invoke(new Api.updates.GetDifference({
+        pts: diffPts,
+        date: diffDate,
+        qts: diffQseq,
+      }));
+
+      if (diff.className === 'updates.DifferenceEmpty') {
+        if (pollCycle <= 3 || pollCycle % 20 === 0) {
+          console.log(`🔄 [Diff #${pollCycle}] لا توجد تحديثات جديدة`);
+        }
+        if (diff.date) diffDate = diff.date;
+        pollInProgress = false;
+        return;
+      }
+
+      if (diff.className === 'updates.DifferenceTooLong') {
+        diffPts = diff.pts;
+        console.log(`⚡ [Diff #${pollCycle}] DifferenceTooLong — تم تحديث pts=${diffPts}`);
+        pollInProgress = false;
+        return;
+      }
+
+      if (diff.intermediateState) {
+        diffPts = diff.intermediateState.pts;
+        diffDate = diff.intermediateState.date;
+        diffQseq = diff.intermediateState.qts;
+      } else if (diff.state) {
+        diffPts = diff.state.pts;
+        diffDate = diff.state.date;
+        diffQseq = diff.state.qts;
+      }
+
+      const newMessages = diff.newMessages || [];
+      const otherUpdates = diff.otherUpdates || [];
+
+      const allMsgs = [...newMessages];
+      for (const upd of otherUpdates) {
+        if (upd.message && upd.className && (upd.className.includes('NewChannelMessage') || upd.className.includes('NewMessage'))) {
+          allMsgs.push(upd.message);
+        }
+      }
+
+      const channelTooLong = [];
+      for (const upd of otherUpdates) {
+        if (upd.className === 'UpdateChannelTooLong') {
+          const chId = String(upd.channelId?.value ?? upd.channelId);
+          if (resolvedSourceIds.has(chId) && !targetIdSet.has(chId)) {
+            channelTooLong.push(chId);
+          }
+        }
+      }
+
+      if (pollCycle <= 5 || allMsgs.length > 0 || channelTooLong.length > 0) {
+        const updTypes = {};
+        for (const u of otherUpdates) {
+          const t = u.className || 'unknown';
+          updTypes[t] = (updTypes[t] || 0) + 1;
+        }
+        const typeSummary = Object.entries(updTypes).map(([k,v]) => `${k}:${v}`).join(', ');
+        console.log(`📬 [Diff #${pollCycle}] msgs=${newMessages.length} upd=${otherUpdates.length} matched=${allMsgs.length} tooLong=${channelTooLong.length} [${typeSummary}]`);
+      }
+
+      for (const chId of channelTooLong) {
+        try {
+          const channelName = sourceIdToName[chId] || `Channel(${chId})`;
+          let peer = resolvedPeers[chId];
+          if (!peer || !peer.accessHash) {
+            try {
+              const entity = await spyClient.getEntity(new Api.PeerChannel({ channelId: BigInt(chId) }));
+              const ah = String(entity.accessHash?.value ?? entity.accessHash ?? '0');
+              resolvedPeers[chId] = entity;
+              peer = entity;
+              const cacheKey = Object.keys(channelCache).find(k => channelCache[k].id === chId);
+              if (cacheKey) {
+                channelCache[cacheKey].accessHash = ah;
+                try { fs.writeFileSync(CACHE_FILE, JSON.stringify(channelCache, null, 2)); } catch(e){}
+              }
+            } catch (e) { continue; }
+          }
+          
+          const accessHash = peer.accessHash?.value ?? peer.accessHash ?? BigInt(0);
+          const inputChannel = new Api.InputChannel({
+            channelId: BigInt(chId),
+            accessHash: typeof accessHash === 'bigint' ? accessHash : BigInt(accessHash),
+          });
+
+          const channelPts = channelPtsMap[chId] || 1;
+          const chDiff = await spyClient.invoke(new Api.updates.GetChannelDifference({
+            channel: inputChannel,
+            filter: new Api.ChannelMessagesFilterEmpty(),
+            pts: channelPts,
+            limit: 10,
+            force: true,
+          }));
+
+          if (chDiff.pts) channelPtsMap[chId] = chDiff.pts;
+
+          const chMsgs = chDiff.newMessages || [];
+          if (chMsgs.length > 0) {
+            console.log(`📥 [ChDiff] ${channelName}: ${chMsgs.length} رسالة جديدة`);
+          }
+
+          for (const msg of chMsgs) {
+            if (!msg || !msg.id) continue;
+            const msgId = msg.id;
+            if (isMessageProcessed(chId, msgId)) continue;
+
+            let text = msg.message || '';
+            text = text
+              .replace(/[\u200B-\u200D\uFEFF]/g, '')
+              .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+              .trim();
+            if (!text) continue;
+
+            const aliLinks = extractAliExpressLinks(text);
+            if (aliLinks.length === 0) continue;
+
+            markMessageProcessed(chId, msgId);
+            newMsgsTotal++;
+            console.log(`📥 [ChDiff] رسالة من ${channelName} (#${msgId}): ${aliLinks.length} رابط`);
+
+            let sourceImage = null;
+            if (msg.media && msg.media.photo) {
+              try {
+                const buffer = await spyClient.downloadMedia(msg.media, {});
+                if (buffer && buffer.length > 0) sourceImage = buffer;
+              } catch (imgErr) {}
+            }
+            await processPost(config, text, sourceImage, channelName);
+          }
+        } catch (e) {
+          if (e.message?.includes('FLOOD') || e.seconds) {
+            const w = e.seconds || 10;
+            console.log(`⏳ [ChDiff] FLOOD ${w}s`);
+            await new Promise(r => setTimeout(r, w * 1000));
+          } else if (!e.message?.includes('CHANNEL_INVALID')) {
+            console.log(`⚠️ [ChDiff ${chId}]: ${e.message}`);
+          }
+        }
+      }
+
+      for (const msg of allMsgs) {
+        if (!msg || !msg.peerId) continue;
+
+        let peerId = '';
+        const peer = msg.peerId;
+        if (peer.channelId) {
+          peerId = String(peer.channelId?.value ?? peer.channelId);
+        } else if (peer.chatId) {
+          peerId = String(peer.chatId?.value ?? peer.chatId);
+        } else if (peer.userId) {
+          peerId = String(peer.userId?.value ?? peer.userId);
+        }
+
+        const isSource = resolvedSourceIds.has(peerId);
+        if (!isSource) continue;
+
+        if (targetIdSet.has(peerId)) continue;
+
+        const msgId = msg.id;
+        if (isMessageProcessed(peerId, msgId)) continue;
+
+        let text = msg.message || '';
+        text = text
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ')
+          .trim();
+
+        if (!text) continue;
+
+        const aliLinks = extractAliExpressLinks(text);
+        if (aliLinks.length === 0) continue;
+
+        markMessageProcessed(peerId, msgId);
+        newMsgsTotal++;
+
+        const channelName = sourceIdToName[peerId] || `Channel(${peerId})`;
+        console.log(`📥 [Diff] رسالة من ${channelName} (#${msgId}): ${aliLinks.length} رابط`);
+
+        let sourceImage = null;
+        if (msg.media && msg.media.photo) {
+          try {
+            const buffer = await spyClient.downloadMedia(msg.media, {});
+            if (buffer && buffer.length > 0) {
+              sourceImage = buffer;
+            }
+          } catch (imgErr) {}
+        }
+
+        await processPost(config, text, sourceImage, channelName);
+      }
+
+      if (newMsgsTotal > 0) {
+        console.log(`✅ [Diff #${pollCycle}] تمت معالجة ${newMsgsTotal} رسالة من القنوات المصدر`);
+      }
+    } catch (e) {
+      if (e.message?.includes('FLOOD') || e.seconds) {
+        const waitSec = e.seconds || 30;
+        console.log(`⏳ [Diff] FLOOD_WAIT ${waitSec}s`);
+        await new Promise(r => setTimeout(r, waitSec * 1000));
+      } else if (e.message?.includes('PERSISTENT_TIMESTAMP_INVALID')) {
+        try {
+          const state = await spyClient.invoke(new Api.updates.GetState());
+          diffPts = state.pts;
+          diffDate = state.date;
+          diffQseq = state.qts;
+          console.log(`🔄 تم إعادة ضبط حالة التحديثات: pts=${diffPts}`);
+        } catch (e2) {}
+      } else {
+        console.log(`⚠️ [Diff] خطأ: ${e.message}`);
+      }
+    } finally {
+      pollInProgress = false;
+    }
+  }
+
+  if (!global.spyPollInterval) {
+    global.spyPollInterval = setInterval(pollWithGetDifference, POLL_INTERVAL);
+    setTimeout(pollWithGetDifference, 3000);
+    console.log(`⏱️ نظام getDifference: كل ${POLL_INTERVAL/1000} ثانية`);
+  }
+
   console.log('🕵️ تم تشغيل نظام التجسس');
 }
 
 async function stopSpy() {
   stopReviewBot();
+  if (global.spyPollInterval) {
+    clearInterval(global.spyPollInterval);
+    global.spyPollInterval = null;
+  }
   if (spyClient) {
     try { await spyClient.disconnect(); } catch (e) {}
     spyClient = null;
