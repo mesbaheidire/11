@@ -531,11 +531,26 @@ async function sendForReview(botToken, ownerId, review) {
 
   const pendingCount = pendingReviews.size;
   const bot = new Telegraf(botToken);
+  
   let msg = `📋 *منتج جديد للمراجعة* (${pendingCount} في الانتظار)\n\n`;
   msg += `📡 المصدر: ${review.sourceName || 'غير معروف'}\n`;
+  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📝 *المنشور الأصلي:*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  if (review.originalText) {
+    const original = review.originalText.substring(0, 300);
+    msg += `${original}${review.originalText.length > 300 ? '...' : ''}\n`;
+  }
+  msg += `\n🔗 ${review.originalLink}\n`;
+  
+  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📢 *المنشور المعد للنشر:*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `${review.message.substring(0, 400)}${review.message.length > 400 ? '...' : ''}\n`;
+  
+  msg += `\n💾 *معلومات:*\n`;
   if (review.productTitle) msg += `📦 ${review.productTitle}\n`;
-  if (review.productPrice) msg += `💰 السعر: ${review.productPrice}\n`;
-  if (review.affiliateLink) msg += `🔗 ${review.affiliateLink}\n`;
+  if (review.productPrice) msg += `💰 ${review.productPrice}\n`;
   msg += `\n📢 القنوات الهدف: ${(review.targetIds || []).join(', ')}`;
 
   const buttons = [
@@ -553,9 +568,9 @@ async function sendForReview(botToken, ownerId, review) {
 
   try {
     if (review.productImage) {
-      await bot.telegram.sendPhoto(ownerId, review.productImage, { caption: msg, reply_markup: keyboard });
+      await bot.telegram.sendPhoto(ownerId, review.productImage, { caption: msg, reply_markup: keyboard, parse_mode: 'Markdown' });
     } else {
-      await bot.telegram.sendMessage(ownerId, msg, { reply_markup: keyboard });
+      await bot.telegram.sendMessage(ownerId, msg, { reply_markup: keyboard, parse_mode: 'Markdown' });
     }
   } catch (e) {
     console.log('⚠️ فشل إرسال طلب المراجعة:', e.message);
@@ -1007,7 +1022,8 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       const reviewData = {
         message, productImage, targetIds, sourceName, originalLink,
-        affiliateLink: affLink, productTitle, productPrice, imageUrlForLog
+        affiliateLink: affLink, productTitle, productPrice, imageUrlForLog,
+        originalText: text
       };
 
       if (config.manualReview && config.ownerId && botToken) {
