@@ -1274,8 +1274,6 @@ async function startSpy(config) {
 
       const isSourceByPeerId = resolvedSourceIds.has(peerId);
 
-      if (!isSourceByPeerId && msgCount > 10) return;
-
       let chatEntity = null;
       let chatUsername = '';
       let chatTitle = '';
@@ -1290,7 +1288,6 @@ async function startSpy(config) {
         if (isSourceByPeerId) {
           chatTitle = sourceIdToName[peerId] || `Channel(${peerId})`;
         } else {
-          if (msgCount <= 10) console.log(`⚠️ فشل حل الكيان (peerId=${peerId}): ${e.message}`);
           return;
         }
       }
