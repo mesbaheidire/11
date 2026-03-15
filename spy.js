@@ -375,19 +375,47 @@ async function executePublish(review) {
 
   const publishBot = new Telegraf(botToken);
   let publishedCount = 0;
+  let imageToSend = productImage;
+
+  // محاولة تحميل الصورة من URL إذا كانت string
+  if (productImage && typeof productImage === 'string' && productImage.startsWith('http')) {
+    try {
+      console.log(`📥 جاري تحميل الصورة من: ${productImage.substring(0, 100)}...`);
+      const response = await fetch(productImage, { timeout: 5000 });
+      if (response.ok) {
+        const buffer = await response.buffer();
+        imageToSend = buffer;
+        console.log(`✅ تم تحميل الصورة (${buffer.length} bytes)`);
+      }
+    } catch (imgErr) {
+      console.log(`⚠️ فشل تحميل الصورة: ${imgErr.message} — سيتم إرسال نص فقط`);
+      imageToSend = null;
+    }
+  }
 
   for (const target of targetIds) {
     try {
-      if (productImage) {
-        await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
+      if (imageToSend) {
+        await publishBot.telegram.sendPhoto(target, imageToSend, { caption: message, parse_mode: 'Markdown' });
       } else {
-        await publishBot.telegram.sendMessage(target, message);
+        await publishBot.telegram.sendMessage(target, message, { parse_mode: 'Markdown' });
       }
       publishedCount++;
       console.log(`✅ تم النشر في ${target}`);
     } catch (pubErr) {
       console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
-      addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
+      // محاولة أخرى بدون صورة
+      if (imageToSend) {
+        try {
+          await publishBot.telegram.sendMessage(target, message, { parse_mode: 'Markdown' });
+          publishedCount++;
+          console.log(`✅ تم النشر في ${target} (نص فقط)`);
+        } catch (textErr) {
+          addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: textErr.message });
+        }
+      } else {
+        addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
+      }
     }
   }
 
