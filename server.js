@@ -1062,16 +1062,20 @@ app.post('/api/ai-extract-seller-coupon', async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const prompt = `أنت خبير استخراج المعلومات من نصوص المنتجات بالعربية.
-استخرج قسيمة أو عرض البائع من نص المنشور التالي إن وجد. مثال على القسائم:
-- أكواد: "ASAF7", "SALE10", "ZNQ005"
-- أرقام: "1000", "500", "100" (قد تكون خصم أو نقاط)
+    const prompt = `أنت خبير في استخراج أكواد الكوبونات والقسائم من نصوص منشورات المتاجر بالعربية.
+استخرج أول كود أو رقم قسيمة تجد في النص. أمثلة على الصيغ المختلفة:
+- أكواد منفصلة: ASAF70, ZNQ070, AMINEAV70A, NUBIA004
+- أكواد مفصولة بـ |: ASAF70 | ZNQ070 | AMINEAV70A
+- أرقام: 1000, 500, 100
+- في جملة: "كوبون: ASAF70" أو "قسيمة: ZNQ070"
 
 النص:
 ${text}
 
+استخرج أول كود أو رقم فقط واحد (الأول الذي تجده).
+
 رد بـ JSON فقط (بدون markdown):
-{"sellerCoupon": "القسيمة المستخرجة (رقم أو كود فقط) أو null إذا لم يوجد"}`;
+{"sellerCoupon": "الكود أو الرقم المستخرج أو null"}`;
 
     const result = await model.generateContent(prompt);
     let rawResult = result.response.text().trim();
