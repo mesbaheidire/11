@@ -155,6 +155,11 @@ function loadConfig() {
       prefix: '🔥 عرض حصري',
       priceLabel: '💰 السعر:',
       linkLabel: '🛒 رابط الشراء:',
+      couponLabel: 'كوبون',
+      fixedCoupons: '',
+      couponFilter: '',
+      sellerCoupon: '',
+      sellerCouponCode: '',
       footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz',
       botLink: '@AliOffersDZ_bot',
       hashtags: '#Aliexpress #تخفيضات'
@@ -948,7 +953,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
+      console.log(`🔍 Coupon filter config: "${t.couponFilter}" → prefixes: [${couponPrefixes.join(', ')}]`);
       if (couponPrefixes.length > 0 && extractedCoupon) {
+        console.log(`🔍 Filtering coupon: "${extractedCoupon}" with prefixes: [${couponPrefixes.join(', ')}]`);
         const filtered = extractedCoupon.split(' | ')
           .map(c => c.trim())
           .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
