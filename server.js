@@ -1502,6 +1502,30 @@ app.delete('/api/saved-posts', (req, res) => {
   }
 });
 
+app.get('/api/test-cookie', async (req, res) => {
+  try {
+    const cookie = getSharedCookie();
+    if (!cookie) return res.json({ valid: false, error: 'لا يوجد كوكي محفوظ' });
+    const result = await portaffFunction(cookie, 'https://www.aliexpress.com/item/1005006445867498.html');
+    res.json({ valid: !!(result && result.previews && result.previews.title) });
+  } catch (e) {
+    res.json({ valid: false, error: e.message });
+  }
+});
+
+app.post('/api/save-credentials', (req, res) => {
+  try {
+    const { cookie, botToken } = req.body;
+    const shared = loadSharedCredentials();
+    if (cookie) shared.cook = cookie;
+    if (botToken) shared.botToken = botToken;
+    saveSharedCredentials(shared);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========== Spy API ==========
 
 app.get('/api/spy/status', (req, res) => {
@@ -1556,7 +1580,7 @@ app.post('/api/spy/config', (req, res) => {
     if (incoming.cook !== undefined && incoming.cook !== '' && incoming.cook !== '****') config.cook = incoming.cook;
     if (incoming.botToken !== undefined && incoming.botToken !== '' && incoming.botToken !== '****') config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.apiHash && !incoming.apiHash.includes('****') && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     saveSpyConfig(config);
     res.json({ success: true });
@@ -1594,7 +1618,7 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.apiHash && !incoming.apiHash.includes('****') && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     saveSpyConfig(config);
     await startSpy(config);
@@ -1628,7 +1652,7 @@ app.post('/api/spy/send-code', async (req, res) => {
     const incoming = req.body || {};
     const config = { ...stored };
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.apiHash && !incoming.apiHash.includes('****') && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     if (incoming.sourceChannels !== undefined) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels !== undefined) config.targetChannels = incoming.targetChannels;

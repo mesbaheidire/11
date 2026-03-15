@@ -787,7 +787,11 @@
         function collectConfig() {
             config.apiId = document.getElementById('apiId').value.trim();
             const hashVal = document.getElementById('apiHash').value.trim();
-            if (hashVal && !hashVal.startsWith('****')) config.apiHash = hashVal;
+            if (hashVal && !hashVal.includes('****')) {
+                config.apiHash = hashVal;
+            } else {
+                delete config.apiHash;
+            }
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();
             config.autoPublish = document.getElementById('autoPublish').checked;
             config.publishDelay = document.getElementById('publishDelay').checked;
@@ -885,6 +889,7 @@
                 } else {
                     collectConfig();
                     await saveAndApply();
+                    await loadConfig();
                     const r = await fetch('/api/spy/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -929,7 +934,9 @@
                     config.sourceChannels = c.sourceChannels || [];
                     config.targetChannels = c.targetChannels || [];
                     config.apiId = c.apiId || '';
-                    config.apiHash = c.apiHash || '';
+                    if (c.apiHash && !c.apiHash.includes('****')) {
+                        config.apiHash = c.apiHash;
+                    }
                     config.phoneNumber = c.phoneNumber || '';
                     config.autoPublish = c.autoPublish !== false;
                     config.publishDelay = !!c.publishDelay;
@@ -956,11 +963,23 @@
                 const r = await fetch('/api/spy/status');
                 const d = await r.json();
                 updateStatusUI(d.running);
-                if (d.session) {
-                    const ss = document.getElementById('sessionStatus');
-                    ss.innerHTML = d.session === 'connected'
-                        ? '<span class="session-badge connected"><i class="fas fa-check-circle"></i> متصل</span>'
-                        : '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> غير متصل</span>';
+                const ss = document.getElementById('sessionStatus');
+                if (d.hasSession || d.authStep === 'authenticated') {
+                    ss.innerHTML = d.running
+                        ? '<span class="session-badge connected"><i class="fas fa-check-circle"></i> متصل ويعمل</span>'
+                        : '<span class="session-badge connected"><i class="fas fa-check-circle"></i> مسجّل الدخول</span>';
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-done').classList.add('active');
+                } else if (d.authStep === 'code_sent') {
+                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> بانتظار الرمز</span>';
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-code').classList.add('active');
+                } else if (d.authStep === 'need_password') {
+                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> بانتظار كلمة المرور</span>';
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-password').classList.add('active');
+                } else {
+                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> غير مسجّل</span>';
                 }
             } catch (e) {}
         }
@@ -972,10 +991,18 @@
             collectConfig();
             await saveAndApply();
             try {
+                const sendData = {
+                    apiId: document.getElementById('apiId').value.trim(),
+                    phoneNumber: document.getElementById('phoneNumber').value.trim()
+                };
+                const hashVal = document.getElementById('apiHash').value.trim();
+                if (hashVal && !hashVal.includes('****')) {
+                    sendData.apiHash = hashVal;
+                }
                 const r = await fetch('/api/spy/send-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiId: config.apiId, apiHash: config.apiHash, phoneNumber: config.phoneNumber })
+                    body: JSON.stringify(sendData)
                 });
                 const d = await r.json();
                 if (d.success) {
