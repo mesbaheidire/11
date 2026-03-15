@@ -25,11 +25,6 @@
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .status-text { font-weight: 700; font-size: 15px; }
 
-        .toggle-btn { padding: 10px 24px; border: none; border-radius: 10px; font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
-        .toggle-btn.start { background: linear-gradient(135deg, #4CAF50, #388E3C); color: #fff; }
-        .toggle-btn.stop { background: linear-gradient(135deg, #ff4444, #cc0000); color: #fff; }
-        .toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; margin-bottom: 4px; color: #aaa; font-size: 12px; font-weight: 600; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 11px 14px; border-radius: 10px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: 'Cairo', sans-serif; font-size: 13px; direction: rtl; transition: border-color 0.3s; }
@@ -125,16 +120,6 @@
     </div>
 
     <div class="content">
-        <div class="status-card">
-            <div class="status-info">
-                <div class="status-dot inactive" id="statusDot"></div>
-                <span class="status-text" id="statusText">متوقف</span>
-            </div>
-            <button class="toggle-btn start" id="toggleBtn" onclick="toggleSpy()">
-                <i class="fas fa-play"></i> تشغيل
-            </button>
-        </div>
-
         <div class="tab-bar">
             <button class="tab-btn active" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
             <button class="tab-btn" onclick="switchTab('template')"><i class="fas fa-edit"></i> القالب</button>
@@ -146,10 +131,10 @@
             <div class="info-box" style="margin-bottom:12px;">
                 <i class="fas fa-info-circle"></i>
                 <strong>طريقة الاستخدام:</strong><br>
-                1. شغّل البوت من الزر أعلاه<br>
-                2. افتح البوت في تيليجرام<br>
-                3. حوّل أي منشور يحتوي رابط AliExpress أو الصقه مباشرة<br>
-                4. البوت يعالج الرابط وينشره في قنواتك تلقائياً
+                1. أضف قنوات الهدف من الأسفل<br>
+                2. اضبط الإعدادات والقالب حسب رغبتك<br>
+                3. افتح البوت في تيليجرام وأرسل/حوّل منشورات تحتوي روابط AliExpress<br>
+                4. البوت يعالج الرابط وينشره تلقائياً في قنواتك
             </div>
 
             <div class="collapse-section">
@@ -527,54 +512,6 @@
             document.getElementById('tmplHashtags').value = t.hashtags || '';
         }
 
-        function updateStatusUI(running) {
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('statusText');
-            const btn = document.getElementById('toggleBtn');
-            if (running) {
-                dot.className = 'status-dot active';
-                text.textContent = 'يعمل';
-                btn.className = 'toggle-btn stop';
-                btn.innerHTML = '<i class="fas fa-stop"></i> إيقاف';
-            } else {
-                dot.className = 'status-dot inactive';
-                text.textContent = 'متوقف';
-                btn.className = 'toggle-btn start';
-                btn.innerHTML = '<i class="fas fa-play"></i> تشغيل';
-            }
-        }
-
-        async function toggleSpy() {
-            const btn = document.getElementById('toggleBtn');
-            btn.disabled = true;
-            try {
-                const res = await fetch('/api/spy/status');
-                const st = await res.json();
-                if (st.running) {
-                    await fetch('/api/spy/stop', { method: 'POST' });
-                    updateStatusUI(false);
-                    showToast('تم إيقاف البوت', 'success');
-                } else {
-                    collectConfig();
-                    const r = await fetch('/api/spy/start', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(config)
-                    });
-                    const d = await r.json();
-                    if (d.success) {
-                        updateStatusUI(true);
-                        showToast('تم تشغيل البوت!', 'success');
-                    } else {
-                        showToast(d.error || 'فشل التشغيل', 'error');
-                    }
-                }
-            } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
-            }
-            btn.disabled = false;
-        }
-
         async function saveAndApply() {
             collectConfig();
             try {
@@ -614,14 +551,6 @@
             } catch (e) {
                 console.log('Failed to load config');
             }
-        }
-
-        async function checkStatus() {
-            try {
-                const r = await fetch('/api/spy/status');
-                const d = await r.json();
-                updateStatusUI(d.running);
-            } catch (e) {}
         }
 
         async function refreshLog() {
@@ -709,8 +638,6 @@
         }
 
         loadConfig();
-        checkStatus();
-        setInterval(checkStatus, 15000);
     </script>
 </body>
 </html>
