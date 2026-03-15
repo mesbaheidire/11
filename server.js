@@ -1539,8 +1539,8 @@ app.post('/api/spy/config', (req, res) => {
       saveSharedCredentials(shared);
     }
     const config = { ...stored };
-    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
-    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.sourceChannels !== undefined) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels !== undefined) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
@@ -1579,8 +1579,8 @@ app.post('/api/spy/start', async (req, res) => {
     const stored = loadSpyConfig();
     const incoming = req.body || {};
     const config = { ...stored };
-    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
-    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.sourceChannels !== undefined) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels !== undefined) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
@@ -1630,8 +1630,8 @@ app.post('/api/spy/send-code', async (req, res) => {
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
-    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
-    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.sourceChannels !== undefined) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels !== undefined) config.targetChannels = incoming.targetChannels;
     if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.linkType) config.linkType = incoming.linkType;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
