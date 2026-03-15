@@ -1428,6 +1428,89 @@ function getStatus() {
   };
 }
 
+async function getAccountDialogs() {
+  const config = loadConfig();
+  const apiId = parseInt(config.apiId);
+  const apiHash = config.apiHash;
+
+  if (!apiId || !apiHash) {
+    throw new Error('API ID و API Hash مطلوبان');
+  }
+
+  let sessionStr = '';
+  try {
+    if (fs.existsSync(SESSION_FILE)) {
+      const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+      sessionStr = sessionData.session || '';
+    }
+  } catch (e) {}
+
+  if (!sessionStr) {
+    throw new Error('يجب تسجيل الدخول أولاً');
+  }
+
+  const { TelegramClient } = require('telegram');
+  const { StringSession } = require('telegram/sessions');
+
+  const session = new StringSession(sessionStr);
+  const client = new TelegramClient(session, apiId, apiHash, {
+    connectionRetries: 3,
+  });
+
+  await client.connect();
+
+  try {
+    if (!await client.isUserAuthorized()) {
+      throw new Error('الجلسة منتهية — أعد تسجيل الدخول');
+    }
+
+    const dialogs = await client.getDialogs({ limit: 200 });
+    const results = [];
+
+    for (const dialog of dialogs) {
+      const entity = dialog.entity;
+      if (!entity) continue;
+
+      const className = entity.className || '';
+      let type = null;
+      let username = '';
+      let title = '';
+      let id = '';
+
+      if (className === 'Channel') {
+        type = entity.broadcast ? 'channel' : 'group';
+        username = entity.username || '';
+        title = entity.title || '';
+        id = entity.id ? `-100${entity.id}` : '';
+      } else if (className === 'Chat') {
+        type = 'group';
+        title = entity.title || '';
+        id = entity.id ? `-${entity.id}` : '';
+      } else {
+        continue;
+      }
+
+      results.push({
+        type,
+        title,
+        username: username ? `@${username}` : '',
+        id,
+        participantsCount: entity.participantsCount || 0
+      });
+    }
+
+    results.sort((a, b) => {
+      if (a.type === 'channel' && b.type !== 'channel') return -1;
+      if (a.type !== 'channel' && b.type === 'channel') return 1;
+      return (a.title || '').localeCompare(b.title || '');
+    });
+
+    return results;
+  } finally {
+    await client.disconnect().catch(() => {});
+  }
+}
+
 module.exports = {
   loadConfig,
   saveConfig,
@@ -1439,5 +1522,6 @@ module.exports = {
   extractAliExpressLinks,
   extractPrice,
   sendLoginCode,
-  verifyCode
+  verifyCode,
+  getAccountDialogs
 };

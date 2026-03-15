@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, getAccountDialogs } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -1556,6 +1556,15 @@ app.post('/api/spy/config', (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/spy/dialogs', async (req, res) => {
+  try {
+    const dialogs = await getAccountDialogs();
+    res.json({ success: true, dialogs });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
   }
 });
 

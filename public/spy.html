@@ -78,6 +78,37 @@
         .toast.error { background: #ff4444; }
         @keyframes fadeInOut { 0%, 100% { opacity: 0; } 10%, 90% { opacity: 1; } }
 
+        .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 3000; display: none; justify-content: center; align-items: center; }
+        .dialog-overlay.active { display: flex; }
+        .dialog-popup { background: #1e1e2e; border-radius: 16px; width: 90%; max-width: 500px; max-height: 80vh; display: flex; flex-direction: column; border: 1px solid #333; }
+        .dialog-popup-header { padding: 16px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .dialog-popup-header h3 { margin: 0; font-size: 16px; color: #bb86fc; }
+        .dialog-popup-header .close-btn { background: none; border: none; color: #888; font-size: 20px; cursor: pointer; }
+        .dialog-popup-search { padding: 10px 16px; border-bottom: 1px solid #333; }
+        .dialog-popup-search input { width: 100%; background: #2d2d3d; border: 1px solid #444; color: #fff; padding: 10px 12px; border-radius: 10px; font-size: 13px; }
+        .dialog-popup-body { overflow-y: auto; flex: 1; padding: 8px; }
+        .dialog-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 0.2s; }
+        .dialog-item:hover { background: #2d2d3d; }
+        .dialog-item.selected { background: rgba(187, 134, 252, 0.15); border: 1px solid rgba(187, 134, 252, 0.4); }
+        .dialog-item .dialog-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .dialog-item .dialog-icon.channel { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
+        .dialog-item .dialog-icon.group { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .dialog-item .dialog-info { flex: 1; min-width: 0; }
+        .dialog-item .dialog-title { font-size: 13px; font-weight: 600; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dialog-item .dialog-meta { font-size: 11px; color: #888; direction: ltr; text-align: right; }
+        .dialog-item .dialog-check { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #555; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .dialog-item.selected .dialog-check { border-color: #bb86fc; background: #bb86fc; color: #1a1a2e; }
+        .dialog-popup-footer { padding: 12px 16px; border-top: 1px solid #333; display: flex; gap: 8px; }
+        .dialog-popup-footer button { flex: 1; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+        .dialog-popup-footer .btn-confirm { background: #bb86fc; color: #1a1a2e; }
+        .dialog-popup-footer .btn-cancel { background: #2d2d3d; color: #ccc; }
+        .dialog-loading { text-align: center; padding: 40px; color: #888; }
+        .dialog-loading i { font-size: 30px; margin-bottom: 10px; display: block; color: #bb86fc; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .dialog-tabs { display: flex; gap: 6px; padding: 10px 16px 0; }
+        .dialog-tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid #444; color: #aaa; background: transparent; }
+        .dialog-tab.active { background: #bb86fc; color: #1a1a2e; border-color: #bb86fc; }
+
         .info-box { background: rgba(187, 134, 252, 0.1); border: 1px solid rgba(187, 134, 252, 0.3); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 11px; color: #ccc; line-height: 1.7; }
         .info-box i { color: #bb86fc; margin-left: 4px; }
         .info-box a { color: #bb86fc; }
@@ -255,6 +286,7 @@
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة</button>
                         <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
+                    <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('source')"><i class="fas fa-download"></i> استخراج من الحساب</button>
                     <p class="form-hint">يجب أن تكون مشتركاً في هذه القنوات</p>
                 </div>
             </div>
@@ -275,6 +307,7 @@
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة</button>
                         <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
+                    <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('target')"><i class="fas fa-download"></i> استخراج من الحساب</button>
                     <p class="form-hint">البوت يجب أن يكون مشرف فيها</p>
                 </div>
             </div>
@@ -429,6 +462,30 @@
 
     <div class="toast" id="toast"></div>
 
+    <div class="dialog-overlay" id="dialogOverlay" onclick="if(event.target===this)closeDialogPicker()">
+        <div class="dialog-popup">
+            <div class="dialog-popup-header">
+                <h3 id="dialogPickerTitle">اختر القنوات</h3>
+                <button class="close-btn" onclick="closeDialogPicker()">&times;</button>
+            </div>
+            <div class="dialog-tabs">
+                <button class="dialog-tab active" onclick="filterDialogs('all', this)">الكل</button>
+                <button class="dialog-tab" onclick="filterDialogs('channel', this)">قنوات</button>
+                <button class="dialog-tab" onclick="filterDialogs('group', this)">مجموعات</button>
+            </div>
+            <div class="dialog-popup-search">
+                <input type="text" id="dialogSearch" placeholder="ابحث عن قناة أو مجموعة..." oninput="filterDialogSearch()">
+            </div>
+            <div class="dialog-popup-body" id="dialogList">
+                <div class="dialog-loading"><i class="fas fa-spinner"></i><p>جاري تحميل القنوات...</p></div>
+            </div>
+            <div class="dialog-popup-footer">
+                <button class="btn-confirm" onclick="confirmDialogPick()"><i class="fas fa-check"></i> إضافة المحدد (<span id="dialogSelectedCount">0</span>)</button>
+                <button class="btn-cancel" onclick="closeDialogPicker()">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let config = {
             enabled: false,
@@ -555,6 +612,133 @@
             ta.value = '';
             ta.style.display = 'none';
             document.getElementById('bulk' + type.charAt(0).toUpperCase() + type.slice(1) + 'Btn').style.display = 'none';
+            showToast(`تمت إضافة ${added} قناة`, 'success');
+        }
+
+        let allDialogs = [];
+        let selectedDialogs = new Set();
+        let dialogPickerType = 'source';
+        let currentDialogFilter = 'all';
+
+        async function openDialogPicker(type) {
+            dialogPickerType = type;
+            selectedDialogs.clear();
+            document.getElementById('dialogSelectedCount').textContent = '0';
+            document.getElementById('dialogPickerTitle').textContent = type === 'source' ? 'اختر القنوات المصدر' : 'اختر القنوات الهدف';
+            document.getElementById('dialogSearch').value = '';
+            document.getElementById('dialogList').innerHTML = '<div class="dialog-loading"><i class="fas fa-spinner"></i><p>جاري تحميل القنوات والمجموعات...</p></div>';
+            document.getElementById('dialogOverlay').classList.add('active');
+            document.querySelectorAll('.dialog-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.dialog-tab').classList.add('active');
+            currentDialogFilter = 'all';
+
+            try {
+                const r = await fetch('/api/spy/dialogs');
+                const d = await r.json();
+                if (d.success && d.dialogs) {
+                    allDialogs = d.dialogs;
+                    renderDialogList(allDialogs);
+                } else {
+                    document.getElementById('dialogList').innerHTML = `<div class="dialog-loading"><i class="fas fa-exclamation-triangle" style="animation:none;color:#ff4444;"></i><p>${d.error || 'فشل تحميل القنوات'}</p></div>`;
+                }
+            } catch (e) {
+                document.getElementById('dialogList').innerHTML = '<div class="dialog-loading"><i class="fas fa-exclamation-triangle" style="animation:none;color:#ff4444;"></i><p>خطأ في الاتصال</p></div>';
+            }
+        }
+
+        function closeDialogPicker() {
+            document.getElementById('dialogOverlay').classList.remove('active');
+        }
+
+        function renderDialogList(dialogs) {
+            const existing = dialogPickerType === 'source' ? config.sourceChannels : config.targetChannels;
+            const list = document.getElementById('dialogList');
+            if (!dialogs.length) {
+                list.innerHTML = '<div class="dialog-loading"><i class="fas fa-inbox" style="animation:none;"></i><p>لا توجد قنوات أو مجموعات</p></div>';
+                return;
+            }
+            list.innerHTML = dialogs.map((d, i) => {
+                const isExisting = existing.some(ch => ch === d.username || ch === d.id);
+                const isSelected = selectedDialogs.has(i);
+                return `<div class="dialog-item ${isSelected ? 'selected' : ''}" ${isExisting ? 'style="opacity:0.4;pointer-events:none;"' : `onclick="toggleDialog(${i})"`} data-type="${d.type}">
+                    <div class="dialog-icon ${d.type}"><i class="fas fa-${d.type === 'channel' ? 'bullhorn' : 'users'}"></i></div>
+                    <div class="dialog-info">
+                        <div class="dialog-title">${esc(d.title)}${isExisting ? ' <span style="color:#4CAF50;font-size:10px;">(مضاف)</span>' : ''}</div>
+                        <div class="dialog-meta">${d.username || d.id}${d.participantsCount ? ' • ' + d.participantsCount + ' عضو' : ''}</div>
+                    </div>
+                    <div class="dialog-check">${isExisting ? '<i class="fas fa-check" style="color:#4CAF50;"></i>' : (isSelected ? '<i class="fas fa-check"></i>' : '')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleDialog(idx) {
+            if (selectedDialogs.has(idx)) {
+                selectedDialogs.delete(idx);
+            } else {
+                selectedDialogs.add(idx);
+            }
+            document.getElementById('dialogSelectedCount').textContent = selectedDialogs.size;
+            filterDialogSearch();
+        }
+
+        function filterDialogs(type, btn) {
+            currentDialogFilter = type;
+            document.querySelectorAll('.dialog-tab').forEach(t => t.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            filterDialogSearch();
+        }
+
+        function filterDialogSearch() {
+            const search = document.getElementById('dialogSearch').value.trim().toLowerCase();
+            let filtered = allDialogs;
+            if (currentDialogFilter !== 'all') {
+                filtered = filtered.filter(d => d.type === currentDialogFilter);
+            }
+            if (search) {
+                filtered = filtered.filter(d => 
+                    (d.title || '').toLowerCase().includes(search) || 
+                    (d.username || '').toLowerCase().includes(search)
+                );
+            }
+            const filteredWithIdx = filtered.map(d => ({ ...d, origIdx: allDialogs.indexOf(d) }));
+            const existing = dialogPickerType === 'source' ? config.sourceChannels : config.targetChannels;
+            const list = document.getElementById('dialogList');
+            if (!filteredWithIdx.length) {
+                list.innerHTML = '<div class="dialog-loading"><i class="fas fa-search" style="animation:none;"></i><p>لا توجد نتائج</p></div>';
+                return;
+            }
+            list.innerHTML = filteredWithIdx.map(d => {
+                const isExisting = existing.some(ch => ch === d.username || ch === d.id);
+                const isSelected = selectedDialogs.has(d.origIdx);
+                return `<div class="dialog-item ${isSelected ? 'selected' : ''}" ${isExisting ? 'style="opacity:0.4;pointer-events:none;"' : `onclick="toggleDialog(${d.origIdx})"`}>
+                    <div class="dialog-icon ${d.type}"><i class="fas fa-${d.type === 'channel' ? 'bullhorn' : 'users'}"></i></div>
+                    <div class="dialog-info">
+                        <div class="dialog-title">${esc(d.title)}${isExisting ? ' <span style="color:#4CAF50;font-size:10px;">(مضاف)</span>' : ''}</div>
+                        <div class="dialog-meta">${d.username || d.id}${d.participantsCount ? ' • ' + d.participantsCount + ' عضو' : ''}</div>
+                    </div>
+                    <div class="dialog-check">${isExisting ? '<i class="fas fa-check" style="color:#4CAF50;"></i>' : (isSelected ? '<i class="fas fa-check"></i>' : '')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function confirmDialogPick() {
+            if (selectedDialogs.size === 0) {
+                showToast('لم تختر أي قناة', 'error');
+                return;
+            }
+            const arr = dialogPickerType === 'source' ? config.sourceChannels : config.targetChannels;
+            let added = 0;
+            for (const idx of selectedDialogs) {
+                const d = allDialogs[idx];
+                if (!d) continue;
+                const identifier = d.username || d.id;
+                if (identifier && !arr.includes(identifier)) {
+                    arr.push(identifier);
+                    added++;
+                }
+            }
+            renderChannels(dialogPickerType);
+            closeDialogPicker();
             showToast(`تمت إضافة ${added} قناة`, 'success');
         }
 
