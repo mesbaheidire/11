@@ -284,8 +284,6 @@
                     <textarea id="bulkSourceChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px;">
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('source')"><i class="fas fa-list"></i> لصق دفعة</button>
-                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="selectAllChannels('source')"><i class="fas fa-check-double"></i> تحديد الكل</button>
-                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="clearAllChannels('source')"><i class="fas fa-times"></i> إلغاء</button>
                         <button class="add-ch-btn" id="bulkSourceBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('source')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
                     <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('source')"><i class="fas fa-download"></i> استخراج من الحساب</button>
@@ -307,8 +305,6 @@
                     <textarea id="bulkTargetChannels" placeholder="الصق قائمة قنوات (كل قناة في سطر)" rows="3" style="width:100%;margin-top:8px;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:8px;font-size:13px;resize:vertical;display:none;"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px;">
                         <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;" onclick="toggleBulk('target')"><i class="fas fa-list"></i> لصق دفعة</button>
-                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="selectAllChannels('target')"><i class="fas fa-check-double"></i> تحديد الكل</button>
-                        <button class="add-ch-btn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;background:#2d2d3d;border:1px solid #555;" onclick="clearAllChannels('target')"><i class="fas fa-times"></i> إلغاء</button>
                         <button class="add-ch-btn" id="bulkTargetBtn" style="flex:1;border-radius:8px;font-size:12px;padding:8px;display:none;background:#4CAF50;" onclick="addBulkChannels('target')"><i class="fas fa-check"></i> إضافة الكل</button>
                     </div>
                     <button class="add-ch-btn" style="width:100%;border-radius:8px;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg, #bb86fc, #9c27b0);color:#fff;" onclick="openDialogPicker('target')"><i class="fas fa-download"></i> استخراج من الحساب</button>
@@ -484,8 +480,7 @@
                 <div class="dialog-loading"><i class="fas fa-spinner"></i><p>جاري تحميل القنوات...</p></div>
             </div>
             <div class="dialog-popup-footer">
-                <button class="dialog-tab" onclick="selectAllVisibleDialogs()" style="flex:1;background:#2d2d3d;border:1px solid #555;padding:8px;"><i class="fas fa-check-double"></i> تحديد الكل</button>
-                <button class="btn-confirm" onclick="confirmDialogPick()"><i class="fas fa-check"></i> إضافة (<span id="dialogSelectedCount">0</span>)</button>
+                <button class="btn-confirm" onclick="confirmDialogPick()"><i class="fas fa-check"></i> إضافة المحدد (<span id="dialogSelectedCount">0</span>)</button>
                 <button class="btn-cancel" onclick="closeDialogPicker()">إلغاء</button>
             </div>
         </div>
@@ -597,27 +592,6 @@
             const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
             arr.splice(idx, 1);
             renderChannels(type);
-        }
-
-        function selectAllChannels(type) {
-            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
-            if (arr.length === 0) {
-                showToast('لا توجد قنوات لتحديدها', 'error');
-                return;
-            }
-            showToast(`تم تحديد ${arr.length} قناة`, 'success');
-        }
-
-        function clearAllChannels(type) {
-            const arr = type === 'source' ? config.sourceChannels : config.targetChannels;
-            if (arr.length === 0) {
-                showToast('لا توجد قنوات لإلغاءها', 'error');
-                return;
-            }
-            const count = arr.length;
-            arr.length = 0;
-            renderChannels(type);
-            showToast(`تم حذف ${count} قناة`, 'success');
         }
 
         function toggleBulk(type) {
@@ -747,22 +721,6 @@
             }).join('');
         }
 
-        function selectAllVisibleDialogs() {
-            const existing = dialogPickerType === 'source' ? config.sourceChannels : config.targetChannels;
-            let selectCount = 0;
-            for (let i = 0; i < allDialogs.length; i++) {
-                const d = allDialogs[i];
-                const isAlreadyAdded = existing.some(ch => ch === d.username || ch === d.id);
-                if (!isAlreadyAdded) {
-                    selectedDialogs.add(i);
-                    selectCount++;
-                }
-            }
-            document.getElementById('dialogSelectedCount').textContent = selectedDialogs.size;
-            filterDialogSearch();
-            showToast(`تم تحديد ${selectCount} قناة`, 'success');
-        }
-
         function confirmDialogPick() {
             if (selectedDialogs.size === 0) {
                 showToast('لم تختر أي قناة', 'error');
@@ -787,11 +745,7 @@
         function collectConfig() {
             config.apiId = document.getElementById('apiId').value.trim();
             const hashVal = document.getElementById('apiHash').value.trim();
-            if (hashVal && !hashVal.includes('****')) {
-                config.apiHash = hashVal;
-            } else {
-                delete config.apiHash;
-            }
+            if (hashVal && !hashVal.startsWith('****')) config.apiHash = hashVal;
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();
             config.autoPublish = document.getElementById('autoPublish').checked;
             config.publishDelay = document.getElementById('publishDelay').checked;
@@ -888,8 +842,6 @@
                     showToast('تم إيقاف التجسس', 'success');
                 } else {
                     collectConfig();
-                    await saveAndApply();
-                    await loadConfig();
                     const r = await fetch('/api/spy/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -934,9 +886,7 @@
                     config.sourceChannels = c.sourceChannels || [];
                     config.targetChannels = c.targetChannels || [];
                     config.apiId = c.apiId || '';
-                    if (c.apiHash && !c.apiHash.includes('****')) {
-                        config.apiHash = c.apiHash;
-                    }
+                    config.apiHash = c.apiHash || '';
                     config.phoneNumber = c.phoneNumber || '';
                     config.autoPublish = c.autoPublish !== false;
                     config.publishDelay = !!c.publishDelay;
@@ -963,23 +913,11 @@
                 const r = await fetch('/api/spy/status');
                 const d = await r.json();
                 updateStatusUI(d.running);
-                const ss = document.getElementById('sessionStatus');
-                if (d.hasSession || d.authStep === 'authenticated') {
-                    ss.innerHTML = d.running
-                        ? '<span class="session-badge connected"><i class="fas fa-check-circle"></i> متصل ويعمل</span>'
-                        : '<span class="session-badge connected"><i class="fas fa-check-circle"></i> مسجّل الدخول</span>';
-                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
-                    document.getElementById('auth-step-done').classList.add('active');
-                } else if (d.authStep === 'code_sent') {
-                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> بانتظار الرمز</span>';
-                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
-                    document.getElementById('auth-step-code').classList.add('active');
-                } else if (d.authStep === 'need_password') {
-                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> بانتظار كلمة المرور</span>';
-                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
-                    document.getElementById('auth-step-password').classList.add('active');
-                } else {
-                    ss.innerHTML = '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> غير مسجّل</span>';
+                if (d.session) {
+                    const ss = document.getElementById('sessionStatus');
+                    ss.innerHTML = d.session === 'connected'
+                        ? '<span class="session-badge connected"><i class="fas fa-check-circle"></i> متصل</span>'
+                        : '<span class="session-badge disconnected"><i class="fas fa-exclamation-circle"></i> غير متصل</span>';
                 }
             } catch (e) {}
         }
@@ -989,20 +927,11 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ الإرسال...';
             collectConfig();
-            await saveAndApply();
             try {
-                const sendData = {
-                    apiId: document.getElementById('apiId').value.trim(),
-                    phoneNumber: document.getElementById('phoneNumber').value.trim()
-                };
-                const hashVal = document.getElementById('apiHash').value.trim();
-                if (hashVal && !hashVal.includes('****')) {
-                    sendData.apiHash = hashVal;
-                }
                 const r = await fetch('/api/spy/send-code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(sendData)
+                    body: JSON.stringify({ apiId: config.apiId, apiHash: config.apiHash, phoneNumber: config.phoneNumber })
                 });
                 const d = await r.json();
                 if (d.success) {
