@@ -1121,8 +1121,6 @@ async function startSpy(config) {
   await bot.launch({ dropPendingUpdates: true });
   spyClient = bot;
   spyRunning = true;
-  config.enabled = true;
-  saveConfig(config);
 
   console.log('🤖 البوت يعمل — أرسل أو حوّل منشورات تحتوي على روابط AliExpress');
   console.log(`📢 القنوات الهدف: ${config.targetChannels.join(', ')}`);
@@ -1135,9 +1133,6 @@ async function stopSpy() {
   }
   pendingReviews.clear();
   spyRunning = false;
-  const config = loadConfig();
-  config.enabled = false;
-  saveConfig(config);
   console.log('🛑 تم إيقاف البوت');
 }
 
