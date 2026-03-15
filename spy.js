@@ -984,10 +984,24 @@ async function startSpy(config) {
 
   const bot = new Telegraf(botToken);
 
+  bot.command('start', async (ctx) => {
+    try {
+      const cfg = loadConfig();
+      if (!cfg.targetChannels || cfg.targetChannels.length === 0) {
+        await ctx.reply('⚠️ لم تُضف قنوات هدف بعد\n\nافتح صفحة الإعدادات وأضف قنوات الهدف أولاً');
+        return;
+      }
+      await ctx.reply('✅ البوت جاهز!\n\nأرسل أو حوّل منشورات تحتوي روابط AliExpress وسيتم معالجتها تلقائياً');
+    } catch (e) {
+      await ctx.reply('❌ خطأ في البوت');
+    }
+  });
+
   bot.on('message', async (ctx) => {
     try {
       const currentCfg = loadConfig();
       if (currentCfg.ownerId && String(ctx.from.id) !== String(currentCfg.ownerId)) {
+        await ctx.reply('❌ ليس لديك صلاحية استخدام هذا البوت');
         return;
       }
 
