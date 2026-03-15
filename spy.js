@@ -968,6 +968,8 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 }
 
+let botInstance = null;
+
 async function startSpy(config) {
   console.log('🔄 بدء البوت...');
   if (spyRunning) {
@@ -988,6 +990,7 @@ async function startSpy(config) {
 
   console.log('✅ التوكن موجود، بدء البوت...');
   const bot = new Telegraf(botToken);
+  botInstance = bot;
 
   console.log('⚙️ إعداد معالجات الأوامر والرسائل...');
 
@@ -1149,14 +1152,38 @@ async function startSpy(config) {
 
   bot.action('noop', (ctx) => ctx.answerCbQuery());
 
-  console.log('🚀 جاري تشغيل البوت...');
-  await bot.launch({ dropPendingUpdates: true });
+  console.log('🚀 جاري تشغيل البوت (Webhook Mode)...');
+  
+  // استخدام webhook بدلاً من polling
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT !== undefined;
+  if (isProduction) {
+    console.log('🌐 البيئة: الإنتاج (Render/Replit) - استخدام Webhook');
+    const domain = process.env.REPLIT_DOMAINS || process.env.RENDER_EXTERNAL_URL || '';
+    if (domain) {
+      try {
+        await bot.telegram.setWebhook(`${domain}/api/telegram-webhook`);
+        console.log(`✅ تم تعيين Webhook: ${domain}/api/telegram-webhook`);
+      } catch (e) {
+        console.log('⚠️ فشل تعيين Webhook:', e.message);
+      }
+    }
+  } else {
+    console.log('💻 البيئة: التطوير - استخدام Polling');
+    await bot.launch({ dropPendingUpdates: true });
+  }
+
   spyClient = bot;
   spyRunning = true;
 
   console.log('✅✅✅ البوت يعمل الآن! ✅✅✅');
   console.log('📢 القنوات الهدف: ' + config.targetChannels.join(', '));
   console.log('🤖 البوت جاهز لاستقبال الرسائل والمنشورات!');
+}
+
+// Function to get webhook callback (for server to handle updates)
+function getBotWebhookCallback() {
+  if (!botInstance) return null;
+  return botInstance.webhookCallback('/api/telegram-webhook');
 }
 
 async function stopSpy() {
@@ -1191,5 +1218,6 @@ module.exports = {
   loadLog,
   addLogEntry,
   extractAliExpressLinks,
-  extractPrice
+  extractPrice,
+  getBotWebhookCallback
 };

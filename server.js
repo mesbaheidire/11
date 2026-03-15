@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, getBotWebhookCallback } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -1596,6 +1596,20 @@ app.get('/api/spy/log', (req, res) => {
     res.json({ success: true, log });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Telegram Webhook endpoint
+app.post('/api/telegram-webhook', (req, res) => {
+  try {
+    const callback = getBotWebhookCallback();
+    if (callback) {
+      return callback(req, res);
+    }
+    res.status(503).json({ error: 'Bot not initialized' });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
