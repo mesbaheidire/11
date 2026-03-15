@@ -999,18 +999,20 @@ app.post('/api/ai-extract-product-info', async (req, res) => {
     }
 
     try {
-      const prompt = `أنت خبير تحديد المنتجات. حلل هذا المنشور من قناة عروض واستخرج معلومات المنتج.
+      const prompt = `You are a product identification expert. Analyze this post from a deals/offers channel and extract the product information.
 
-القواعد:
-1. استخرج اسم المنتج الدقيق تماماً كما يُعرّف تجارياً
-2. إذا كان الهاتف، استخرج: الماركة + الموديل + الرقم + الزيادات + الذاكرة
-3. استخرج العنوان الكامل والجذاب (مثل: "Realme P3 Lite 128GB" أو "Samsung Galaxy A15")
-4. أرجع JSON فقط بدون شرح:
-{"productName":"اسم المنتج الكامل بالإنجليزي","isPhone":true أو false}
-5. إذا لم تتمكن من تحديد المنتج، أرجع: {"productName":null,"isPhone":false}
+Rules:
+1. Identify the EXACT product name as it's commercially known (brand + model + variant).
+2. If it's a phone/smartphone, include: Brand + Model + Number + Suffix (Pro/Ultra/Plus/Max/Lite) + RAM/ROM if mentioned.
+3. If it's NOT a phone, give a short attractive product name (3-8 words max).
+4. Write product name in English only.
+5. Determine if the product is a phone/smartphone or not.
+6. Return ONLY JSON, no explanation, no markdown, no code blocks:
+{"productName":"exact product name","isPhone":true/false}
+7. If you cannot identify the product at all, return: {"productName":null,"isPhone":false}
 
-${apiTitle ? `معلومة API (قد تكون خاطئة): ${apiTitle}\n` : ''}
-نص المنشور:
+${apiTitle ? `API Title (may be wrong): ${apiTitle}\n` : ''}
+Post text:
 ${text}`;
 
       const rawResult = await runGeminiWithRotation(prompt);
@@ -1023,28 +1025,24 @@ ${text}`;
           productInfo = JSON.parse(jsonMatch[0]);
           if (productInfo.productName) {
             productInfo.productName = stripAIFormatting(String(productInfo.productName));
-            console.log(`✅ استخرج: "${productInfo.productName}" (هاتف: ${productInfo.isPhone ? 'نعم' : 'لا'})`);
           }
         }
-      } catch (parseErr) {
-        console.log('⚠️ فشل تحليل JSON:', parseErr.message);
-      }
+      } catch {}
 
-      if (!productInfo || !productInfo.productName) {
-        const lines = rawResult.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('{') && !l.startsWith('`') && l.length > 3);
+      if (!productInfo) {
+        const lines = rawResult.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('{') && !l.startsWith('`'));
         if (lines.length > 0) {
           const name = stripAIFormatting(lines[0]);
-          if (name && name.length >= 3 && name.length <= 150) {
+          if (name && name.length >= 3 && name.length <= 80) {
             productInfo = { productName: name, isPhone: false };
-            console.log(`📝 استخدام اسم بديل: "${name}"`);
           }
         }
       }
 
-      console.log(`✅ معلومات المنتج: ${JSON.stringify(productInfo)}`);
+      console.log(`✅ AI product info: ${JSON.stringify(productInfo)}`);
       res.json({ success: true, productInfo, method: 'ai' });
     } catch (aiError) {
-      console.log('❌ فشل استخراج معلومات المنتج:', aiError.message);
+      console.log('AI product info extraction failed:', aiError.message);
       res.json({ success: true, productInfo: null, method: 'fallback' });
     }
   } catch (error) {

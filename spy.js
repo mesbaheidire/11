@@ -780,10 +780,9 @@ async function processPost(config, text, sourceImage, sourceName) {
         const aiInfo = await extractProductInfoWithAI(text, apiTitle);
         if (aiInfo && aiInfo.productName) {
           productTitle = aiInfo.productName;
-          const phoneLabel = aiInfo.isPhone ? '📱 هاتف' : '📦 منتج';
-          console.log(`🤖 ${phoneLabel} تم استخراجه: "${productTitle}"`);
+          console.log(`🤖 AI استخرج المنتج: "${productTitle}" (هاتف: ${aiInfo.isPhone ? 'نعم' : 'لا'})`);
         } else {
-          console.log(`⚠️ AI لم يستخرج المنتج — محاولة تحسين عنوان API`);
+          console.log(`⚠️ AI لم يتعرف على المنتج — محاولة تحسين عنوان API`);
           if (apiTitle) {
             try {
               const refined = await refineTitle(apiTitle);
@@ -795,7 +794,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           }
         }
       } catch (e) {
-        console.log(`⚠️ خطأ استخراج المنتج: ${e.message}`);
+        console.log(`⚠️ فشل استخراج معلومات المنتج: ${e.message}`);
         if (apiTitle) {
           try {
             const refined = await refineTitle(apiTitle);
