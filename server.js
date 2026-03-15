@@ -1516,6 +1516,12 @@ app.get('/api/spy/status', (req, res) => {
 app.get('/api/spy/config', (req, res) => {
   try {
     const config = loadSpyConfig();
+    const shared = loadSharedCredentials();
+    const hasCookie = !!(shared.cook || config.cook || process.env.cook);
+    const hasBotToken = !!(shared.botToken || config.botToken || process.env.TELEGRAM_BOT_TOKEN);
+    config.hasCookie = hasCookie;
+    config.hasBotToken = hasBotToken;
+    if (config.apiHash) config.apiHash = '****' + config.apiHash.slice(-4);
     res.json({ config });
   } catch (e) {
     res.json({ config: {} });
@@ -1618,7 +1624,25 @@ app.get('/api/spy/log', (req, res) => {
 
 app.post('/api/spy/send-code', async (req, res) => {
   try {
-    const config = req.body;
+    const stored = loadSpyConfig();
+    const incoming = req.body || {};
+    const config = { ...stored };
+    if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
+    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
+    if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
+    if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
+    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
+    if (incoming.linkType) config.linkType = incoming.linkType;
+    if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
+    if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
+    if (incoming.delayMin !== undefined) config.delayMin = incoming.delayMin;
+    if (incoming.delayMax !== undefined) config.delayMax = incoming.delayMax;
+    if (incoming.notifyOwner !== undefined) config.notifyOwner = incoming.notifyOwner;
+    if (incoming.ownerId !== undefined) config.ownerId = incoming.ownerId;
+    if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
+    if (incoming.dailyLimit !== undefined) config.dailyLimit = incoming.dailyLimit;
+    if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     saveSpyConfig(config);
     const result = await sendLoginCode(config);
     res.json(result);
