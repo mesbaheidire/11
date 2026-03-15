@@ -689,9 +689,11 @@ async function generateHook(title) {
   return callAiRefine(title, true);
 }
 
-async function processPost(config, text, sourceImage, sourceName) {
+async function processPost(config, text, sourceImage, sourceName, returnResults = false) {
   const aliLinks = extractAliExpressLinks(text);
-  if (aliLinks.length === 0) return;
+  if (aliLinks.length === 0) return returnResults ? [] : undefined;
+  
+  const results = [];
 
   let priceFromPost = null;
   try {
@@ -953,30 +955,35 @@ async function processPost(config, text, sourceImage, sourceName) {
         });
         await sendForReview(botToken, config.ownerId, reviewData);
       } else if (config.autoPublish) {
-        const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
-        const delayMinutes = Math.round(delayMs / 60000);
-
-        if (config.notifyOwner && config.ownerId && botToken) {
-          await sendOwnerNotification(botToken, config.ownerId, {
-            source: sourceName, title: productTitle, price: productPrice,
-            affiliateLink: affLink, delayMinutes
-          });
-        }
-
-        const publishFn = async () => {
-          await executePublish(reviewData);
-        };
-
-        if (delayMs > 0) {
-          console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
-          addLogEntry({
-            source: sourceName, originalLink, affiliateLink: affLink,
-            title: productTitle, price: productPrice, image: imageUrlForLog,
-            status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
-          });
-          setTimeout(publishFn, delayMs);
+        if (returnResults) {
+          // إرجاع النتائج للعرض مع الأزرار
+          results.push(reviewData);
         } else {
-          await publishFn();
+          const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
+          const delayMinutes = Math.round(delayMs / 60000);
+
+          if (config.notifyOwner && config.ownerId && botToken) {
+            await sendOwnerNotification(botToken, config.ownerId, {
+              source: sourceName, title: productTitle, price: productPrice,
+              affiliateLink: affLink, delayMinutes
+            });
+          }
+
+          const publishFn = async () => {
+            await executePublish(reviewData);
+          };
+
+          if (delayMs > 0) {
+            console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+            addLogEntry({
+              source: sourceName, originalLink, affiliateLink: affLink,
+              title: productTitle, price: productPrice, image: imageUrlForLog,
+              status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+            });
+            setTimeout(publishFn, delayMs);
+          } else {
+            await publishFn();
+          }
         }
       } else {
         addLogEntry({
@@ -994,6 +1001,8 @@ async function processPost(config, text, sourceImage, sourceName) {
       addLogEntry({ source: sourceName, originalLink, status: errorStatus, error: errorMsg });
     }
   }
+  
+  return returnResults ? results : undefined;
 }
 
 let botInstance = null;
@@ -1089,8 +1098,52 @@ async function startSpy(config) {
         }
       }
 
-      await processPost(currentConfig, text, sourceImage, sourceName);
-      await ctx.reply(`✅ تمت المعالجة — ${aliLinks.length} رابط`);
+      // معالجة المنشور وجمع النتائج
+      const results = await processPost(currentConfig, text, sourceImage, sourceName, true);
+      
+      // عرض المنشور المعالج مع أزرار
+      if (results && results.length > 0) {
+        for (let i = 0; i < results.length; i++) {
+          const result = results[i];
+          const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2) + i;
+          
+          // حفظ بيانات المراجعة
+          pendingReviews.set(reviewId, result);
+          
+          let preview = `📦 *${result.productTitle || 'منتج'}*\n\n`;
+          preview += `${result.message.substring(0, 300)}\n\n`;
+          preview += `🔗 [رابط الشراء](${result.affiliateLink})\n`;
+          preview += `📢 القنوات: ${(result.targetIds || []).join(', ')}`;
+          
+          const keyboard = {
+            inline_keyboard: [
+              [
+                { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
+                { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
+              ]
+            ]
+          };
+          
+          try {
+            if (result.productImage) {
+              await ctx.replyWithPhoto(result.productImage, {
+                caption: preview,
+                reply_markup: keyboard,
+                parse_mode: 'Markdown'
+              });
+            } else {
+              await ctx.reply(preview, {
+                reply_markup: keyboard,
+                parse_mode: 'Markdown'
+              });
+            }
+          } catch (e) {
+            console.log(`⚠️ فشل عرض المراجعة: ${e.message}`);
+          }
+        }
+      } else {
+        await ctx.reply(`✅ تمت المعالجة — ${aliLinks.length} رابط`);
+      }
     } catch (err) {
       console.log('❌ خطأ في معالجة الرسالة:', err.message);
       try { await ctx.reply(`❌ خطأ: ${err.message}`); } catch (e) {}
