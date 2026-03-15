@@ -1381,6 +1381,13 @@ async function startSpy(config) {
         return;
       }
 
+      // معالج فوري للـ UpdateChannelTooLong من الأحداث الخام
+      if (event.className === 'UpdateChannelTooLong' && resolvedSourceIds.has(chatId)) {
+        console.log(`⚡ UpdateChannelTooLong من ${chatTitle} - معالجة فورية`);
+        processChannelTooLongImmediate(chatId).catch(e => console.log(`⚠️ فشل: ${e.message}`));
+        return;
+      }
+
       const isSource = isSourceByPeerId || resolvedSourceIds.has(chatId) ||
         sourceUsernames.some(src => {
           const srcLower = src.toLowerCase();
@@ -1462,6 +1469,74 @@ async function startSpy(config) {
   const POLL_INTERVAL = 20000;
   const channelPtsMap = {};
   let pollInProgress = false;
+  const pendingChannelTooLong = new Set();
+
+  // معالج فوري لـ UpdateChannelTooLong
+  async function processChannelTooLongImmediate(chId) {
+    try {
+      const channelName = sourceIdToName[chId] || `Channel(${chId})`;
+      let peer = resolvedPeers[chId];
+      
+      if (!peer || !peer.accessHash) {
+        try {
+          const entity = await spyClient.getEntity(new Api.PeerChannel({ channelId: BigInt(chId) }));
+          resolvedPeers[chId] = entity;
+          peer = entity;
+        } catch (e) { return; }
+      }
+      
+      const accessHash = peer.accessHash?.value ?? peer.accessHash ?? BigInt(0);
+      if (accessHash === BigInt(0)) return;
+      
+      const inputChannel = new Api.InputChannel({
+        channelId: BigInt(chId),
+        accessHash: typeof accessHash === 'bigint' ? accessHash : BigInt(accessHash),
+      });
+
+      const channelPts = channelPtsMap[chId] || (await spyClient.invoke(new Api.updates.GetState())).pts;
+      const chDiff = await spyClient.invoke(new Api.updates.GetChannelDifference({
+        channel: inputChannel,
+        filter: new Api.ChannelMessagesFilterEmpty(),
+        pts: channelPts,
+        limit: 10,
+        force: true,
+      })).catch(e => {
+        if (e.message?.includes('CHANNEL_INVALID')) return null;
+        throw e;
+      });
+
+      if (!chDiff || !chDiff.newMessages) return;
+      if (chDiff.pts) channelPtsMap[chId] = chDiff.pts;
+
+      for (const msg of chDiff.newMessages) {
+        if (!msg || !msg.id || isMessageProcessed(chId, msg.id)) continue;
+        
+        let text = (msg.message || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+        if (!text || extractAliExpressLinks(text).length === 0) continue;
+
+        markMessageProcessed(chId, msg.id);
+        console.log(`⚡ [NOW] ${channelName}: جديد (#${msg.id})`);
+
+        let sourceImage = null;
+        if (msg.media?.photo) {
+          try {
+            const buffer = await spyClient.downloadMedia(msg.media, {});
+            if (buffer?.length > 0) sourceImage = buffer;
+          } catch(e){}
+        }
+        
+        await processPost(config, text, sourceImage, channelName).catch(e => {
+          if (!e.message?.includes('FLOOD')) console.log(`⚠️ معالجة: ${e.message}`);
+        });
+      }
+    } catch(e) {
+      if (e.message?.includes('FLOOD')) {
+        const w = e.seconds || 10;
+        console.log(`⏳ FLOOD ${w}s لـ ${chId}`);
+        pendingChannelTooLong.add(chId);
+      }
+    }
+  }
 
   try {
     const state = await spyClient.invoke(new Api.updates.GetState());
@@ -1543,7 +1618,22 @@ async function startSpy(config) {
         console.log(`📬 [Diff #${pollCycle}] msgs=${newMessages.length} upd=${otherUpdates.length} matched=${allMsgs.length} tooLong=${channelTooLong.length} [${typeSummary}]`);
       }
 
+      // معالجة فورية للـ pending channels من FLOOD_WAIT السابق
+      for (const chId of pendingChannelTooLong) {
+        pendingChannelTooLong.delete(chId);
+        await processChannelTooLongImmediate(chId).catch(e => {
+          if (e.message?.includes('FLOOD')) pendingChannelTooLong.add(chId);
+        });
+      }
+
       for (const chId of channelTooLong) {
+        // استدعِ المعالج الفوري بدل الحلقة القديمة
+        await processChannelTooLongImmediate(chId).catch(e => {
+          if (e.message?.includes('FLOOD')) pendingChannelTooLong.add(chId);
+        });
+        continue;
+
+        // كود قديم (سيتم تخطيه)
         try {
           const channelName = sourceIdToName[chId] || `Channel(${chId})`;
           let peer = resolvedPeers[chId];
