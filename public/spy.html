@@ -484,7 +484,8 @@
                 <div class="dialog-loading"><i class="fas fa-spinner"></i><p>جاري تحميل القنوات...</p></div>
             </div>
             <div class="dialog-popup-footer">
-                <button class="btn-confirm" onclick="confirmDialogPick()"><i class="fas fa-check"></i> إضافة المحدد (<span id="dialogSelectedCount">0</span>)</button>
+                <button class="dialog-tab" onclick="selectAllVisibleDialogs()" style="flex:1;background:#2d2d3d;border:1px solid #555;padding:8px;"><i class="fas fa-check-double"></i> تحديد الكل</button>
+                <button class="btn-confirm" onclick="confirmDialogPick()"><i class="fas fa-check"></i> إضافة (<span id="dialogSelectedCount">0</span>)</button>
                 <button class="btn-cancel" onclick="closeDialogPicker()">إلغاء</button>
             </div>
         </div>
@@ -744,6 +745,22 @@
                     <div class="dialog-check">${isExisting ? '<i class="fas fa-check" style="color:#4CAF50;"></i>' : (isSelected ? '<i class="fas fa-check"></i>' : '')}</div>
                 </div>`;
             }).join('');
+        }
+
+        function selectAllVisibleDialogs() {
+            const existing = dialogPickerType === 'source' ? config.sourceChannels : config.targetChannels;
+            let selectCount = 0;
+            for (let i = 0; i < allDialogs.length; i++) {
+                const d = allDialogs[i];
+                const isAlreadyAdded = existing.some(ch => ch === d.username || ch === d.id);
+                if (!isAlreadyAdded) {
+                    selectedDialogs.add(i);
+                    selectCount++;
+                }
+            }
+            document.getElementById('dialogSelectedCount').textContent = selectedDialogs.size;
+            filterDialogSearch();
+            showToast(`تم تحديد ${selectCount} قناة`, 'success');
         }
 
         function confirmDialogPick() {
