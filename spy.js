@@ -485,7 +485,10 @@ function stopReviewBot() {
 async function executePublish(review) {
   const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
   const botToken = getBotToken();
-  if (!botToken) return;
+  if (!botToken) {
+    console.log('❌ فشل النشر: لا يوجد توكن بوت');
+    return;
+  }
 
   const logImage = imageUrlForLog || (typeof productImage === 'string' ? productImage : null);
 
@@ -500,20 +503,39 @@ async function executePublish(review) {
     return;
   }
 
+  if (!message || typeof message !== 'string') {
+    console.log('❌ فشل النشر: الرسالة فارغة أو غير صحيحة');
+    addLogEntry({ source: sourceName, originalLink, status: 'publish_failed', error: 'رسالة فارغة' });
+    return;
+  }
+
+  if (message.length > 4096) {
+    console.log(`⚠️ الرسالة طويلة جداً (${message.length} حرف) — تقصير...`);
+  }
+
   const publishBot = new Telegraf(botToken);
   let publishedCount = 0;
+  let finalMessage = message;
+
+  if (message.length > 4096) {
+    finalMessage = message.substring(0, 4090) + '...';
+  }
 
   for (const target of targetIds) {
     try {
+      if (!target) {
+        console.log('❌ معرف القناة فارغ');
+        continue;
+      }
       if (productImage) {
-        await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
+        await publishBot.telegram.sendPhoto(target, productImage, { caption: finalMessage });
       } else {
-        await publishBot.telegram.sendMessage(target, message);
+        await publishBot.telegram.sendMessage(target, finalMessage);
       }
       publishedCount++;
       console.log(`✅ تم النشر في ${target}`);
     } catch (pubErr) {
-      console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
+      console.log(`❌ فشل النشر في ${target}: ${pubErr.message}`);
       addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
     }
   }
