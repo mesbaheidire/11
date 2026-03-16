@@ -1233,24 +1233,45 @@ async function startSpy(config) {
 
   bot.action('noop', (ctx) => ctx.answerCbQuery());
 
-  console.log('🚀 جاري تشغيل البوت (Webhook Mode)...');
+  console.log('🚀 جاري تشغيل البوت...');
   
-  // استخدام webhook بدلاً من polling
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT !== undefined;
-  if (isProduction) {
-    console.log('🌐 البيئة: الإنتاج (Render/Replit) - استخدام Webhook');
-    const domain = process.env.REPLIT_DOMAINS || process.env.RENDER_EXTERNAL_URL || '';
-    if (domain) {
-      try {
-        await bot.telegram.setWebhook(`${domain}/api/telegram-webhook`);
-        console.log(`✅ تم تعيين Webhook: ${domain}/api/telegram-webhook`);
-      } catch (e) {
-        console.log('⚠️ فشل تعيين Webhook:', e.message);
-      }
+  // تحديد البيئة
+  const isRender = process.env.RENDER_EXTERNAL_URL ? true : false;
+  const isReplit = process.env.REPLIT_DEPLOYMENT ? true : false;
+  const nodeEnv = process.env.NODE_ENV;
+  
+  console.log(`📍 البيئة: Render=${isRender}, Replit=${isReplit}, NODE_ENV=${nodeEnv}`);
+
+  if (isRender) {
+    // Render يستخدم Webhook
+    console.log('🌐 الوضع: Render - استخدام Webhook');
+    const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/api/telegram-webhook`;
+    try {
+      console.log(`🔗 جاري تعيين Webhook: ${webhookUrl}`);
+      await bot.telegram.setWebhook(webhookUrl);
+      console.log(`✅ تم تعيين Webhook بنجاح`);
+    } catch (e) {
+      console.error(`❌ فشل تعيين Webhook: ${e.message}`);
+      console.log(`⚠️ سيتم المحاولة مرة أخرى عند أول رسالة...`);
+    }
+  } else if (isReplit) {
+    // Replit يستخدم Polling
+    console.log('💻 الوضع: Replit - استخدام Polling');
+    try {
+      await bot.launch({ dropPendingUpdates: true });
+      console.log('✅ تم تشغيل البوت (Polling Mode)');
+    } catch (e) {
+      console.error(`❌ فشل تشغيل البوت: ${e.message}`);
     }
   } else {
-    console.log('💻 البيئة: التطوير - استخدام Polling');
-    await bot.launch({ dropPendingUpdates: true });
+    // وضع التطوير المحلي
+    console.log('💻 الوضع: التطوير المحلي - استخدام Polling');
+    try {
+      await bot.launch({ dropPendingUpdates: true });
+      console.log('✅ تم تشغيل البوت (Polling Mode)');
+    } catch (e) {
+      console.error(`❌ فشل تشغيل البوت: ${e.message}`);
+    }
   }
 
   spyClient = bot;
@@ -1263,13 +1284,27 @@ async function startSpy(config) {
 
 // Function to get webhook callback (for server to handle updates)
 function getBotWebhookCallback() {
-  if (!botInstance) return null;
+  if (!botInstance) {
+    console.log('⚠️ Bot instance is null, cannot get webhook callback');
+    return null;
+  }
+  console.log('✅ Webhook callback requested');
   return botInstance.webhookCallback('/api/telegram-webhook');
 }
 
 async function stopSpy() {
   if (spyClient) {
-    try { spyClient.stop(); } catch (e) {}
+    try { 
+      if (process.env.RENDER_EXTERNAL_URL) {
+        // Render: قم بإزالة الـ webhook بدلاً من stop
+        await spyClient.telegram.deleteWebhook();
+        console.log('🛑 تم حذف Webhook');
+      } else {
+        spyClient.stop(); 
+      }
+    } catch (e) {
+      console.log('⚠️ خطأ في إيقاف البوت:', e.message);
+    }
     spyClient = null;
   }
   pendingReviews.clear();

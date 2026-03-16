@@ -1620,11 +1620,15 @@ app.listen(PORT, '0.0.0.0', async () => {
   // بدء البوت تلقائياً
   try {
     const cfg = loadSpyConfig();
-    if (cfg.botToken && cfg.targetChannels && cfg.targetChannels.length > 0) {
+    console.log(`📋 التكوين: Token=${cfg.botToken ? 'موجود' : 'مفقود'}, Channels=${cfg.targetChannels ? cfg.targetChannels.length : 0}`);
+    
+    if (!cfg.botToken) {
+      console.log('⚠️ البوت: لا يوجد توكن - سيتم الانتظار حتى يتم إضافته من الصفحة');
+    } else if (!cfg.targetChannels || cfg.targetChannels.length === 0) {
+      console.log('⚠️ البوت: لا توجد قنوات هدف - سيتم الانتظار حتى يتم إضافتها من الصفحة');
+    } else {
       console.log('🤖 بدء البوت التلقائي...');
       await startSpy(cfg);
-    } else {
-      console.log('⚠️ لم يتم بدء البوت - تأكد من وجود توكن والقنوات الهدف');
     }
   } catch (e) {
     console.log('⚠️ خطأ في بدء البوت:', e.message);
