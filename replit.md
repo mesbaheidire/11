@@ -1,97 +1,90 @@
-# AliExpress Affiliate Bot - Production Ready
+# AliExpress Affiliate Links Generator
 
-## 📌 Project Summary
-**Spy System Redesign**: Auto-monitoring replaced with user-forwarded posts. Bot processes posts sent/forwarded directly, with optional manual review before publishing.
+## Overview
+An Arabic-language web application for generating AliExpress affiliate links and publishing product offers to Telegram channels. The app is a PWA (Progressive Web App) that can be installed on mobile devices.
 
-## 🎯 Current Status (Turn 3 Complete)
+## Project Structure
+- `server.js` - Main Express server entry point
+- `afflink.js` - AliExpress affiliate link generation logic
+- `scheduler.js` - Post scheduling functionality
+- `aliexpress-api.js` - AliExpress API integration
+- `index.js` - Telegram bot entry point
+- `spy.js` - Channel spy module (monitor competitor channels)
+- `public/` - Static frontend files
+  - `index.html` - Main app interface
+  - `spy.html` - Channel spy management page
+  - `collections.html` - Collections page
+  - `telegram.html` - Telegram publishing page
+  - `manifest.json` - PWA manifest
+  - `sw.js` - Service worker for offline support
 
-### ✅ Completed Features
-- **Bot Core**: Telegraf bot listener for messages/forwards
-- **Link Extraction**: Detects AliExpress URLs in posts
-- **Link Conversion**: Converts to affiliate links with cookie
-- **Product Info**: AI-extracts product name, price, coupon
-- **Message Template**: Customizable post template per channel
-- **Publishing**: Auto-publishes to target channels
-- **Review Mode**: Shows preview with approve/skip buttons (NEW)
-- **Image Handling**: Downloads images from URLs before sending (FIXED)
-- **Webhook Support**: Production mode for Render (NEW)
+## Tech Stack
+- **Backend**: Node.js with Express
+- **Frontend**: Vanilla HTML/CSS/JavaScript (PWA)
+- **Dependencies**: axios, cheerio, cors, express, sharp, telegraf
 
-### 🌍 Environment Modes
-- **Development (Replit)**: Bot uses polling (bot.launch)
-- **Production (Render)**: Bot uses webhook (/api/telegram-webhook)
-
-Environment detection:
-```javascript
-const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT !== undefined;
+## Running the App
+The app runs on port 5000 with the command:
+```
+npm start
 ```
 
-### 🔧 Render Deployment Requirements
-Set these environment variables on Render:
-```
-TELEGRAM_BOT_TOKEN=8252407430:AAHyK3ZGiwPBL5vVnh1Q-ZIhsjTTObu7WPw
-cook=<AliExpress Cookie>
-NODE_ENV=production
-RENDER_EXTERNAL_URL=<Your Render domain>
-```
+## Features
+- Generate AliExpress affiliate links
+- Frame product images with custom borders
+- **Logo Watermark** - Add channel logo as watermark to framed images
+  - Upload PNG logo with transparent background
+  - 5 position options (corners + center)
+  - 3 size options (small, medium, large)
+- Publish offers to Telegram channels
+- Schedule posts for later
+- PWA support for mobile installation
+- **Discover Winning Products** - Search for hot products using AliExpress API with optional Gemini AI ranking
+  - AI-powered keyword suggestions for Algerian market
+  - Product analysis with AI scoring and hooks in Algerian dialect
+  - Fallback mode works without Gemini API key
+- **Gemini API Key Rotation** - Automatic switching between multiple API keys
+  - Add multiple keys in Settings (comma-separated)
+  - Auto-rotates to next key when quota is exceeded
+  - Status display shows current key and total available
+  - Keys stored securely in `gemini_keys.json` (gitignored)
+- **AI Hook Refinement** - Improve user-written Algerian hooks with AI
+  - Two buttons: "توليد (AI)" for generating new hooks, "تحسين (AI)" for refining existing ones
+- **Saved Posts History** - Auto-save published posts for easy republishing
+  - View all saved posts with thumbnails
+  - One-click republish to Telegram
+  - Edit saved posts before republishing
+  - Posts stored in `saved_posts.json` (gitignored)
+- **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
+  - Uses GramJS (Telegram MTProto) Userbot mode — monitors any public channel you're subscribed to without admin access
+  - Auto-detect AliExpress links from source channel posts
+  - Convert links to your own affiliate links automatically
+  - Extract price from competitor posts, get product title and image from AliExpress API
+  - **AI-powered product info extraction** — Gemini analyzes post text to extract product name and type (phone vs other)
+  - **AI-powered seller coupon extraction** — Automatically detects and extracts seller coupons from competitor posts
+  - AI-powered title refinement via Gemini (improves AliExpress product titles)
+  - Publishes with AliExpress API image (not competitor's image) to target channels
+  - Bot token and cookie used automatically from main app environment variables
+  - Configurable message template with seller coupon field
+  - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
+  - Duplicate link detection — skips already-processed links (stored 7 days, file: `spy_processed.json`)
+  - Random publish delay (configurable 1-60 min range) to avoid detection
+  - Daily publish limit — configurable max posts per day (0 = unlimited), resets at midnight
+  - Manual review mode — products sent to you via bot with "Publish"/"Skip" buttons before posting (30-min expiry)
+  - Owner notifications — sends you a personal Telegram message when a new product is detected
+  - Activity log with full history
+  - Auto-restart on server reboot
+  - Authentication flow: API ID/Hash from my.telegram.org + phone verification
+  - Session stored in `spy_session.json` (gitignored), config in `spy_config.json` (gitignored)
 
-### 📋 API Endpoints
-- **GET /api/spy/log** - View processing logs
-- **POST /api/spy/start** - Start bot
-- **POST /api/spy/stop** - Stop bot
-- **POST /api/spy/config** - Save bot config
-- **GET /api/spy/status** - Get bot status
-- **POST /api/telegram-webhook** - Webhook endpoint (Render only)
+## Product Metadata Extraction
+The app uses multiple fallback methods to extract product title and image:
+1. **AliExpress API** - First attempt using internal API
+2. **microlink.io API** - External API for reliable metadata extraction
+3. **Web Scraping** - Multiple AliExpress domains with JSON parsing
 
-### 🤖 Bot Message Flow
-1. User sends/forwards post with AliExpress link to bot
-2. Bot checks for authorization (ownerId if set)
-3. Bot extracts links and processes each:
-   - Gets affiliate link via portaffFunction or directAffLink
-   - Extracts product info (AI + API fallbacks)
-   - Downloads image from URL
-   - Generates formatted message
-4. **Review Mode**: Shows preview with buttons (✅ نشر / ⏭ تخطي)
-5. User clicks button to publish or skip
-6. **Auto-publish**: Sends to all target channels with image
-
-### 📁 Important Files
-- **spy.js**: Core bot logic, link processing, message formatting
-- **server.js**: Express server, API endpoints, webhook handler
-- **afflink.js**: Affiliate link generation
-- **public/spy.html**: Web UI for settings
-
-### 🔑 Key Configurations
-- **targetChannels**: List of channels to publish to
-- **messageTemplate**: Customizable post format
-- **autoPublish**: Auto-publish (true) or manual review (false)
-- **linkType**: Affiliate link type (coin/super/point)
-- **couponFilter**: Filter coupons by prefix (e.g., AFAS,ZNQ)
-
-### ⚠️ Critical for Render
-1. **Webhook URL**: Must match RENDER_EXTERNAL_URL + /api/telegram-webhook
-2. **Bot Token**: Already set in spy_config.json
-3. **NODE_ENV**: Set to "production" to enable webhook
-4. **Cookie**: Required for link conversion
-
-### 🐛 Known Limitations
-- Microlink.io API timeout (fallback to direct URL)
-- LinkPreview.xyz API occasional failures
-- AliExpress IP rate limiting (fallback to source image)
-
-### ✅ Testing Checklist
-- [x] Bot starts automatically on server init
-- [x] Accepts messages with AliExpress links
-- [x] Extracts and converts links
-- [x] Shows review preview with buttons
-- [x] Publish button sends to channels
-- [x] Skip button discards post
-- [x] Images download and send correctly
-- [x] Works on Replit (polling mode)
-- [x] Works on Render (webhook mode)
-
-### 🚀 Next Steps for Production
-1. Push changes to Render
-2. Set environment variables on Render
-3. Test webhook connectivity (check logs)
-4. Send test message to bot
-5. Click publish button to verify
+## Environment Variables (Optional)
+- `TELEGRAM_BOT_TOKEN` - Telegram bot token
+- `TELEGRAM_CHANNEL_ID` - Default channel ID
+- `cook` - AliExpress cookie for affiliate generation
+- `GEMINI_API_KEY` - Single or multiple keys (comma-separated) for AI features

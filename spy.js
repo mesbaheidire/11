@@ -6,9 +6,26 @@ const http = require('http');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
+const SESSION_FILE = path.join(__dirname, 'spy_session.json');
 const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
 
 const inFlightLinks = new Set();
+const processedMessageIds = new Set();
+const MAX_PROCESSED_MESSAGES = 500;
+
+function isMessageProcessed(chatId, msgId) {
+  const key = `${chatId}:${msgId}`;
+  return processedMessageIds.has(key);
+}
+
+function markMessageProcessed(chatId, msgId) {
+  const key = `${chatId}:${msgId}`;
+  processedMessageIds.add(key);
+  if (processedMessageIds.size > MAX_PROCESSED_MESSAGES) {
+    const first = processedMessageIds.values().next().value;
+    processedMessageIds.delete(first);
+  }
+}
 
 function loadProcessedLinks() {
   try {
@@ -353,7 +370,117 @@ function getCookie() {
 
 let spyClient = null;
 let spyRunning = false;
+let authState = { step: 'idle', phoneCodeHash: null };
+let reviewBot = null;
 const pendingReviews = new Map();
+
+function startReviewBot(botToken) {
+  if (reviewBot) return;
+  try {
+    reviewBot = new Telegraf(botToken);
+
+    reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      const review = pendingReviews.get(reviewId);
+      if (!review) {
+        await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏰ منتهي الصلاحية', callback_data: 'noop' }]] });
+        return;
+      }
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('جاري النشر...');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
+
+      try {
+        await executePublish(review);
+        console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
+      } catch (e) {
+        console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
+      }
+    });
+
+    reviewBot.action(/^spy_skip_(.+)$/, async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('تم التخطي');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
+      addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
+      console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
+    });
+
+    reviewBot.action('spy_approve_all', async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const count = pendingReviews.size;
+      if (count === 0) {
+        await ctx.answerCbQuery('لا توجد منشورات معلقة');
+        return;
+      }
+      await ctx.answerCbQuery(`جاري نشر ${count} منشور...`);
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `✅ تم نشر الكل (${count})`, callback_data: 'noop' }]] });
+      const allReviews = Array.from(pendingReviews.entries());
+      pendingReviews.clear();
+      for (const [rid, review] of allReviews) {
+        try {
+          await executePublish(review);
+          console.log(`✅ نشر (الكل): ${rid}`);
+        } catch (e) {
+          console.log(`❌ فشل نشر (الكل) ${rid}: ${e.message}`);
+        }
+      }
+    });
+
+    reviewBot.action('spy_skip_all', async (ctx) => {
+      const config = loadConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const count = pendingReviews.size;
+      if (count === 0) {
+        await ctx.answerCbQuery('لا توجد منشورات معلقة');
+        return;
+      }
+      await ctx.answerCbQuery(`تم تخطي ${count} منشور`);
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `⏭ تم تخطي الكل (${count})`, callback_data: 'noop' }]] });
+      for (const [rid, review] of pendingReviews.entries()) {
+        addLogEntry({ status: 'skipped', title: review.productTitle || 'تم التخطي', source: review.sourceName });
+      }
+      pendingReviews.clear();
+      console.log(`⏭ تم تخطي الكل (${count})`);
+    });
+
+    reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
+
+    reviewBot.launch({ dropPendingUpdates: true });
+    console.log('🤖 بوت المراجعة يعمل');
+  } catch (e) {
+    console.log('⚠️ فشل تشغيل بوت المراجعة:', e.message);
+    reviewBot = null;
+  }
+}
+
+function stopReviewBot() {
+  if (reviewBot) {
+    try { reviewBot.stop(); } catch (e) {}
+    reviewBot = null;
+    pendingReviews.clear();
+    console.log('🤖 تم إيقاف بوت المراجعة');
+  }
+}
 
 async function executePublish(review) {
   const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
@@ -375,47 +502,19 @@ async function executePublish(review) {
 
   const publishBot = new Telegraf(botToken);
   let publishedCount = 0;
-  let imageToSend = productImage;
-
-  // محاولة تحميل الصورة من URL إذا كانت string
-  if (productImage && typeof productImage === 'string' && productImage.startsWith('http')) {
-    try {
-      console.log(`📥 جاري تحميل الصورة من: ${productImage.substring(0, 100)}...`);
-      const response = await fetch(productImage, { timeout: 5000 });
-      if (response.ok) {
-        const buffer = await response.buffer();
-        imageToSend = buffer;
-        console.log(`✅ تم تحميل الصورة (${buffer.length} bytes)`);
-      }
-    } catch (imgErr) {
-      console.log(`⚠️ فشل تحميل الصورة: ${imgErr.message} — سيتم إرسال نص فقط`);
-      imageToSend = null;
-    }
-  }
 
   for (const target of targetIds) {
     try {
-      if (imageToSend) {
-        await publishBot.telegram.sendPhoto(target, imageToSend, { caption: message, parse_mode: 'Markdown' });
+      if (productImage) {
+        await publishBot.telegram.sendPhoto(target, productImage, { caption: message });
       } else {
-        await publishBot.telegram.sendMessage(target, message, { parse_mode: 'Markdown' });
+        await publishBot.telegram.sendMessage(target, message);
       }
       publishedCount++;
       console.log(`✅ تم النشر في ${target}`);
     } catch (pubErr) {
       console.log(`❌ فشل النشر في ${target}:`, pubErr.message);
-      // محاولة أخرى بدون صورة
-      if (imageToSend) {
-        try {
-          await publishBot.telegram.sendMessage(target, message, { parse_mode: 'Markdown' });
-          publishedCount++;
-          console.log(`✅ تم النشر في ${target} (نص فقط)`);
-        } catch (textErr) {
-          addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: textErr.message });
-        }
-      } else {
-        addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
-      }
+      addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
     }
   }
 
@@ -689,11 +788,9 @@ async function generateHook(title) {
   return callAiRefine(title, true);
 }
 
-async function processPost(config, text, sourceImage, sourceName, returnResults = false) {
+async function processPost(config, text, sourceImage, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
-  if (aliLinks.length === 0) return returnResults ? [] : undefined;
-  
-  const results = [];
+  if (aliLinks.length === 0) return;
 
   let priceFromPost = null;
   try {
@@ -787,11 +884,7 @@ async function processPost(config, text, sourceImage, sourceName, returnResults 
       }
 
       if (!productImage && sourceImage) {
-        if (typeof sourceImage === 'string' && sourceImage.startsWith('http')) {
-          productImage = sourceImage;
-        } else {
-          productImage = { source: sourceImage };
-        }
+        productImage = { source: sourceImage };
         console.log(`🖼 جميع طرق API فشلت — استخدام صورة المنشور الأصلي كاحتياط أخير`);
       }
 
@@ -860,11 +953,12 @@ async function processPost(config, text, sourceImage, sourceName, returnResults 
       }
 
       const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
+      console.log(`🔍 Coupon filter config: "${t.couponFilter}" → prefixes: [${couponPrefixes.join(', ')}]`);
       if (couponPrefixes.length > 0 && extractedCoupon) {
         console.log(`🔍 Filtering coupon: "${extractedCoupon}" with prefixes: [${couponPrefixes.join(', ')}]`);
         const filtered = extractedCoupon.split(' | ')
-          .map(c => c.trim().toUpperCase())
-          .filter(c => couponPrefixes.some(prefix => c.startsWith(prefix)));
+          .map(c => c.trim())
+          .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
         if (filtered.length > 0) {
           extractedCoupon = filtered.join(' | ');
           console.log(`🔍 كوبونات بعد الفلترة: ${extractedCoupon}`);
@@ -901,7 +995,7 @@ async function processPost(config, text, sourceImage, sourceName, returnResults 
       else if (productTitle) message += `${productTitle}\n\n`;
       if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
       if (extractedCoupon) {
-        const label = (t.couponLabel && t.couponLabel.trim()) ? t.couponLabel.trim() : 'كوبون';
+        const label = t.couponLabel || 'كوبون';
         message += `${label}: ${extractedCoupon}\n`;
       }
 
@@ -955,35 +1049,30 @@ async function processPost(config, text, sourceImage, sourceName, returnResults 
         });
         await sendForReview(botToken, config.ownerId, reviewData);
       } else if (config.autoPublish) {
-        if (returnResults) {
-          // إرجاع النتائج للعرض مع الأزرار
-          results.push(reviewData);
+        const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
+        const delayMinutes = Math.round(delayMs / 60000);
+
+        if (config.notifyOwner && config.ownerId && botToken) {
+          await sendOwnerNotification(botToken, config.ownerId, {
+            source: sourceName, title: productTitle, price: productPrice,
+            affiliateLink: affLink, delayMinutes
+          });
+        }
+
+        const publishFn = async () => {
+          await executePublish(reviewData);
+        };
+
+        if (delayMs > 0) {
+          console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+          addLogEntry({
+            source: sourceName, originalLink, affiliateLink: affLink,
+            title: productTitle, price: productPrice, image: imageUrlForLog,
+            status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+          });
+          setTimeout(publishFn, delayMs);
         } else {
-          const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
-          const delayMinutes = Math.round(delayMs / 60000);
-
-          if (config.notifyOwner && config.ownerId && botToken) {
-            await sendOwnerNotification(botToken, config.ownerId, {
-              source: sourceName, title: productTitle, price: productPrice,
-              affiliateLink: affLink, delayMinutes
-            });
-          }
-
-          const publishFn = async () => {
-            await executePublish(reviewData);
-          };
-
-          if (delayMs > 0) {
-            console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
-            addLogEntry({
-              source: sourceName, originalLink, affiliateLink: affLink,
-              title: productTitle, price: productPrice, image: imageUrlForLog,
-              status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
-            });
-            setTimeout(publishFn, delayMs);
-          } else {
-            await publishFn();
-          }
+          await publishFn();
         }
       } else {
         addLogEntry({
@@ -1001,327 +1090,341 @@ async function processPost(config, text, sourceImage, sourceName, returnResults 
       addLogEntry({ source: sourceName, originalLink, status: errorStatus, error: errorMsg });
     }
   }
-  
-  return returnResults ? results : undefined;
 }
 
-let botInstance = null;
-
 async function startSpy(config) {
-  console.log('🔄 بدء البوت...');
   if (spyRunning) {
-    console.log('⚠️ البوت يعمل بالفعل، إيقاف النسخة القديمة...');
     await stopSpy();
   }
 
+  const { TelegramClient } = require('telegram');
+  const { StringSession } = require('telegram/sessions');
+  const { NewMessage } = require('telegram/events');
+
+  const apiId = parseInt(config.apiId);
+  const apiHash = config.apiHash;
+
+  if (!apiId || !apiHash) {
+    throw new Error('API ID و API Hash مطلوبان - احصل عليهما من my.telegram.org');
+  }
   if (!config.targetChannels || config.targetChannels.length === 0) {
-    console.log('❌ لا توجد قنوات هدف — يجب إضافة قناة على الأقل');
     throw new Error('يجب إضافة قناة هدف واحدة على الأقل');
+  }
+  if (!config.sourceChannels || config.sourceChannels.length === 0) {
+    throw new Error('يجب إضافة قناة مصدر واحدة على الأقل');
   }
 
   const botToken = getBotToken();
-  if (!botToken) {
-    console.log('❌ لا يوجد توكن بوت');
+  if (!botToken && (config.autoPublish || config.manualReview)) {
     throw new Error('توكن البوت غير موجود - أضفه في إعدادات التطبيق الرئيسية');
   }
+  if (config.manualReview && !config.ownerId) {
+    throw new Error('وضع المراجعة اليدوية يتطلب إدخال معرف حسابك (Chat ID)');
+  }
 
-  console.log('✅ التوكن موجود، بدء البوت...');
-  const bot = new Telegraf(botToken);
-  botInstance = bot;
-
-  console.log('⚙️ إعداد معالجات الأوامر والرسائل...');
-
-  bot.command('start', async (ctx) => {
-    console.log('🚀 /start أمر مستقبل');
-    try {
-      const cfg = loadConfig();
-      if (!cfg.targetChannels || cfg.targetChannels.length === 0) {
-        await ctx.reply('⚠️ لم تُضف قنوات هدف بعد\n\nافتح صفحة الإعدادات وأضف قنوات الهدف أولاً');
-        return;
-      }
-      await ctx.reply('✅ البوت جاهز!\n\nأرسل أو حوّل منشورات تحتوي روابط AliExpress وسيتم معالجتها تلقائياً');
-    } catch (e) {
-      await ctx.reply('❌ خطأ في البوت');
+  let sessionStr = '';
+  try {
+    if (fs.existsSync(SESSION_FILE)) {
+      const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+      sessionStr = sessionData.session || '';
     }
+  } catch (e) {}
+
+  if (!sessionStr) {
+    throw new Error('SESSION_REQUIRED');
+  }
+
+  const session = new StringSession(sessionStr);
+  spyClient = new TelegramClient(session, apiId, apiHash, {
+    connectionRetries: 5,
   });
 
-  bot.on('message', async (ctx) => {
+  await spyClient.connect();
+
+  if (!await spyClient.isUserAuthorized()) {
+    throw new Error('SESSION_REQUIRED');
+  }
+
+  try {
+    const me = await spyClient.getMe();
+    console.log(`🕵️ تم الاتصال بحساب: ${me.firstName || ''} ${me.lastName || ''} (@${me.username || 'بدون'})`);
+  } catch (e) {
+    console.log('🕵️ تم الاتصال بحساب تيليجرام');
+  }
+
+  console.log('🔄 جاري مزامنة المحادثات...');
+  try {
+    const dialogs = await spyClient.getDialogs({ limit: 100 });
+    console.log(`📋 تمت مزامنة ${dialogs.length} محادثة`);
+  } catch (e) {
+    console.log(`⚠️ فشل مزامنة المحادثات: ${e.message}`);
+  }
+
+  const sourceUsernames = config.sourceChannels.map(ch => {
+    if (ch.startsWith('@')) return ch.substring(1);
+    if (ch.includes('t.me/')) {
+      const match = ch.match(/t\.me\/([^\/\?]+)/);
+      if (match) return match[1];
+    }
+    return ch;
+  });
+
+  const targetUsernames = new Set();
+  const targetIdSet = new Set();
+  for (const ch of (config.targetChannels || [])) {
+    if (ch.startsWith('-')) {
+      targetIdSet.add(ch);
+      targetIdSet.add(ch.replace(/^-100/, ''));
+    } else if (ch.startsWith('@')) {
+      targetUsernames.add(ch.substring(1).toLowerCase());
+    } else if (ch.includes('t.me/')) {
+      const match = ch.match(/t\.me\/([^\/\?]+)/);
+      if (match) targetUsernames.add(match[1].toLowerCase());
+    } else {
+      targetUsernames.add(ch.toLowerCase());
+    }
+  }
+
+  for (const tgt of targetUsernames) {
     try {
-      console.log(`📨 رسالة جديدة من ${ctx.from.id} (${ctx.from.first_name || ctx.from.username})`);
-      const currentCfg = loadConfig();
-      if (!currentCfg.ownerId) {
-        console.log(`⚠️ لم يتم تعيين ownerId - جميع المستخدمين مسموح لهم`);
-      } else if (String(ctx.from.id) !== String(currentCfg.ownerId)) {
-        console.log(`❌ رفض: المستخدم ${ctx.from.id} ليس ownerId ${currentCfg.ownerId}`);
-        await ctx.reply('❌ ليس لديك صلاحية استخدام هذا البوت');
+      const entity = await spyClient.getEntity(tgt);
+      const entityId = String(entity.id?.value ?? entity.id);
+      targetIdSet.add(entityId);
+    } catch (e) {}
+  }
+
+  let botId = null;
+  const spyBotToken = getBotToken();
+  if (spyBotToken) {
+    const tokenMatch = spyBotToken.match(/^(\d+):/);
+    if (tokenMatch) botId = tokenMatch[1];
+  }
+
+  let meId = null;
+  try {
+    const me = await spyClient.getMe();
+    meId = String(me.id?.value ?? me.id);
+  } catch (e) {}
+
+  const resolvedSourceIds = new Set();
+  for (const src of sourceUsernames) {
+    try {
+      const entity = await spyClient.getEntity(src);
+      const entityId = String(entity.id?.value ?? entity.id);
+      resolvedSourceIds.add(entityId);
+      console.log(`✅ تم حل القناة: ${src} → ${entity.title || src} (ID: ${entityId})`);
+    } catch (e) {
+      console.log(`❌ فشل حل القناة "${src}": ${e.message}`);
+    }
+  }
+
+  if (resolvedSourceIds.size === 0) {
+    console.log('⚠️ لم يتم حل أي قناة مصدر — تأكد أن الحساب مشترك في القنوات');
+  }
+
+  console.log(`🛡 حماية التكرار: ${targetIdSet.size} قنوات هدف محظورة، botId=${botId || 'غير معروف'}`);
+
+  let msgCount = 0;
+
+  spyClient.addEventHandler(async (event) => {
+    try {
+      const msg = event.message;
+      if (!msg || !msg.peerId) return;
+
+      msgCount++;
+      if (msgCount <= 10 || msgCount % 50 === 0) {
+        console.log(`📨 رسالة #${msgCount} — out:${msg.out} peerId: ${JSON.stringify(msg.peerId.className || msg.peerId.constructor?.name || 'unknown')}`);
+      }
+
+      let chatEntity;
+      try {
+        chatEntity = await spyClient.getEntity(msg.peerId);
+      } catch (e) {
+        if (msgCount <= 10) console.log(`⚠️ فشل حل الكيان: ${e.message}`);
         return;
       }
 
-      const text = ctx.message.text || ctx.message.caption || '';
-      const forwardFrom = ctx.message.forward_from_chat;
-      const sourceName = forwardFrom ? (forwardFrom.title || forwardFrom.username || 'محوّل') : (ctx.from.first_name || 'مباشر');
-      console.log(`📝 النص: ${text.substring(0, 100)}...`);
+      const chatUsername = (chatEntity.username || '').toLowerCase();
+      const chatTitle = chatEntity.title || chatEntity.username || '';
+      const chatId = String(chatEntity.id?.value ?? chatEntity.id);
 
+      if (msgCount <= 10) {
+        console.log(`📍 رسالة من: ${chatTitle} | username: ${chatUsername} | id: ${chatId}`);
+      }
+
+      if (targetIdSet.has(chatId) || targetUsernames.has(chatUsername)) {
+        if (msgCount <= 20) console.log(`🚫 تخطي رسالة من قناة الهدف: ${chatTitle}`);
+        return;
+      }
+
+      const isSource = resolvedSourceIds.has(chatId) ||
+        sourceUsernames.some(src => {
+          const srcLower = src.toLowerCase();
+          return chatUsername === srcLower ||
+                 chatId === src ||
+                 ('-100' + chatId) === src;
+        });
+
+      if (!isSource) return;
+
+      const msgId = msg.id;
+      if (isMessageProcessed(chatId, msgId)) {
+        console.log(`🔁 تخطي رسالة مكررة: ${chatTitle} #${msgId}`);
+        return;
+      }
+      markMessageProcessed(chatId, msgId);
+
+      console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
+
+      const text = msg.message || '';
       if (!text) {
-        console.log('⚠️ رسالة بدون نص، يتم تجاهلها');
+        console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
         return;
       }
 
-      console.log(`🔍 جاري البحث عن روابط AliExpress...`);
       const aliLinks = extractAliExpressLinks(text);
-      console.log(`🔗 وجدت ${aliLinks.length} رابط AliExpress`);
       if (aliLinks.length === 0) {
-        console.log('❌ لا توجد روابط AliExpress');
-        await ctx.reply('⚠️ لا توجد روابط AliExpress في الرسالة\n\nأرسل أو حوّل منشوراً يحتوي على رابط AliExpress');
+        console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة`);
         return;
       }
-
-      const currentConfig = loadConfig();
-      if (!currentConfig.targetChannels || currentConfig.targetChannels.length === 0) {
-        await ctx.reply('⚠️ لم تُضف قنوات هدف — أضفها من صفحة الإعدادات');
-        return;
-      }
-
-      await ctx.reply(`🔄 جاري معالجة ${aliLinks.length} رابط من: ${sourceName}...`);
-
-      console.log(`📨 رسالة من ${sourceName}: ${aliLinks.length} رابط AliExpress`);
 
       let sourceImage = null;
-      if (ctx.message.photo && ctx.message.photo.length > 0) {
+      if (msg.media && msg.media.photo) {
         try {
-          const photo = ctx.message.photo[ctx.message.photo.length - 1];
-          const fileLink = await ctx.telegram.getFileLink(photo.file_id);
-          sourceImage = fileLink.href;
-          console.log(`🖼 صورة مستخرجة من الرسالة`);
-        } catch (e) {
-          console.log(`⚠️ فشل تحميل الصورة: ${e.message}`);
-        }
-      }
-
-      // معالجة المنشور وجمع النتائج
-      const results = await processPost(currentConfig, text, sourceImage, sourceName, true);
-      
-      // عرض المنشور المعالج مع أزرار
-      if (results && results.length > 0) {
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2) + i;
-          
-          // حفظ بيانات المراجعة
-          pendingReviews.set(reviewId, result);
-          
-          let preview = `📦 *${result.productTitle || 'منتج'}*\n\n`;
-          preview += `${result.message.substring(0, 300)}\n\n`;
-          preview += `🔗 [رابط الشراء](${result.affiliateLink})\n`;
-          preview += `📢 القنوات: ${(result.targetIds || []).join(', ')}`;
-          
-          const keyboard = {
-            inline_keyboard: [
-              [
-                { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
-                { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
-              ]
-            ]
-          };
-          
-          try {
-            if (result.productImage) {
-              await ctx.replyWithPhoto(result.productImage, {
-                caption: preview,
-                reply_markup: keyboard,
-                parse_mode: 'Markdown'
-              });
-            } else {
-              await ctx.reply(preview, {
-                reply_markup: keyboard,
-                parse_mode: 'Markdown'
-              });
-            }
-          } catch (e) {
-            console.log(`⚠️ فشل عرض المراجعة: ${e.message}`);
+          const buffer = await spyClient.downloadMedia(msg.media, {});
+          if (buffer && buffer.length > 0) {
+            sourceImage = buffer;
+            console.log(`🖼 صورة مستخرجة من المنشور (${Math.round(buffer.length/1024)}KB)`);
           }
+        } catch (imgErr) {
+          console.log(`⚠️ فشل تحميل صورة المنشور: ${imgErr.message}`);
         }
-      } else {
-        await ctx.reply(`✅ تمت المعالجة — ${aliLinks.length} رابط`);
       }
+
+      console.log(`🔗 وجد ${aliLinks.length} رابط AliExpress — بدء المعالجة`);
+      await processPost(config, text, sourceImage, chatTitle);
     } catch (err) {
-      console.log('❌ خطأ في معالجة الرسالة:', err.message);
-      try { await ctx.reply(`❌ خطأ: ${err.message}`); } catch (e) {}
+      console.log('❌ خطأ Userbot:', err.message);
     }
-  });
+  }, new NewMessage({}));
 
-  bot.action(/^spy_approve_(.+)$/, async (ctx) => {
-    const config2 = loadConfig();
-    if (config2.ownerId && String(ctx.from.id) !== String(config2.ownerId)) {
-      await ctx.answerCbQuery('غير مصرح لك');
-      return;
-    }
-    const reviewId = ctx.match[1];
-    const review = pendingReviews.get(reviewId);
-    if (!review) {
-      await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏰ منتهي الصلاحية', callback_data: 'noop' }]] });
-      return;
-    }
-    pendingReviews.delete(reviewId);
-    await ctx.answerCbQuery('جاري النشر...');
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
-    try {
-      await executePublish(review);
-      console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
-    } catch (e) {
-      console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
-    }
-  });
+  console.log(`🔍 مراقبة القنوات: ${sourceUsernames.join(', ')}`);
 
-  bot.action(/^spy_skip_(.+)$/, async (ctx) => {
-    const config2 = loadConfig();
-    if (config2.ownerId && String(ctx.from.id) !== String(config2.ownerId)) {
-      await ctx.answerCbQuery('غير مصرح لك');
-      return;
-    }
-    const reviewId = ctx.match[1];
-    pendingReviews.delete(reviewId);
-    await ctx.answerCbQuery('تم التخطي');
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
-    addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
-    console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
-  });
-
-  bot.action('spy_approve_all', async (ctx) => {
-    const config2 = loadConfig();
-    if (config2.ownerId && String(ctx.from.id) !== String(config2.ownerId)) {
-      await ctx.answerCbQuery('غير مصرح لك');
-      return;
-    }
-    const count = pendingReviews.size;
-    if (count === 0) {
-      await ctx.answerCbQuery('لا توجد منشورات معلقة');
-      return;
-    }
-    await ctx.answerCbQuery(`جاري نشر ${count} منشور...`);
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `✅ تم نشر الكل (${count})`, callback_data: 'noop' }]] });
-    const allReviews = Array.from(pendingReviews.entries());
-    pendingReviews.clear();
-    for (const [rid, review] of allReviews) {
-      try {
-        await executePublish(review);
-      } catch (e) {
-        console.log(`❌ فشل نشر ${rid}: ${e.message}`);
-      }
-    }
-  });
-
-  bot.action('spy_skip_all', async (ctx) => {
-    const config2 = loadConfig();
-    if (config2.ownerId && String(ctx.from.id) !== String(config2.ownerId)) {
-      await ctx.answerCbQuery('غير مصرح لك');
-      return;
-    }
-    const count = pendingReviews.size;
-    if (count === 0) {
-      await ctx.answerCbQuery('لا توجد منشورات معلقة');
-      return;
-    }
-    await ctx.answerCbQuery(`تم تخطي ${count} منشور`);
-    await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `⏭ تم تخطي الكل (${count})`, callback_data: 'noop' }]] });
-    for (const [rid, review] of pendingReviews.entries()) {
-      addLogEntry({ status: 'skipped', title: review.productTitle || 'تم التخطي', source: review.sourceName });
-    }
-    pendingReviews.clear();
-  });
-
-  bot.action('noop', (ctx) => ctx.answerCbQuery());
-
-  console.log('🚀 جاري تشغيل البوت...');
-  
-  // تحديد البيئة
-  const isRender = process.env.RENDER_EXTERNAL_URL ? true : false;
-  const isReplit = process.env.REPLIT_DEPLOYMENT ? true : false;
-  const nodeEnv = process.env.NODE_ENV;
-  
-  console.log(`📍 البيئة: Render=${isRender}, Replit=${isReplit}, NODE_ENV=${nodeEnv}`);
-
-  if (isRender) {
-    // Render يستخدم Webhook
-    console.log('🌐 الوضع: Render - استخدام Webhook');
-    const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}/api/telegram-webhook`;
-    try {
-      console.log(`🔗 جاري تعيين Webhook: ${webhookUrl}`);
-      await bot.telegram.setWebhook(webhookUrl);
-      console.log(`✅ تم تعيين Webhook بنجاح`);
-    } catch (e) {
-      console.error(`❌ فشل تعيين Webhook: ${e.message}`);
-      console.log(`⚠️ سيتم المحاولة مرة أخرى عند أول رسالة...`);
-    }
-  } else if (isReplit) {
-    // Replit يستخدم Polling
-    console.log('💻 الوضع: Replit - استخدام Polling');
-    try {
-      await bot.launch({ dropPendingUpdates: true });
-      console.log('✅ تم تشغيل البوت (Polling Mode)');
-    } catch (e) {
-      console.error(`❌ فشل تشغيل البوت: ${e.message}`);
-    }
-  } else {
-    // وضع التطوير المحلي
-    console.log('💻 الوضع: التطوير المحلي - استخدام Polling');
-    try {
-      await bot.launch({ dropPendingUpdates: true });
-      console.log('✅ تم تشغيل البوت (Polling Mode)');
-    } catch (e) {
-      console.error(`❌ فشل تشغيل البوت: ${e.message}`);
-    }
-  }
-
-  spyClient = bot;
   spyRunning = true;
+  config.enabled = true;
+  saveConfig(config);
 
-  console.log('✅✅✅ البوت يعمل الآن! ✅✅✅');
-  console.log('📢 القنوات الهدف: ' + config.targetChannels.join(', '));
-  console.log('🤖 البوت جاهز لاستقبال الرسائل والمنشورات!');
-}
-
-// Function to get webhook callback (for server to handle updates)
-function getBotWebhookCallback() {
-  if (!botInstance) {
-    console.log('⚠️ Bot instance is null, cannot get webhook callback');
-    return null;
+  if (config.manualReview && botToken) {
+    startReviewBot(botToken);
   }
-  console.log('✅ Webhook callback requested');
-  return botInstance.webhookCallback('/api/telegram-webhook');
+
+  console.log('🕵️ تم تشغيل نظام التجسس');
 }
 
 async function stopSpy() {
+  stopReviewBot();
   if (spyClient) {
-    try { 
-      if (process.env.RENDER_EXTERNAL_URL) {
-        // Render: قم بإزالة الـ webhook بدلاً من stop
-        await spyClient.telegram.deleteWebhook();
-        console.log('🛑 تم حذف Webhook');
-      } else {
-        spyClient.stop(); 
-      }
-    } catch (e) {
-      console.log('⚠️ خطأ في إيقاف البوت:', e.message);
-    }
+    try { await spyClient.disconnect(); } catch (e) {}
     spyClient = null;
   }
-  pendingReviews.clear();
   spyRunning = false;
-  console.log('🛑 تم إيقاف البوت');
+  const config = loadConfig();
+  config.enabled = false;
+  saveConfig(config);
+  console.log('🛑 تم إيقاف نظام التجسس');
+}
+
+async function sendLoginCode(config) {
+  const { TelegramClient } = require('telegram');
+  const { StringSession } = require('telegram/sessions');
+
+  const apiId = parseInt(config.apiId);
+  const apiHash = config.apiHash;
+  const phoneNumber = config.phoneNumber;
+
+  if (!apiId || !apiHash) throw new Error('API ID و API Hash مطلوبان');
+  if (!phoneNumber) throw new Error('رقم الهاتف مطلوب');
+
+  if (spyClient) {
+    try { await spyClient.disconnect(); } catch (e) {}
+    spyClient = null;
+  }
+
+  const session = new StringSession('');
+  spyClient = new TelegramClient(session, apiId, apiHash, { connectionRetries: 5 });
+  await spyClient.connect();
+
+  const result = await spyClient.sendCode(
+    { apiId, apiHash },
+    phoneNumber
+  );
+
+  authState = { step: 'code_sent', phoneCodeHash: result.phoneCodeHash, phoneNumber };
+  return { success: true, message: 'تم إرسال رمز التحقق إلى تيليجرام' };
+}
+
+async function verifyCode(config, code, password) {
+  if (!spyClient) throw new Error('ابدأ بإرسال رمز التحقق أولاً');
+  if (authState.step !== 'code_sent' && authState.step !== 'need_password') {
+    throw new Error('ابدأ بإرسال رمز التحقق أولاً');
+  }
+
+  try {
+    if (authState.step === 'need_password') {
+      const { computeCheck } = require('telegram/Password');
+      const passwordResult = await spyClient.invoke(
+        new (require('telegram/tl').Api.account.GetPassword)()
+      );
+      const srp = await computeCheck(passwordResult, password);
+      await spyClient.invoke(
+        new (require('telegram/tl').Api.auth.CheckPassword)({ password: srp })
+      );
+    } else {
+      try {
+        await spyClient.invoke(
+          new (require('telegram/tl').Api.auth.SignIn)({
+            phoneNumber: authState.phoneNumber,
+            phoneCodeHash: authState.phoneCodeHash,
+            phoneCode: code
+          })
+        );
+      } catch (e) {
+        if (e.errorMessage === 'SESSION_PASSWORD_NEEDED') {
+          authState.step = 'need_password';
+          return { success: false, needPassword: true, message: 'الحساب محمي بكلمة مرور - أدخل كلمة المرور' };
+        }
+        throw e;
+      }
+    }
+
+    const sessionStr = spyClient.session.save();
+    fs.writeFileSync(SESSION_FILE, JSON.stringify({ session: sessionStr }));
+    authState = { step: 'authenticated' };
+
+    await spyClient.disconnect();
+    spyClient = null;
+
+    return { success: true, message: 'تم تسجيل الدخول بنجاح! يمكنك الآن تشغيل التجسس' };
+  } catch (e) {
+    throw new Error('فشل التحقق: ' + e.message);
+  }
 }
 
 function getStatus() {
   const config = loadConfig();
   const safeConfig = { ...config };
+  safeConfig.apiHash = safeConfig.apiHash ? '****' : '';
+  safeConfig.phoneNumber = safeConfig.phoneNumber ? safeConfig.phoneNumber.substring(0, 4) + '****' : '';
   safeConfig.cook = safeConfig.cook ? true : false;
   safeConfig.botToken = safeConfig.botToken ? true : false;
 
+  const hasSession = fs.existsSync(SESSION_FILE);
   return {
     running: spyRunning,
     config: safeConfig,
-    log: loadLog()
+    log: loadLog(),
+    hasSession,
+    authStep: authState.step
   };
 }
 
@@ -1335,5 +1438,6 @@ module.exports = {
   addLogEntry,
   extractAliExpressLinks,
   extractPrice,
-  getBotWebhookCallback
+  sendLoginCode,
+  verifyCode
 };
