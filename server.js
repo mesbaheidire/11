@@ -999,20 +999,22 @@ app.post('/api/ai-extract-product-info', async (req, res) => {
     }
 
     try {
-      const prompt = `You are a product identification expert. Analyze this post from a deals/offers channel and extract the product information.
+      const prompt = `أنت خبير تحديد المنتجات. حلّل منشور من قناة عروض واستخرج معلومات المنتج بدقة.
 
-Rules:
-1. Identify the EXACT product name as it's commercially known (brand + model + variant).
-2. If it's a phone/smartphone, include: Brand + Model + Number + Suffix (Pro/Ultra/Plus/Max/Lite) + RAM/ROM if mentioned.
-3. If it's NOT a phone, give a short attractive product name (3-8 words max).
-4. Write product name in English only.
-5. Determine if the product is a phone/smartphone or not.
-6. Return ONLY JSON, no explanation, no markdown, no code blocks:
-{"productName":"exact product name","isPhone":true/false}
-7. If you cannot identify the product at all, return: {"productName":null,"isPhone":false}
+القواعس:
+1. تعرف على اسم المنتج التجاري الدقيق (العلامة التجارية + الموديل + النسخة).
+2. للهواتف الذكية: البحث عن: Brand Model Number (مثل: iPhone 15 Pro, Samsung Galaxy S24, DJI Osmo Mobile 7, Soundcore by Anker Space Q45).
+3. للأجهزة الأخرى: اسم منتج قصير جذاب (3-8 كلمات كحد أقصى).
+4. اكتب اسم المنتج باللغة الإنجليزية فقط.
+5. حدّد إذا كان المنتج هاتف ذكي أو لا.
+6. ابحث في النص عن: اسم العلامة التجارية (Samsung, iPhone, DJI, Anker, Sony, إلخ)، رقم الموديل أو النسخة (15, S24, 7, Pro, Ultra, Max، إلخ).
+7. تجاهل الكلمات العربية والحروف والرموز - انتقِ الأسماء الإنجليزية فقط.
+8. رد بـ JSON فقط، بلا شرح أو markdown:
+{"productName":"اسم المنتج الدقيق","isPhone":true/false}
+9. إذا لم تتعرف على المنتج: {"productName":null,"isPhone":false}
 
-${apiTitle ? `API Title (may be wrong): ${apiTitle}\n` : ''}
-Post text:
+${apiTitle ? `API Title (قد تكون خاطئة): ${apiTitle}\n` : ''}
+نص المنشور:
 ${text}`;
 
       const rawResult = await runGeminiWithRotation(prompt);
