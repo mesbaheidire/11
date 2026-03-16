@@ -806,6 +806,33 @@ async function extractSellerCouponWithAI(text) {
   });
 }
 
+async function analyzePostWithAI(text) {
+  return new Promise((resolve) => {
+    const postData = JSON.stringify({ text });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-analyze-post',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed.success && parsed.analysis ? parsed.analysis : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(15000, () => { req.destroy(); resolve(null); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function generateHook(title) {
   return callAiRefine(title, true);
 }
@@ -1305,6 +1332,32 @@ async function startSpy(config) {
       }
 
       const aliLinks = extractAliExpressLinks(text);
+      
+      let postAnalysis = null;
+      try {
+        postAnalysis = await analyzePostWithAI(text);
+        if (postAnalysis) {
+          console.log(`📊 تحليل المنشور:`);
+          console.log(`   - رابط: ${postAnalysis.hasLink ? '✅' : '❌'}`);
+          console.log(`   - سعر: ${postAnalysis.hasPrice ? '✅' : '❌'}`);
+          console.log(`   - كوبونات: ${postAnalysis.hasCoupons ? '✅' : '❌'}`);
+          console.log(`   - اسم منتج: ${postAnalysis.hasProductName ? '✅' : '❌'}`);
+          console.log(`   - جودة النص: ${postAnalysis.overallQuality}`);
+          
+          if (postAnalysis.issues && postAnalysis.issues.length > 0) {
+            console.log(`   ⚠️ مشاكل مكتشفة:`);
+            postAnalysis.issues.forEach(issue => console.log(`      - ${issue}`));
+          }
+          
+          if (postAnalysis.recommendations && postAnalysis.recommendations.length > 0) {
+            console.log(`   💡 التوصيات:`);
+            postAnalysis.recommendations.forEach(rec => console.log(`      - ${rec}`));
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ فشل تحليل المنشور: ${e.message}`);
+      }
+      
       if (aliLinks.length === 0) {
         console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة`);
         return;

@@ -60,8 +60,10 @@ npm start
   - Auto-detect AliExpress links from source channel posts
   - Convert links to your own affiliate links automatically
   - Extract price from competitor posts, get product title and image from AliExpress API
+  - **Comprehensive AI post analysis** — Gemini analyzes entire post to detect issues, quality, and provides recommendations
   - **AI-powered product info extraction** — Gemini analyzes post text to extract product name and type (phone vs other)
   - **AI-powered seller coupon extraction** — Automatically detects and extracts seller coupons from competitor posts
+  - **AI failure diagnosis** — Provides detailed error reasons and suggestions for fixing problems
   - AI-powered title refinement via Gemini (improves AliExpress product titles)
   - Publishes with AliExpress API image (not competitor's image) to target channels
   - Bot token and cookie used automatically from main app environment variables

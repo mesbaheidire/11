@@ -1105,6 +1105,69 @@ ${text}
   }
 });
 
+// Comprehensive AI analysis of post text for issues and insights
+app.post('/api/ai-analyze-post', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.json({ success: true, analysis: null });
+    }
+
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, analysis: null, method: 'no_ai' });
+    }
+
+    const prompt = `أنت خبير تحليل منشورات العروض. حلّل المنشور التالي وأعطِ تقرير شامل.
+
+النص:
+${text}
+
+حلّل:
+1. هل يحتوي على رابط AliExpress؟
+2. هل يحتوي على سعر منتج؟
+3. هل يحتوي على كوبونات/أكواد؟
+4. هل هناك اسم منتج واضح؟
+5. هل النص واضح ومفهوم؟
+6. المشاكل المحتملة (إن وجدت)
+7. التوصيات للإصلاح
+
+رد بـ JSON فقط (بدون markdown):
+{
+  "hasLink": true/false,
+  "hasPrice": true/false,
+  "hasCoupons": true/false,
+  "hasProductName": true/false,
+  "isTextClear": true/false,
+  "issues": ["المشكلة 1", "المشكلة 2"],
+  "recommendations": ["التوصية 1", "التوصية 2"],
+  "overallQuality": "عالية/متوسطة/منخفضة",
+  "readiness": true/false
+}`;
+
+    try {
+      const rawResult = await runGeminiWithRotation(prompt);
+      let analysis = null;
+      try {
+        const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
+        const jsonMatch = cleaned.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0]);
+        }
+      } catch {}
+
+      console.log(`🔍 Post analysis: ${JSON.stringify(analysis)}`);
+      res.json({ success: true, analysis, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI post analysis failed:', aiError.message);
+      res.json({ success: true, analysis: null, method: 'fallback' });
+    }
+  } catch (error) {
+    console.error('Post analysis error:', error.message || error);
+    res.json({ success: false, error: error.message || error });
+  }
+});
+
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {
   try {
