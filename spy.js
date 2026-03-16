@@ -1,7 +1,7 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-const { portaffFunction, directAffLink } = require('./afflink');
+const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
 const http = require('http');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
@@ -881,31 +881,28 @@ async function processPost(config, text, sourceImage, sourceName) {
         inFlightLinks.delete(normalizeAliLink(originalLink));
         continue;
       }
-      let affLink, apiTitle, productImage, productPrice, resolvedProductId = null;
+      let affLink, resolvedProductId = null;
 
+      // تحويل الرابط إلى أفليت
+      let result, directResult;
       if (config.useTypedLinks) {
-        const result = await portaffFunction(cookie, originalLink);
+        result = await portaffFunction(cookie, originalLink);
         if (!result || !result.aff) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
           inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
         const linkType = config.linkType || 'coin';
-        affLink = result.aff[linkType] ||
-                  result.aff.coin || result.aff.super || result.aff.point ||
-                  Object.values(result.aff).find(v => v);
+        affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
         if (!affLink) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
           inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
-        console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
         resolvedProductId = result.productId || null;
-        apiTitle = (result.previews && result.previews.title) || '';
-        productImage = (result.previews && result.previews.image_url) || '';
-        productPrice = priceFromPost || (result.previews && result.previews.price) || '';
+        console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
       } else {
-        const directResult = await directAffLink(cookie, originalLink);
+        directResult = await directAffLink(cookie, originalLink);
         if (!directResult || !directResult.affLink) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
           inFlightLinks.delete(normalizeAliLink(originalLink));
@@ -914,9 +911,18 @@ async function processPost(config, text, sourceImage, sourceName) {
         affLink = directResult.affLink;
         resolvedProductId = directResult.productId || null;
         console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
-        apiTitle = (directResult.previews && directResult.previews.title) || '';
-        productImage = (directResult.previews && directResult.previews.image_url) || '';
-        productPrice = priceFromPost || (directResult.previews && directResult.previews.price) || '';
+      }
+
+      // جلب بيانات المنتج بـ 4 طرق متتالية
+      let apiTitle = '', productImage = '', productPrice = priceFromPost || '';
+      if (resolvedProductId) {
+        const preview = await fetchLinkPreview(resolvedProductId);
+        if (preview) {
+          console.log(`✅ بيانات المنتج (الطريقة: ${preview.method})`);
+          apiTitle = preview.title || '';
+          productImage = preview.image_url || '';
+          productPrice = priceFromPost || preview.price || '';
+        }
       }
 
       markLinkProcessed(originalLink);

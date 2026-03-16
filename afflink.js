@@ -497,3 +497,4 @@ async function directAffLink(cookie, originalUrl) {
 
 exports.portaffFunction = portaffFunction;
 exports.directAffLink = directAffLink;
+exports.fetchLinkPreview = fetchLinkPreview;
