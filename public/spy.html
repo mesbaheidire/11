@@ -509,12 +509,21 @@
         function renderChannels(type) {
             const listId = type === 'source' ? 'sourceChannelsList' : 'targetChannelsList';
             const channels = type === 'source' ? config.sourceChannels : config.targetChannels;
-            document.getElementById(listId).innerHTML = channels.map((ch, i) => `
-                <div class="channel-item">
-                    <span>${esc(ch)}</span>
-                    <button class="remove-ch-btn" onclick="removeChannel('${type}', ${i})"><i class="fas fa-trash"></i></button>
-                </div>
-            `).join('');
+            const container = document.getElementById(listId);
+            container.innerHTML = '';
+            channels.forEach((ch, i) => {
+                const item = document.createElement('div');
+                item.className = 'channel-item';
+                const span = document.createElement('span');
+                span.textContent = ch;
+                const btn = document.createElement('button');
+                btn.className = 'remove-ch-btn';
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+                btn.onclick = () => removeChannel(type, i);
+                item.appendChild(span);
+                item.appendChild(btn);
+                container.appendChild(item);
+            });
             const countEl = document.getElementById(type + 'Count');
             if (countEl) countEl.textContent = channels.length;
         }
@@ -566,6 +575,9 @@
             config.publishDelay = document.getElementById('publishDelay').checked;
             config.delayMin = parseInt(document.getElementById('delayMin').value) || 1;
             config.delayMax = parseInt(document.getElementById('delayMax').value) || 5;
+            if (config.delayMin > config.delayMax) {
+                [config.delayMin, config.delayMax] = [config.delayMax, config.delayMin];
+            }
             config.notifyOwner = document.getElementById('notifyOwner').checked;
             config.ownerId = document.getElementById('ownerId').value.trim();
             config.manualReview = document.getElementById('manualReview').checked;

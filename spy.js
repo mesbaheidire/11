@@ -8,10 +8,17 @@ const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
 const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
+const AUTH_STATE_FILE = path.join(__dirname, 'spy_auth_state.json');
 
-const inFlightLinks = new Set();
+const inFlightLinks = new Map(); // change to Map to track timeout
 const processedMessageIds = new Set();
 const MAX_PROCESSED_MESSAGES = 500;
+const MAX_INFLIGHT_LINKS = 1000;
+const INFLIGHT_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
+
+let processedLinksCache = null;
+let processedLinksCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 function isMessageProcessed(chatId, msgId) {
   const key = `${chatId}:${msgId}`;
@@ -28,36 +35,71 @@ function markMessageProcessed(chatId, msgId) {
 }
 
 function loadProcessedLinks() {
+  const now = Date.now();
+  if (processedLinksCache && (now - processedLinksCacheTime) < CACHE_DURATION) {
+    return processedLinksCache;
+  }
+  
   try {
     if (fs.existsSync(PROCESSED_LINKS_FILE)) {
       const data = JSON.parse(fs.readFileSync(PROCESSED_LINKS_FILE, 'utf8'));
-      const now = Date.now();
       const filtered = data.filter(entry => now - entry.time < 7 * 24 * 60 * 60 * 1000);
       if (filtered.length < data.length) {
         saveProcessedLinks(filtered);
       }
+      processedLinksCache = filtered;
+      processedLinksCacheTime = now;
       return filtered;
     }
   } catch (e) {}
+  
+  processedLinksCache = [];
+  processedLinksCacheTime = now;
   return [];
 }
 
 function saveProcessedLinks(links) {
   try {
     fs.writeFileSync(PROCESSED_LINKS_FILE, JSON.stringify(links));
+    processedLinksCache = links;
+    processedLinksCacheTime = Date.now();
   } catch (e) {}
 }
 
 function isLinkProcessed(link) {
   const normalized = normalizeAliLink(link);
-  if (inFlightLinks.has(normalized)) return true;
+  const now = Date.now();
+  
+  if (inFlightLinks.has(normalized)) {
+    const timestamp = inFlightLinks.get(normalized);
+    if (now - timestamp < INFLIGHT_TIMEOUT) {
+      return true;
+    } else {
+      console.log(`⚠️ تطهير رابط معلق متجاوز المهلة: ${normalized}`);
+      inFlightLinks.delete(normalized);
+    }
+  }
+  
   const processed = loadProcessedLinks();
   return processed.some(entry => entry.link === normalized);
 }
 
 function reserveLink(link) {
   const normalized = normalizeAliLink(link);
-  inFlightLinks.add(normalized);
+  inFlightLinks.set(normalized, Date.now());
+  
+  if (inFlightLinks.size > MAX_INFLIGHT_LINKS) {
+    const now = Date.now();
+    for (const [key, timestamp] of inFlightLinks.entries()) {
+      if (now - timestamp > INFLIGHT_TIMEOUT) {
+        inFlightLinks.delete(key);
+      }
+    }
+    if (inFlightLinks.size > MAX_INFLIGHT_LINKS) {
+      const firstKey = inFlightLinks.keys().next().value;
+      inFlightLinks.delete(firstKey);
+    }
+  }
 }
 
 function markLinkProcessed(link) {
@@ -373,6 +415,29 @@ let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
 let reviewBot = null;
 const pendingReviews = new Map();
+
+function loadAuthState() {
+  try {
+    if (fs.existsSync(AUTH_STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(AUTH_STATE_FILE, 'utf8'));
+      authState = data;
+      console.log(`✅ تم استعادة حالة المصادقة: ${authState.step}`);
+      return authState;
+    }
+  } catch (e) {
+    console.log(`⚠️ فشل استعادة حالة المصادقة: ${e.message}`);
+  }
+  authState = { step: 'idle', phoneCodeHash: null };
+  return authState;
+}
+
+function saveAuthState() {
+  try {
+    fs.writeFileSync(AUTH_STATE_FILE, JSON.stringify(authState));
+  } catch (e) {
+    console.log(`⚠️ فشل حفظ حالة المصادقة: ${e.message}`);
+  }
+}
 
 function startReviewBot(botToken) {
   if (reviewBot) return;
@@ -1441,6 +1506,7 @@ async function sendLoginCode(config) {
   );
 
   authState = { step: 'code_sent', phoneCodeHash: result.phoneCodeHash, phoneNumber };
+  saveAuthState();
   return { success: true, message: 'تم إرسال رمز التحقق إلى تيليجرام' };
 }
 
@@ -1472,6 +1538,7 @@ async function verifyCode(config, code, password) {
       } catch (e) {
         if (e.errorMessage === 'SESSION_PASSWORD_NEEDED') {
           authState.step = 'need_password';
+          saveAuthState();
           return { success: false, needPassword: true, message: 'الحساب محمي بكلمة مرور - أدخل كلمة المرور' };
         }
         throw e;
@@ -1481,6 +1548,7 @@ async function verifyCode(config, code, password) {
     const sessionStr = spyClient.session.save();
     fs.writeFileSync(SESSION_FILE, JSON.stringify({ session: sessionStr }));
     authState = { step: 'authenticated' };
+    saveAuthState();
 
     await spyClient.disconnect();
     spyClient = null;
