@@ -85,8 +85,34 @@ The app uses multiple fallback methods to extract product title and image:
 2. **microlink.io API** - External API for reliable metadata extraction
 3. **Web Scraping** - Multiple AliExpress domains with JSON parsing
 
-## Environment Variables (Optional)
+## Environment Variables
+### Required for Render/Production Deployment:
+- `DATABASE_URL` - PostgreSQL connection string (auto-set by Render)
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - Database credentials
+
+### Optional (can be set as environment variables):
 - `TELEGRAM_BOT_TOKEN` - Telegram bot token
 - `TELEGRAM_CHANNEL_ID` - Default channel ID
 - `cook` - AliExpress cookie for affiliate generation
 - `GEMINI_API_KEY` - Single or multiple keys (comma-separated) for AI features
+- `SPY_CONFIG_DATA` - Spy configuration (JSON-encoded, stored in environment for Render)
+- `SPY_SESSION_DATA` - Telegram session (stored in environment for Render)
+
+## Database Schema
+The app uses PostgreSQL with the following key tables:
+- `spy_config` - Spy module configuration
+- `spy_auth_state` - Telegram authentication state
+- `spy_processed_links` - 7-day history of processed links
+- `spy_log` - Activity log for spy operations
+- `telegram_session` - Telegram user session
+- `gemini_keys` - Gemini API keys storage
+- `saved_posts` - User's saved posts
+- `app_storage` - General key-value storage for Render compatibility
+
+## Render Deployment Notes
+The app is **fully compatible with Render** and uses:
+1. **PostgreSQL** - For persistent data (survives restarts)
+2. **JSON fallback** - Local files as backup (for development)
+3. **Environment variables** - For critical data on Render
+
+All data is automatically synced across storage methods for reliability.

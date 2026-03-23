@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
 const http = require('http');
+const db = require('./db');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
@@ -34,39 +35,26 @@ function markMessageProcessed(chatId, msgId) {
   }
 }
 
-function loadProcessedLinks() {
+async function loadProcessedLinks() {
   const now = Date.now();
   if (processedLinksCache && (now - processedLinksCacheTime) < CACHE_DURATION) {
     return processedLinksCache;
   }
   
   try {
-    if (fs.existsSync(PROCESSED_LINKS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(PROCESSED_LINKS_FILE, 'utf8'));
-      const filtered = data.filter(entry => now - entry.time < 7 * 24 * 60 * 60 * 1000);
-      if (filtered.length < data.length) {
-        saveProcessedLinks(filtered);
-      }
-      processedLinksCache = filtered;
-      processedLinksCacheTime = now;
-      return filtered;
-    }
-  } catch (e) {}
-  
-  processedLinksCache = [];
-  processedLinksCacheTime = now;
-  return [];
-}
-
-function saveProcessedLinks(links) {
-  try {
-    fs.writeFileSync(PROCESSED_LINKS_FILE, JSON.stringify(links));
+    const links = await db.getProcessedLinks();
     processedLinksCache = links;
-    processedLinksCacheTime = Date.now();
-  } catch (e) {}
+    processedLinksCacheTime = now;
+    return links;
+  } catch (e) {
+    console.log('⚠️ Error loading processed links:', e.message);
+    processedLinksCache = [];
+    processedLinksCacheTime = now;
+    return [];
+  }
 }
 
-function isLinkProcessed(link) {
+async function isLinkProcessed(link) {
   const normalized = normalizeAliLink(link);
   const now = Date.now();
   
@@ -80,8 +68,12 @@ function isLinkProcessed(link) {
     }
   }
   
-  const processed = loadProcessedLinks();
-  return processed.some(entry => entry.link === normalized);
+  try {
+    return await db.isLinkProcessed(normalized);
+  } catch (e) {
+    console.log('⚠️ Error checking link:', e.message);
+    return false;
+  }
 }
 
 function reserveLink(link) {
@@ -102,12 +94,14 @@ function reserveLink(link) {
   }
 }
 
-function markLinkProcessed(link) {
+async function markLinkProcessed(link) {
   const normalized = normalizeAliLink(link);
   inFlightLinks.delete(normalized);
-  const processed = loadProcessedLinks();
-  processed.push({ link: normalized, time: Date.now() });
-  saveProcessedLinks(processed);
+  try {
+    await db.addProcessedLink(normalized);
+  } catch (e) {
+    console.log('⚠️ Error marking link as processed:', e.message);
+  }
 }
 
 function normalizeAliLink(link) {
@@ -175,14 +169,26 @@ async function sendOwnerNotification(botToken, ownerId, entry) {
   }
 }
 
-function loadConfig() {
+async function loadConfig() {
   try {
-    if (fs.existsSync(SPY_CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(SPY_CONFIG_FILE, 'utf8'));
+    const config = await db.getConfig();
+    if (Object.keys(config).length === 0) {
+      return getDefaultConfig();
     }
+    return config;
   } catch (e) {
     console.log('Error loading spy config:', e.message);
+    // Fallback to file if database fails
+    try {
+      if (fs.existsSync(SPY_CONFIG_FILE)) {
+        return JSON.parse(fs.readFileSync(SPY_CONFIG_FILE, 'utf8'));
+      }
+    } catch {}
+    return getDefaultConfig();
   }
+}
+
+function getDefaultConfig() {
   return {
     enabled: false,
     sourceChannels: [],
@@ -209,36 +215,36 @@ function loadConfig() {
   };
 }
 
-function saveConfig(config) {
+async function saveConfig(config) {
   try {
-    fs.writeFileSync(SPY_CONFIG_FILE, JSON.stringify(config, null, 2));
+    await db.saveConfig(config);
     return true;
   } catch (e) {
     console.log('Error saving spy config:', e.message);
+    // Fallback to file
+    try {
+      fs.writeFileSync(SPY_CONFIG_FILE, JSON.stringify(config, null, 2));
+      return true;
+    } catch {}
     return false;
   }
 }
 
-function loadLog() {
+async function loadLog() {
   try {
-    if (fs.existsSync(SPY_LOG_FILE)) {
-      return JSON.parse(fs.readFileSync(SPY_LOG_FILE, 'utf8'));
-    }
-  } catch (e) {}
-  return [];
+    return await db.getLog(200);
+  } catch (e) {
+    console.log('Error loading spy log:', e.message);
+    return [];
+  }
 }
 
-function saveLog(log) {
+async function addLogEntry(entry) {
   try {
-    const trimmed = log.slice(-200);
-    fs.writeFileSync(SPY_LOG_FILE, JSON.stringify(trimmed, null, 2));
-  } catch (e) {}
-}
-
-function addLogEntry(entry) {
-  const log = loadLog();
-  log.push({ ...entry, timestamp: new Date().toISOString() });
-  saveLog(log);
+    await db.addLogEntry(entry);
+  } catch (e) {
+    console.log('⚠️ Failed to add log entry:', e.message);
+  }
 }
 
 function extractCouponFromPost(text) {
