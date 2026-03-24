@@ -420,16 +420,41 @@ function loadSharedCredentials() {
   return {};
 }
 
-function getBotToken() {
-  const shared = loadSharedCredentials();
-  const config = loadConfig();
-  return shared.botToken || config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
+let cachedConfig = null;
+let cachedConfigTime = 0;
+const SPY_CONFIG_CACHE_DURATION = 60 * 1000;
+
+async function getCachedConfig() {
+  const now = Date.now();
+  if (cachedConfig && (now - cachedConfigTime) < SPY_CONFIG_CACHE_DURATION) {
+    return cachedConfig;
+  }
+  try {
+    cachedConfig = await loadConfig();
+    cachedConfigTime = now;
+    return cachedConfig;
+  } catch (e) {
+    return cachedConfig || {};
+  }
 }
 
-function getCookie() {
+function invalidateConfigCache() {
+  cachedConfig = null;
+  cachedConfigTime = 0;
+}
+
+async function getBotToken() {
   const shared = loadSharedCredentials();
-  const config = loadConfig();
-  const cookie = shared.cook || config.cook || process.env.cook || '';
+  if (shared.botToken) return shared.botToken;
+  const config = await getCachedConfig();
+  return config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
+}
+
+async function getCookie() {
+  const shared = loadSharedCredentials();
+  if (shared.cook) return shared.cook;
+  const config = await getCachedConfig();
+  const cookie = config.cook || process.env.cook || '';
   if (!cookie) {
     console.log('⚠️ الكوكي غير موجود — تأكد من إدخاله في صفحة الإعدادات الرئيسية');
   }
@@ -442,12 +467,22 @@ let authState = { step: 'idle', phoneCodeHash: null };
 let reviewBot = null;
 const pendingReviews = new Map();
 
-function loadAuthState() {
+async function loadAuthState() {
+  try {
+    const dbState = await db.getAuthState();
+    if (dbState && Object.keys(dbState).length > 0) {
+      authState = dbState;
+      console.log(`✅ تم استعادة حالة المصادقة من قاعدة البيانات: ${authState.step}`);
+      return authState;
+    }
+  } catch (e) {
+    console.log(`⚠️ فشل تحميل حالة المصادقة من DB: ${e.message}`);
+  }
   try {
     if (fs.existsSync(AUTH_STATE_FILE)) {
       const data = JSON.parse(fs.readFileSync(AUTH_STATE_FILE, 'utf8'));
       authState = data;
-      console.log(`✅ تم استعادة حالة المصادقة: ${authState.step}`);
+      console.log(`✅ تم استعادة حالة المصادقة من الملف: ${authState.step}`);
       return authState;
     }
   } catch (e) {
@@ -457,11 +492,16 @@ function loadAuthState() {
   return authState;
 }
 
-function saveAuthState() {
+async function saveAuthState() {
+  try {
+    await db.saveAuthState(authState);
+  } catch (e) {
+    console.log(`⚠️ فشل حفظ حالة المصادقة في DB: ${e.message}`);
+  }
   try {
     fs.writeFileSync(AUTH_STATE_FILE, JSON.stringify(authState));
   } catch (e) {
-    console.log(`⚠️ فشل حفظ حالة المصادقة: ${e.message}`);
+    console.log(`⚠️ فشل حفظ حالة المصادقة في الملف: ${e.message}`);
   }
 }
 
@@ -471,7 +511,7 @@ function startReviewBot(botToken) {
     reviewBot = new Telegraf(botToken);
 
     reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
-      const config = loadConfig();
+      const config = await getCachedConfig();
       if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
         await ctx.answerCbQuery('غير مصرح لك');
         return;
@@ -496,7 +536,7 @@ function startReviewBot(botToken) {
     });
 
     reviewBot.action(/^spy_skip_(.+)$/, async (ctx) => {
-      const config = loadConfig();
+      const config = await getCachedConfig();
       if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
         await ctx.answerCbQuery('غير مصرح لك');
         return;
@@ -510,7 +550,7 @@ function startReviewBot(botToken) {
     });
 
     reviewBot.action('spy_approve_all', async (ctx) => {
-      const config = loadConfig();
+      const config = await getCachedConfig();
       if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
         await ctx.answerCbQuery('غير مصرح لك');
         return;
@@ -535,7 +575,7 @@ function startReviewBot(botToken) {
     });
 
     reviewBot.action('spy_skip_all', async (ctx) => {
-      const config = loadConfig();
+      const config = await getCachedConfig();
       if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
         await ctx.answerCbQuery('غير مصرح لك');
         return;
@@ -575,7 +615,7 @@ function stopReviewBot() {
 
 async function executePublish(review) {
   const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
-  const botToken = getBotToken();
+  const botToken = await getBotToken();
   if (!botToken) {
     console.log('❌ فشل النشر: لا يوجد توكن بوت');
     return;
@@ -583,7 +623,7 @@ async function executePublish(review) {
 
   const logImage = imageUrlForLog || (typeof productImage === 'string' ? productImage : null);
 
-  const config = loadConfig();
+  const config = await getCachedConfig();
   if (isDailyLimitReached(config)) {
     console.log(`🚫 تم بلوغ الحد اليومي عند النشر (${config.dailyLimit}) — إلغاء`);
     addLogEntry({
@@ -958,7 +998,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   console.log(`🕵️ رصد منشور من ${sourceName} يحتوي على ${aliLinks.length} رابط`);
 
   for (const originalLink of aliLinks) {
-    if (isLinkProcessed(originalLink)) {
+    if (await isLinkProcessed(originalLink)) {
       console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
       continue;
     }
@@ -966,7 +1006,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     reserveLink(originalLink);
 
     try {
-      const cookie = getCookie();
+      const cookie = await getCookie();
       if (!cookie) {
         addLogEntry({ source: sourceName, originalLink, status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
         inFlightLinks.delete(normalizeAliLink(originalLink));
@@ -1020,13 +1060,16 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       if (resolvedProductId) {
         const productKey = 'product:' + resolvedProductId;
-        const processed = loadProcessedLinks();
-        if (processed.some(entry => entry.link === productKey)) {
-          console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
-          continue;
+        try {
+          const isDuplicate = await db.isLinkProcessed(productKey);
+          if (isDuplicate) {
+            console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
+            continue;
+          }
+          await db.addProcessedLink(productKey);
+        } catch (e) {
+          console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
         }
-        processed.push({ link: productKey, time: Date.now() });
-        saveProcessedLinks(processed);
       }
 
       if (!productImage && sourceImage) {
@@ -1168,7 +1211,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
 
-      const botToken = getBotToken();
+      const botToken = await getBotToken();
 
       if (isDailyLimitReached(config)) {
         console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
@@ -1260,7 +1303,7 @@ async function startSpy(config) {
     throw new Error('يجب إضافة قناة مصدر واحدة على الأقل');
   }
 
-  const botToken = getBotToken();
+  const botToken = await getBotToken();
   if (!botToken && (config.autoPublish || config.manualReview)) {
     throw new Error('توكن البوت غير موجود - أضفه في إعدادات التطبيق الرئيسية');
   }
@@ -1270,11 +1313,25 @@ async function startSpy(config) {
 
   let sessionStr = '';
   try {
-    if (fs.existsSync(SESSION_FILE)) {
-      const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
-      sessionStr = sessionData.session || '';
+    sessionStr = await db.getTelegramSession('spy');
+    if (sessionStr) {
+      console.log('✅ تم تحميل جلسة تيليجرام من قاعدة البيانات');
     }
-  } catch (e) {}
+  } catch (e) {
+    console.log('⚠️ فشل تحميل الجلسة من DB:', e.message);
+  }
+  if (!sessionStr) {
+    try {
+      if (fs.existsSync(SESSION_FILE)) {
+        const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+        sessionStr = sessionData.session || '';
+        if (sessionStr) {
+          console.log('✅ تم تحميل جلسة تيليجرام من الملف — مزامنة إلى DB...');
+          await db.saveTelegramSession(sessionStr, 'spy').catch(e => console.log('⚠️ فشل مزامنة الجلسة:', e.message));
+        }
+      }
+    } catch (e) {}
+  }
 
   if (!sessionStr) {
     throw new Error('SESSION_REQUIRED');
@@ -1340,7 +1397,7 @@ async function startSpy(config) {
   }
 
   let botId = null;
-  const spyBotToken = getBotToken();
+  const spyBotToken = await getBotToken();
   if (spyBotToken) {
     const tokenMatch = spyBotToken.match(/^(\d+):/);
     if (tokenMatch) botId = tokenMatch[1];
@@ -1484,7 +1541,8 @@ async function startSpy(config) {
 
   spyRunning = true;
   config.enabled = true;
-  saveConfig(config);
+  invalidateConfigCache();
+  await saveConfig(config);
 
   if (config.manualReview && botToken) {
     startReviewBot(botToken);
@@ -1500,9 +1558,14 @@ async function stopSpy() {
     spyClient = null;
   }
   spyRunning = false;
-  const config = loadConfig();
-  config.enabled = false;
-  saveConfig(config);
+  try {
+    const config = await getCachedConfig();
+    config.enabled = false;
+    invalidateConfigCache();
+    await saveConfig(config);
+  } catch (e) {
+    console.log('⚠️ فشل حفظ حالة الإيقاف:', e.message);
+  }
   console.log('🛑 تم إيقاف نظام التجسس');
 }
 
@@ -1532,7 +1595,7 @@ async function sendLoginCode(config) {
   );
 
   authState = { step: 'code_sent', phoneCodeHash: result.phoneCodeHash, phoneNumber };
-  saveAuthState();
+  await saveAuthState();
   return { success: true, message: 'تم إرسال رمز التحقق إلى تيليجرام' };
 }
 
@@ -1564,7 +1627,7 @@ async function verifyCode(config, code, password) {
       } catch (e) {
         if (e.errorMessage === 'SESSION_PASSWORD_NEEDED') {
           authState.step = 'need_password';
-          saveAuthState();
+          await saveAuthState();
           return { success: false, needPassword: true, message: 'الحساب محمي بكلمة مرور - أدخل كلمة المرور' };
         }
         throw e;
@@ -1572,9 +1635,13 @@ async function verifyCode(config, code, password) {
     }
 
     const sessionStr = spyClient.session.save();
-    fs.writeFileSync(SESSION_FILE, JSON.stringify({ session: sessionStr }));
+    await db.saveTelegramSession(sessionStr, 'spy');
+    console.log('✅ تم حفظ جلسة تيليجرام في قاعدة البيانات');
+    try {
+      fs.writeFileSync(SESSION_FILE, JSON.stringify({ session: sessionStr }));
+    } catch (e) {}
     authState = { step: 'authenticated' };
-    saveAuthState();
+    await saveAuthState();
 
     await spyClient.disconnect();
     spyClient = null;
@@ -1585,19 +1652,28 @@ async function verifyCode(config, code, password) {
   }
 }
 
-function getStatus() {
-  const config = loadConfig();
+async function getStatus() {
+  const config = await getCachedConfig();
   const safeConfig = { ...config };
   safeConfig.apiHash = safeConfig.apiHash ? '****' : '';
   safeConfig.phoneNumber = safeConfig.phoneNumber ? safeConfig.phoneNumber.substring(0, 4) + '****' : '';
   safeConfig.cook = safeConfig.cook ? true : false;
   safeConfig.botToken = safeConfig.botToken ? true : false;
 
-  const hasSession = fs.existsSync(SESSION_FILE);
+  let hasSession = false;
+  try {
+    const dbSession = await db.getTelegramSession('spy');
+    hasSession = !!dbSession;
+  } catch (e) {}
+  if (!hasSession) {
+    hasSession = fs.existsSync(SESSION_FILE);
+  }
+
+  const log = await loadLog();
   return {
     running: spyRunning,
     config: safeConfig,
-    log: loadLog(),
+    log,
     hasSession,
     authStep: authState.step
   };
@@ -1606,6 +1682,7 @@ function getStatus() {
 module.exports = {
   loadConfig,
   saveConfig,
+  invalidateConfigCache,
   startSpy,
   stopSpy,
   getStatus,

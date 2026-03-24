@@ -77,7 +77,9 @@ npm start
   - Activity log with full history
   - Auto-restart on server reboot
   - Authentication flow: API ID/Hash from my.telegram.org + phone verification
-  - Session stored in `spy_session.json` (gitignored), config in `spy_config.json` (gitignored)
+  - Session stored in PostgreSQL `telegram_session` table (with file fallback), config in `spy_config` table (with file fallback)
+  - All async functions properly awaited (getBotToken, getCookie, loadConfig, saveConfig, loadAuthState, saveAuthState)
+  - Config caching with `getCachedConfig()` for performance in synchronous contexts
 
 ## Product Metadata Extraction
 The app uses multiple fallback methods to extract product title and image:

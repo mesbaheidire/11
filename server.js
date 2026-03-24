@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -1589,9 +1589,9 @@ app.delete('/api/saved-posts', (req, res) => {
 
 // ========== Spy API ==========
 
-app.get('/api/spy/status', (req, res) => {
+app.get('/api/spy/status', async (req, res) => {
   try {
-    const status = getSpyStatus();
+    const status = await getSpyStatus();
     res.json({ success: true, ...status });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1638,6 +1638,9 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     await saveSpyConfig(config);
+    invalidateSpyCache();
+    spyConfigCache = config;
+    spyConfigCacheTime = Date.now();
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1667,6 +1670,9 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     await saveSpyConfig(config);
+    invalidateSpyCache();
+    spyConfigCache = config;
+    spyConfigCacheTime = Date.now();
     await startSpy(config);
     res.json({ success: true, message: 'تم تشغيل نظام التجسس' });
   } catch (error) {
@@ -1677,6 +1683,9 @@ app.post('/api/spy/start', async (req, res) => {
 app.post('/api/spy/stop', async (req, res) => {
   try {
     await stopSpy();
+    invalidateSpyCache();
+    spyConfigCache = null;
+    spyConfigCacheTime = 0;
     res.json({ success: true, message: 'تم إيقاف نظام التجسس' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
