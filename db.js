@@ -47,16 +47,20 @@ async function getConfig() {
 
 async function saveConfig(config) {
   try {
+    let savedCount = 0;
     for (const [key, value] of Object.entries(config)) {
       const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
-      await query(
+      const result = await query(
         'INSERT INTO spy_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()',
         [key, valueStr]
       );
+      savedCount++;
     }
+    console.log(`✅ Saved ${savedCount} config entries to database`);
     return true;
   } catch (e) {
-    console.log('⚠️ Failed to save config to database:', e.message);
+    console.log('❌ Failed to save config to database:', e.message);
+    console.log('Error details:', e);
     return false;
   }
 }

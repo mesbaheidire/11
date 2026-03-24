@@ -568,6 +568,8 @@
         }
 
         function collectConfig() {
+            config.sourceChannels = config.sourceChannels || [];
+            config.targetChannels = config.targetChannels || [];
             config.apiId = document.getElementById('apiId').value.trim();
             config.apiHash = document.getElementById('apiHash').value.trim();
             config.phoneNumber = document.getElementById('phoneNumber').value.trim();

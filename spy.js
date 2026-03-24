@@ -171,21 +171,31 @@ async function sendOwnerNotification(botToken, ownerId, entry) {
 
 async function loadConfig() {
   try {
+    // Try to load from database first
     const config = await db.getConfig();
-    if (Object.keys(config).length === 0) {
-      return getDefaultConfig();
+    if (Object.keys(config).length > 0) {
+      console.log('✅ Loaded spy config from database');
+      return config;
     }
-    return config;
   } catch (e) {
-    console.log('Error loading spy config:', e.message);
-    // Fallback to file if database fails
-    try {
-      if (fs.existsSync(SPY_CONFIG_FILE)) {
-        return JSON.parse(fs.readFileSync(SPY_CONFIG_FILE, 'utf8'));
-      }
-    } catch {}
-    return getDefaultConfig();
+    console.log('⚠️ Error loading spy config from database:', e.message);
   }
+  
+  // Fallback to file
+  try {
+    if (fs.existsSync(SPY_CONFIG_FILE)) {
+      const config = JSON.parse(fs.readFileSync(SPY_CONFIG_FILE, 'utf8'));
+      console.log('✅ Loaded spy config from file, syncing to database...');
+      // Sync to database
+      await db.saveConfig(config).catch(err => console.log('⚠️ Failed to sync config to DB:', err.message));
+      return config;
+    }
+  } catch (e) {
+    console.log('⚠️ Error loading spy config from file:', e.message);
+  }
+  
+  console.log('📝 Using default spy config');
+  return getDefaultConfig();
 }
 
 function getDefaultConfig() {
@@ -216,18 +226,28 @@ function getDefaultConfig() {
 }
 
 async function saveConfig(config) {
+  let savedToDb = false;
+  let savedToFile = false;
+  
+  // Save to database
   try {
     await db.saveConfig(config);
-    return true;
+    console.log('✅ Saved spy config to database');
+    savedToDb = true;
   } catch (e) {
-    console.log('Error saving spy config:', e.message);
-    // Fallback to file
-    try {
-      fs.writeFileSync(SPY_CONFIG_FILE, JSON.stringify(config, null, 2));
-      return true;
-    } catch {}
-    return false;
+    console.log('⚠️ Error saving spy config to database:', e.message);
   }
+  
+  // Save to file as backup
+  try {
+    fs.writeFileSync(SPY_CONFIG_FILE, JSON.stringify(config, null, 2));
+    console.log('✅ Saved spy config to file');
+    savedToFile = true;
+  } catch (e) {
+    console.log('⚠️ Error saving spy config to file:', e.message);
+  }
+  
+  return savedToDb || savedToFile;
 }
 
 async function loadLog() {
