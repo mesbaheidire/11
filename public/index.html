@@ -369,21 +369,6 @@
                     <input type="text" id="settingChannelId2">
                 </div>
                 
-                <div class="form-group">
-                    <label>🍪 AliExpress Cookie:</label>
-                    <input type="password" id="settingCook">
-                </div>
-                
-                <div class="form-group">
-                    <label>🔑 App Key:</label>
-                    <input type="password" id="settingAppKey">
-                </div>
-                
-                <div class="form-group">
-                    <label>🔒 App Secret:</label>
-                    <input type="password" id="settingAppSecret">
-                </div>
-                
                 <hr>
                 <h3 style="color: #9C27B0; margin-bottom: 15px; font-size: 16px;">🤖 مفاتيح Gemini AI</h3>
                 
@@ -441,10 +426,7 @@
             warning: 'غيّر البلد إلى كندا 🇨🇦',
             telegramToken: '',
             channelId: '',
-            channelId2: '@AliOffers_Dz',
-            cook: '',
-            appKey: '',
-            appSecret: '',
+            channelId2: '@AliOffers_Dz'
         };
 
         let settings = JSON.parse(localStorage.getItem('appSettings')) || { ...defaultSettings };
@@ -463,9 +445,6 @@
             document.getElementById('settingBotToken').value = settings.telegramToken || '';
             document.getElementById('settingChannelId').value = settings.channelId || '';
             document.getElementById('settingChannelId2').value = settings.channelId2 || '';
-            document.getElementById('settingCook').value = settings.cook || '';
-            document.getElementById('settingAppKey').value = settings.appKey || '';
-            document.getElementById('settingAppSecret').value = settings.appSecret || '';
             document.getElementById('settingGeminiKeys').value = '';
             checkGeminiStatus();
             document.getElementById('settingsModal').classList.add('show');
@@ -527,17 +506,12 @@
             settings.telegramToken = document.getElementById('settingBotToken').value;
             settings.channelId = document.getElementById('settingChannelId').value;
             settings.channelId2 = document.getElementById('settingChannelId2').value;
-            settings.cook = document.getElementById('settingCook').value;
-            settings.appKey = document.getElementById('settingAppKey').value;
-            settings.appSecret = document.getElementById('settingAppSecret').value;
             
             localStorage.setItem('appSettings', JSON.stringify(settings));
             document.getElementById('warningText').textContent = settings.warning;
 
-            if (settings.cook || settings.telegramToken) {
-                const syncData = {};
-                if (settings.cook) syncData.cook = settings.cook;
-                if (settings.telegramToken) syncData.botToken = settings.telegramToken;
+            if (settings.telegramToken) {
+                const syncData = { botToken: settings.telegramToken };
                 fetch('/api/spy/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -622,7 +596,7 @@
                 const response = await fetch('/api/affiliate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url, credentials: { cook: settings.cook, appKey: settings.appKey, appSecret: settings.appSecret } })
+                    body: JSON.stringify({ url, credentials: {} })
                 });
                 const data = await response.json();
                 if (data.success) {
