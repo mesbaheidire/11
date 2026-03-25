@@ -35,29 +35,75 @@ async function loadSpyConfigCached() {
   return spyConfigCache;
 }
 
-function loadSharedCredentials() {
+async function loadSharedCredentials() {
+  let credentials = {};
+  
+  // Try database first
+  try {
+    const botTokenDb = await db.getAppStorage('TELEGRAM_BOT_TOKEN');
+    const cookieDb = await db.getAppStorage('ALIEXPRESS_COOKIE');
+    if (botTokenDb) credentials.botToken = botTokenDb;
+    if (cookieDb) credentials.cook = cookieDb;
+    if (Object.keys(credentials).length > 0) {
+      console.log('✅ تم تحميل بيانات حساسة من قاعدة البيانات');
+      return credentials;
+    }
+  } catch (e) {
+    console.log('⚠️ فشل تحميل البيانات من DB:', e.message);
+  }
+  
+  // Try environment variables
+  if (process.env.TELEGRAM_BOT_TOKEN) credentials.botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (process.env.cook) credentials.cook = process.env.cook;
+  if (Object.keys(credentials).length > 0) {
+    console.log('✅ تم تحميل بيانات حساسة من متغيرات البيئة');
+    return credentials;
+  }
+  
+  // Try local file as last resort
   try {
     if (fs.existsSync(SHARED_CREDS_FILE)) {
-      return JSON.parse(fs.readFileSync(SHARED_CREDS_FILE, 'utf8'));
+      credentials = JSON.parse(fs.readFileSync(SHARED_CREDS_FILE, 'utf8'));
+      console.log('✅ تم تحميل بيانات حساسة من الملف المحلي');
+      return credentials;
     }
   } catch (e) {}
+  
+  console.log('⚠️ لم يتم العثور على بيانات حساسة - يجب إدخالها في الإعدادات');
   return {};
 }
 
-function saveSharedCredentials(creds) {
-  fs.writeFileSync(SHARED_CREDS_FILE, JSON.stringify(creds, null, 2));
+async function saveSharedCredentials(creds) {
+  // Save to database
+  try {
+    if (creds.botToken) await db.setAppStorage('TELEGRAM_BOT_TOKEN', creds.botToken);
+    if (creds.cook) await db.setAppStorage('ALIEXPRESS_COOKIE', creds.cook);
+    console.log('✅ تم حفظ البيانات الحساسة في قاعدة البيانات');
+  } catch (e) {
+    console.log('⚠️ فشل حفظ البيانات في DB:', e.message);
+  }
+  
+  // Also save to file as backup
+  try {
+    fs.writeFileSync(SHARED_CREDS_FILE, JSON.stringify(creds, null, 2));
+    console.log('✅ تم حفظ نسخة احتياطية في الملف');
+  } catch (e) {
+    console.log('⚠️ فشل حفظ الملف:', e.message);
+  }
 }
 
-function getSharedCookie() {
-  const shared = loadSharedCredentials();
+async function getSharedCookie() {
+  const shared = await loadSharedCredentials();
+  if (shared.cook) return shared.cook;
   const spyCfg = spyConfigCache || {};
-  return shared.cook || spyCfg.cook || process.env.cook || '';
+  return spyCfg.cook || process.env.cook || '';
 }
 
-function getSharedBotToken() {
-  const shared = loadSharedCredentials();
+async function getSharedBotToken() {
+  const shared = await loadSharedCredentials();
+  if (shared.botToken) return shared.botToken;
   const spyCfg = spyConfigCache || {};
-  return shared.botToken || spyCfg.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
+  return spyCfg.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
 }
 
 const app = express();
@@ -522,11 +568,11 @@ app.post('/api/frame-image', async (req, res) => {
 app.post('/api/affiliate', async (req, res) => {
   try {
     const { url, credentials } = req.body;
-    const cookies = credentials?.cook || getSharedCookie();
+    const cookies = credentials?.cook || await getSharedCookie();
     if (credentials?.cook) {
-      const shared = loadSharedCredentials();
+      const shared = await loadSharedCredentials();
       shared.cook = credentials.cook;
-      saveSharedCredentials(shared);
+      await saveSharedCredentials(shared);
     }
     if (!url) return res.status(400).json({ success: false, error: 'الرجاء إرسال رابط المنتج' });
     if (!cookies) return res.status(500).json({ success: false, error: 'الرجاء إدخال Cookie في الإعدادات' });
@@ -564,12 +610,12 @@ app.post('/api/publish-telegram', async (req, res) => {
   try {
     const { title, price, link, coupon, image, settings, credentials } = req.body;
     if (credentials?.telegramToken) {
-      const shared = loadSharedCredentials();
+      const shared = await loadSharedCredentials();
       shared.botToken = credentials.telegramToken;
       if (credentials.cook) shared.cook = credentials.cook;
-      saveSharedCredentials(shared);
+      await saveSharedCredentials(shared);
     }
-    const botToken = credentials?.telegramToken || getSharedBotToken();
+    const botToken = credentials?.telegramToken || await getSharedBotToken();
     let channelId1 = credentials?.channelId || process.env.TELEGRAM_CHANNEL_ID;
     let channelId2 = credentials?.channelId2 || '@AliOffers_Dz';
     const channelChoice = credentials?.channelChoice || '1';
@@ -1612,10 +1658,10 @@ app.post('/api/spy/config', async (req, res) => {
     const stored = await loadSpyConfig();
     const incoming = req.body || {};
     if (incoming.cook || incoming.botToken) {
-      const shared = loadSharedCredentials();
+      const shared = await loadSharedCredentials();
       if (incoming.cook && incoming.cook !== '****') shared.cook = incoming.cook;
       if (incoming.botToken && incoming.botToken !== '****') shared.botToken = incoming.botToken;
-      saveSharedCredentials(shared);
+      await saveSharedCredentials(shared);
     }
     const config = { ...stored };
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;

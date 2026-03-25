@@ -280,6 +280,30 @@ async function getSavedPosts(limit = 100) {
   }
 }
 
+async function setAppStorage(key, value) {
+  try {
+    await query(
+      'INSERT INTO app_storage (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()',
+      [key, value]
+    );
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to set app storage:', e.message);
+    return false;
+  }
+}
+
+async function getAppStorage(key) {
+  try {
+    const result = await query('SELECT value FROM app_storage WHERE key = $1', [key]);
+    if (result.rows.length === 0) return null;
+    return result.rows[0].value;
+  } catch (e) {
+    console.log('⚠️ Failed to get app storage:', e.message);
+    return null;
+  }
+}
+
 module.exports = {
   query,
   getConfig,
@@ -297,4 +321,6 @@ module.exports = {
   getGeminiKeys,
   addSavedPost,
   getSavedPosts,
+  setAppStorage,
+  getAppStorage,
 };
