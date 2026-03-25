@@ -1594,8 +1594,13 @@ async function sendLoginCode(config) {
     phoneNumber
   );
 
+  if (!result.phoneCodeHash) {
+    throw new Error('فشل إرسال الرمز - لم يتم استلام رمز من تيليجرام');
+  }
+  
   authState = { step: 'code_sent', phoneCodeHash: result.phoneCodeHash, phoneNumber };
   await saveAuthState();
+  console.log('✅ تم حفظ حالة الرمز المرسل، في انتظار التحقق');
   return { success: true, message: 'تم إرسال رمز التحقق إلى تيليجرام' };
 }
 
@@ -1635,11 +1640,24 @@ async function verifyCode(config, code, password) {
     }
 
     const sessionStr = spyClient.session.save();
-    await db.saveTelegramSession(sessionStr, 'spy');
-    console.log('✅ تم حفظ جلسة تيليجرام في قاعدة البيانات');
+    if (!sessionStr || typeof sessionStr !== 'string' || sessionStr.trim() === '') {
+      throw new Error('فشل استخراج جلسة التيليجرام - الرجاء المحاولة مرة أخرى');
+    }
+    
+    const saveDbResult = await db.saveTelegramSession(sessionStr, 'spy');
+    if (!saveDbResult) {
+      console.log('⚠️ تحذير: فشل حفظ الجلسة في قاعدة البيانات، محاولة الملف كبديل');
+    } else {
+      console.log('✅ تم حفظ جلسة تيليجرام في قاعدة البيانات');
+    }
+    
     try {
       fs.writeFileSync(SESSION_FILE, JSON.stringify({ session: sessionStr }));
-    } catch (e) {}
+      console.log('✅ تم حفظ جلسة تيليجرام في الملف');
+    } catch (e) {
+      console.log('⚠️ فشل حفظ الملف:', e.message);
+    }
+    
     authState = { step: 'authenticated' };
     await saveAuthState();
 
