@@ -1726,6 +1726,16 @@ app.post('/api/spy/start', async (req, res) => {
   }
 });
 
+app.post('/api/spy/logout', async (req, res) => {
+  try {
+    const { logoutSpy } = require('./spy');
+    await logoutSpy();
+    res.json({ success: true, message: 'تم تسجيل الخروج بنجاح' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/spy/stop', async (req, res) => {
   try {
     await stopSpy();

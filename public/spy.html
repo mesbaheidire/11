@@ -204,6 +204,9 @@
                             <div style="text-align: center; padding: 8px;">
                                 <i class="fas fa-check-circle" style="font-size: 30px; color: #4CAF50; margin-bottom: 6px; display: block;"></i>
                                 <p style="font-weight: 700; color: #4CAF50; font-size: 14px;">تم تسجيل الدخول بنجاح!</p>
+                                <button class="auth-btn" onclick="logoutTelegram()" id="logoutBtn" style="margin-top: 12px; background: linear-gradient(135deg, #f44336, #d32f2f);">
+                                    <i class="fas fa-sign-out-alt"></i> تسجيل الخروج
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -819,6 +822,32 @@
                 showToast('خطأ', 'error');
             }
             btn.disabled = false;
+        }
+
+        async function logoutTelegram() {
+            const btn = document.getElementById('logoutBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جارٍ التسجيل خارج...';
+            try {
+                const r = await fetch('/api/spy/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const d = await r.json();
+                if (d.success) {
+                    document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+                    document.getElementById('auth-step-send').classList.add('active');
+                    document.getElementById('verifyCode').value = '';
+                    document.getElementById('twoStepPassword').value = '';
+                    showToast('تم تسجيل الخروج', 'success');
+                } else {
+                    showToast(d.error || 'فشل تسجيل الخروج', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> تسجيل الخروج';
         }
 
         async function refreshLog() {

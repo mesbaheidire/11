@@ -1697,6 +1697,33 @@ async function getStatus() {
   };
 }
 
+async function logoutSpy() {
+  try {
+    await db.saveTelegramSession('', 'spy');
+    console.log('✅ تم حذف جلسة تيليجرام من قاعدة البيانات');
+  } catch (e) {
+    console.log('⚠️ فشل حذف الجلسة من DB:', e.message);
+  }
+  
+  try {
+    if (fs.existsSync(SESSION_FILE)) {
+      fs.unlinkSync(SESSION_FILE);
+      console.log('✅ تم حذف ملف الجلسة المحلي');
+    }
+  } catch (e) {
+    console.log('⚠️ فشل حذف ملف الجلسة:', e.message);
+  }
+  
+  authState = { step: 'idle', phoneCodeHash: null };
+  try {
+    await saveAuthState();
+  } catch (e) {
+    console.log('⚠️ فشل حفظ حالة تسجيل الخروج:', e.message);
+  }
+  
+  console.log('🚪 تم تسجيل الخروج من حساب تيليجرام');
+}
+
 module.exports = {
   loadConfig,
   saveConfig,
@@ -1709,5 +1736,6 @@ module.exports = {
   extractAliExpressLinks,
   extractPrice,
   sendLoginCode,
-  verifyCode
+  verifyCode,
+  logoutSpy
 };
