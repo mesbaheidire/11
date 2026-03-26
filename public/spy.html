@@ -695,7 +695,10 @@
                     body: JSON.stringify(config)
                 });
                 const d = await r.json();
-                if (d.success) showToast('تم حفظ الإعدادات', 'success');
+                if (d.success) {
+                    showToast('تم حفظ الإعدادات', 'success');
+                    await loadConfig();
+                }
                 else showToast('فشل الحفظ', 'error');
             } catch (e) {
                 showToast('خطأ في الحفظ', 'error');
