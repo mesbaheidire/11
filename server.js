@@ -1939,19 +1939,70 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
     const { productName, imageUrl, style, lang } = req.body;
     if (!productName && !imageUrl) return res.status(400).json({ success: false, error: 'Product name or image required' });
 
+    const styleNames = {
+      apple: 'Apple-style clean minimalist advert',
+      cinematic: 'cinematic epic advert with dramatic slow-motion',
+      energetic: 'fast-paced energetic TikTok/Reels style advert',
+      luxury: 'luxury premium advert with gold and black palette'
+    };
+    const styleLbl = styleNames[style] || styleNames.apple;
+
     const apiKey = getCurrentGeminiKey();
     if (!apiKey) {
-      const fallback = `create me a prompt i can use for google veo3 to show a ${productName || 'product'} off in an apple style advert. it needs to start off showing the product from a dramatic angle with particles and light rays flying through the air in one flowing motion, then the camera slowly orbits around the product revealing its details and premium build quality. the lighting should be clean and minimal with a white background. the video should feel premium and elegant, 10-15 seconds vertical format.`;
+      const pName = productName || 'Product';
+      const fallback = JSON.stringify({
+        title: `${pName} Transformation Advert`,
+        style: `Cinematic, ${styleLbl}`,
+        duration: "10-15 seconds",
+        aspect_ratio: "9:16",
+        sequence: [
+          {
+            stage: "Opening — Ingredient Ballet",
+            description: `A black void space is suddenly illuminated. Elements related to ${pName} float and swirl through the air in elegant slow-motion, catching dramatic rim lighting.`,
+            camera: { movement: "slow-motion tracking from left to right", framing: "macro to medium-wide, transitioning smoothly" },
+            lighting: "high-contrast studio lighting with rim light, dark background",
+            duration: "3 seconds"
+          },
+          {
+            stage: "Transformation — Product Reveal",
+            description: `The floating elements converge and morph into the ${pName}, materializing from particles of light. The product rotates slowly revealing its premium build.`,
+            camera: { movement: "slow orbit around product, 180 degrees", framing: "medium shot, centered" },
+            lighting: "soft volumetric lighting from above, subtle reflections",
+            duration: "4 seconds"
+          },
+          {
+            stage: "Detail Showcase",
+            description: `Extreme close-up of the product's key features and textures. Light plays across the surface highlighting premium materials.`,
+            camera: { movement: "smooth dolly push-in to extreme close-up", framing: "macro detail shots" },
+            lighting: "warm accent lighting with bokeh background",
+            duration: "3 seconds"
+          },
+          {
+            stage: "Closing — Call to Action",
+            description: `The product settles into its final hero pose against a clean gradient. A subtle glow emanates from behind.`,
+            camera: { movement: "slow pull-out to reveal full product", framing: "centered hero shot" },
+            lighting: "clean white backlight with soft shadows",
+            duration: "3 seconds"
+          }
+        ],
+        color_palette: ["#000000", "#FFFFFF", "#C0C0C0"],
+        mood: "Premium, aspirational, sleek and modern",
+        music_style: "Minimal electronic with deep bass, building to a crescendo",
+        text_overlays: [
+          { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
+          { time: "12s", text: "Available Now", style: "smaller, beneath title" }
+        ]
+      }, null, 2);
       return res.json({ success: true, prompt: fallback });
     }
 
-    const styleNames = {
+    const styleDescs = {
       apple: 'Apple-style clean minimalist advert with white backgrounds, elegant smooth camera movements, floating product shots, and premium feel',
       cinematic: 'cinematic epic advert with dramatic slow-motion, deep depth of field, volumetric lighting, dark moody atmosphere with spotlight on the product',
       energetic: 'fast-paced energetic TikTok/Reels style advert with quick cuts, dynamic movements, vibrant colors, particles and motion graphics',
       luxury: 'luxury premium advert with gold and black palette, reflective surfaces, macro detail shots, silk textures, slow rotating showcase'
     };
-    const styleDesc = styleNames[style] || styleNames.apple;
+    const styleDesc = styleDescs[style] || styleDescs.apple;
 
     const parts = [];
 
@@ -1973,39 +2024,63 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
 
     const hasImage = parts.length > 0;
 
+    const jsonStructure = `{
+  "title": "[Product Name] [Style] Advert",
+  "style": "[Cinematic/Minimalist/Energetic/Luxury], [style description]",
+  "duration": "10-15 seconds",
+  "aspect_ratio": "9:16",
+  "sequence": [
+    {
+      "stage": "Opening — [Stage Name]",
+      "description": "[Detailed visual description of what happens in this stage]",
+      "camera": {
+        "movement": "[e.g. slow-motion tracking from left to right]",
+        "framing": "[e.g. macro to medium-wide, transitioning smoothly]"
+      },
+      "lighting": "[e.g. high-contrast studio lighting with rim light]",
+      "duration": "[e.g. 3 seconds]"
+    }
+  ],
+  "color_palette": ["[color1]", "[color2]", "[color3]"],
+  "mood": "[overall mood description]",
+  "music_style": "[music description]",
+  "text_overlays": [
+    {"time": "[e.g. 8s]", "text": "[overlay text]", "style": "[text style]"}
+  ]
+}`;
+
     const textPrompt = hasImage
-      ? `Look at this product image carefully. Identify exactly what the product is (its type, brand if visible, color, shape, key features).
+      ? `Look at this product image carefully. Identify exactly what the product is (its type, brand if visible, color, shape, key features you can see).
 
-Then write a single detailed prompt paragraph that I can paste directly into Google Veo 3 to generate a video advertisement for this exact product.
-
-The ad style should be: ${styleDesc}
-
-The prompt must:
-- Start with "create me a prompt i can use for google veo3 to show a [exact product name you identified] off in..."
-- Be written as one flowing paragraph, like a human would type it naturally (NOT JSON, NOT bullet points)
-- Describe the exact visual flow: opening dramatic shot → product reveal → feature showcase → ending
-- Include specific details about what elements should fly/move through the air based on what the product actually is
-- Mention camera movements naturally (orbit, dolly, push-in, slow-motion)
-- Describe the lighting and atmosphere
-- Be 10-15 seconds, vertical format (9:16)
-- Be detailed enough that Veo 3 can generate a stunning video from it
-
-Write ONLY the prompt text. No explanations, no JSON, no formatting. Just the raw prompt paragraph ready to paste.`
-      : `Write a single detailed prompt paragraph that I can paste directly into Google Veo 3 to generate a video advertisement for this product: "${productName}"
+Generate a detailed Google Veo 3 video advertisement prompt as a JSON object for this exact product.
 
 The ad style should be: ${styleDesc}
 
-The prompt must:
-- Start with "create me a prompt i can use for google veo3 to show a ${productName} off in..."
-- Be written as one flowing paragraph, like a human would type it naturally (NOT JSON, NOT bullet points)
-- Describe the exact visual flow: opening dramatic shot → product reveal → feature showcase → ending
-- Include specific details about what elements should fly/move through the air based on what the product is
-- Mention camera movements naturally (orbit, dolly, push-in, slow-motion)
-- Describe the lighting and atmosphere
-- Be 10-15 seconds, vertical format (9:16)
-- Be detailed enough that Veo 3 can generate a stunning video from it
+The JSON must follow this exact structure with 3-5 stages in the sequence:
+${jsonStructure}
 
-Write ONLY the prompt text. No explanations, no JSON, no formatting. Just the raw prompt paragraph ready to paste.`;
+Rules:
+- Identify the product precisely from the image (brand, model, color, type)
+- Each stage should have rich, cinematic descriptions specific to THIS product
+- Camera movements should be detailed and professional
+- Include product-specific elements (e.g. for a phone: screen lighting up, for headphones: sound waves)
+- The sequence should flow naturally: dramatic intro → product reveal → feature showcase → close-up details → call to action
+- All descriptions should be in English
+- Write ONLY valid JSON, no markdown code blocks, no explanations before or after`
+      : `Generate a detailed Google Veo 3 video advertisement prompt as a JSON object for this product: "${productName}"
+
+The ad style should be: ${styleDesc}
+
+The JSON must follow this exact structure with 3-5 stages in the sequence:
+${jsonStructure}
+
+Rules:
+- Each stage should have rich, cinematic descriptions specific to this product
+- Camera movements should be detailed and professional
+- Include product-specific elements relevant to what "${productName}" is
+- The sequence should flow naturally: dramatic intro → product reveal → feature showcase → close-up details → call to action
+- All descriptions should be in English
+- Write ONLY valid JSON, no markdown code blocks, no explanations before or after`;
 
     parts.push({ text: textPrompt });
 
@@ -2016,10 +2091,59 @@ Write ONLY the prompt text. No explanations, no JSON, no formatting. Just the ra
     const text = response.text().trim();
     rotateGeminiKey();
 
-    res.json({ success: true, prompt: text });
+    let cleanText = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+    try {
+      const parsed = JSON.parse(cleanText);
+      cleanText = JSON.stringify(parsed, null, 2);
+    } catch (e) {}
+
+    res.json({ success: true, prompt: cleanText });
   } catch (error) {
     console.log('Veo prompt error:', error.message);
-    const fallback = `create me a prompt i can use for google veo3 to show a ${req.body?.productName || 'product'} off in an apple style advert. it needs to start off showing the product from a dramatic angle with particles and light rays flying through the air in one flowing motion, then it needs to transform into a full product showcase with the camera slowly orbiting around it. the lighting should be clean and premium with a white background, 10-15 seconds vertical format.`;
+    const pName = req.body?.productName || 'Product';
+    const fallback = JSON.stringify({
+      title: `${pName} Transformation Advert`,
+      style: "Cinematic, Apple-style product reveal",
+      duration: "10-15 seconds",
+      aspect_ratio: "9:16",
+      sequence: [
+        {
+          stage: "Opening — Ingredient Ballet",
+          description: `A black void space is suddenly illuminated. Elements related to ${pName} float and swirl through the air in elegant slow-motion, catching dramatic rim lighting as they dance.`,
+          camera: { movement: "slow-motion tracking from left to right", framing: "macro to medium-wide, transitioning smoothly" },
+          lighting: "high-contrast studio lighting with rim light, dark background",
+          duration: "3 seconds"
+        },
+        {
+          stage: "Transformation — Product Reveal",
+          description: `The floating elements converge and morph into the ${pName}, materializing from particles of light. The product rotates slowly, revealing its premium build quality and design details.`,
+          camera: { movement: "slow orbit around product, 180 degrees", framing: "medium shot, centered" },
+          lighting: "soft volumetric lighting from above, subtle reflections on surface",
+          duration: "4 seconds"
+        },
+        {
+          stage: "Detail Showcase",
+          description: `Extreme close-up of the product's key features and textures. Light plays across the surface highlighting craftsmanship and premium materials.`,
+          camera: { movement: "smooth dolly push-in to extreme close-up", framing: "macro detail shots" },
+          lighting: "warm accent lighting with bokeh background",
+          duration: "3 seconds"
+        },
+        {
+          stage: "Closing — Call to Action",
+          description: `The product settles into its final hero pose against a clean gradient background. A subtle glow emanates from behind as text fades in.`,
+          camera: { movement: "slow pull-out to reveal full product", framing: "centered hero shot" },
+          lighting: "clean white backlight with soft shadows",
+          duration: "3 seconds"
+        }
+      ],
+      color_palette: ["#000000", "#FFFFFF", "#C0C0C0"],
+      mood: "Premium, aspirational, sleek and modern",
+      music_style: "Minimal electronic with deep bass, building to a crescendo",
+      text_overlays: [
+        { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
+        { time: "12s", text: "Available Now", style: "smaller, beneath title, subtle fade" }
+      ]
+    }, null, 2);
     res.json({ success: true, prompt: fallback });
   }
 });

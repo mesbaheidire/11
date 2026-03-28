@@ -266,12 +266,18 @@
             position: relative;
         }
         .veo-prompt-box pre {
-            font-family: 'Cairo', monospace;
-            font-size: 13px; line-height: 1.8;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 12px; line-height: 1.7;
             white-space: pre-wrap; word-wrap: break-word;
             color: #c8d6e5; direction: ltr; text-align: left;
-            max-height: 400px; overflow-y: auto;
+            max-height: 500px; overflow-y: auto;
+            tab-size: 2;
         }
+        .veo-prompt-box .json-key { color: #82aaff; }
+        .veo-prompt-box .json-string { color: #c3e88d; }
+        .veo-prompt-box .json-number { color: #f78c6c; }
+        .veo-prompt-box .json-bracket { color: #ffcb6b; }
+        .veo-prompt-box .json-colon { color: #89ddff; }
 
         .veo-actions {
             display: flex; gap: 8px; margin-top: 12px;
@@ -1100,7 +1106,7 @@
             if (data.success) {
                 currentVeoPrompt = data.prompt;
                 document.getElementById('veoPromptBox').style.display = 'block';
-                document.getElementById('veoPromptText').textContent = data.prompt;
+                document.getElementById('veoPromptText').innerHTML = highlightJson(data.prompt);
                 showToast('تم توليد البرومبت بنجاح!', 'success');
             } else {
                 throw new Error(data.error || 'فشل التوليد');
@@ -1111,6 +1117,15 @@
             btn.disabled = false;
             btn.innerHTML = '<i class="fab fa-google"></i> توليد برومبت Veo 3';
         }
+    }
+
+    function highlightJson(str) {
+        const escaped = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return escaped
+            .replace(/"([^"]+)"(\s*:)/g, '<span class="json-key">"$1"</span><span class="json-colon">$2</span>')
+            .replace(/:\s*"([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+            .replace(/:\s*(\d+)/g, ': <span class="json-number">$1</span>')
+            .replace(/[\[\]{}]/g, '<span class="json-bracket">$&</span>');
     }
 
     async function copyVeoPrompt() {
