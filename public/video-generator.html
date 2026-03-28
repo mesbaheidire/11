@@ -486,12 +486,22 @@
 
             <div class="veo-prompt-box" id="veoPromptBox">
                 <pre id="veoPromptText"></pre>
+                <div id="veoVideoPromptBox" style="display:none; margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #e94560; border-radius: 12px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                        <i class="fas fa-video" style="color:#e94560; font-size:18px;"></i>
+                        <span style="color:#e94560; font-weight:bold; font-size:15px;">برومبت Veo 3 للفيديو — جاهز للصق</span>
+                    </div>
+                    <p id="veoVideoPromptText" style="color:#e0e0e0; font-size:14px; line-height:1.8; margin:0; white-space:pre-wrap; font-family: 'Segoe UI', sans-serif;"></p>
+                    <button onclick="copyVideoPromptOnly()" style="margin-top:12px; background:#e94560; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-copy"></i> نسخ برومبت الفيديو فقط
+                    </button>
+                </div>
                 <div class="veo-actions">
                     <button class="veo-action-btn copy" onclick="copyVeoPrompt()">
-                        <i class="fas fa-copy"></i> نسخ البرومبت
+                        <i class="fas fa-copy"></i> نسخ الكل (JSON)
                     </button>
-                    <button class="veo-action-btn open-veo" onclick="window.open('https://aistudio.google.com/','_blank')">
-                        <i class="fas fa-external-link-alt"></i> فتح Google AI Studio
+                    <button class="veo-action-btn open-veo" onclick="window.open('https://labs.google/fx/tools/video-fx','_blank')">
+                        <i class="fas fa-external-link-alt"></i> فتح Google Veo 3
                     </button>
                     <button class="veo-action-btn regen" onclick="generateVeoPrompt()">
                         <i class="fas fa-redo"></i> إعادة توليد
@@ -1042,6 +1052,7 @@
 
     let selectedVeoStyle = 'apple';
     let currentVeoPrompt = '';
+    let currentVideoPrompt = '';
     let veoProductImageUrl = '';
 
     function selectVeoStyle(style) {
@@ -1062,6 +1073,8 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="loading-spinner"></span> جارٍ جلب بيانات المنتج...';
         document.getElementById('veoPromptBox').style.display = 'none';
+        document.getElementById('veoVideoPromptBox').style.display = 'none';
+        currentVideoPrompt = '';
 
         try {
             let productName = '';
@@ -1107,6 +1120,16 @@
                 currentVeoPrompt = data.prompt;
                 document.getElementById('veoPromptBox').style.display = 'block';
                 document.getElementById('veoPromptText').innerHTML = highlightJson(data.prompt);
+
+                try {
+                    const parsed = JSON.parse(data.prompt);
+                    if (parsed.veo3_video_prompt) {
+                        currentVideoPrompt = parsed.veo3_video_prompt;
+                        document.getElementById('veoVideoPromptBox').style.display = 'block';
+                        document.getElementById('veoVideoPromptText').textContent = parsed.veo3_video_prompt;
+                    }
+                } catch(e) {}
+
                 showToast('تم توليد البرومبت بنجاح!', 'success');
             } else {
                 throw new Error(data.error || 'فشل التوليد');
@@ -1116,6 +1139,22 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fab fa-google"></i> توليد برومبت Veo 3';
+        }
+    }
+
+    async function copyVideoPromptOnly() {
+        if (!currentVideoPrompt) return;
+        try {
+            await navigator.clipboard.writeText(currentVideoPrompt);
+            showToast('تم نسخ برومبت الفيديو!', 'success');
+        } catch (e) {
+            const ta = document.createElement('textarea');
+            ta.value = currentVideoPrompt;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('تم نسخ برومبت الفيديو!', 'success');
         }
     }
 

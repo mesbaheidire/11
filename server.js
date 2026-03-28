@@ -1949,39 +1949,41 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
 
     const apiKey = getCurrentGeminiKey();
     if (!apiKey) {
-      const pName = productName || 'Product';
+      const pName = productName ? productName.split(/\s+/).slice(0, 5).join(' ') : 'Product';
       const fallback = JSON.stringify({
-        title: `${pName} Transformation Advert`,
+        product_short_name: pName,
+        product_appearance: `A premium ${pName} product with sleek design and modern build quality.`,
+        title: `${pName} — Cinematic Video Ad`,
         style: `Cinematic, ${styleLbl}`,
         duration: "10-15 seconds",
         aspect_ratio: "9:16",
         sequence: [
           {
-            stage: "Opening — Ingredient Ballet",
-            description: `A black void space is suddenly illuminated. Elements related to ${pName} float and swirl through the air in elegant slow-motion, catching dramatic rim lighting.`,
-            camera: { movement: "slow-motion tracking from left to right", framing: "macro to medium-wide, transitioning smoothly" },
-            lighting: "high-contrast studio lighting with rim light, dark background",
+            stage: "Opening — Dark Reveal",
+            description: `A cinematic video opens in pure darkness. Particles of light begin swirling and converging in slow motion. The camera tracks smoothly from left to right as the ${pName} gradually materializes from the light particles, rotating slowly into frame.`,
+            camera: { movement: "slow-motion tracking from left to right, continuous flow", framing: "wide to medium, smooth transition" },
+            lighting: "high-contrast rim lighting against deep black void",
             duration: "3 seconds"
           },
           {
-            stage: "Transformation — Product Reveal",
-            description: `The floating elements converge and morph into the ${pName}, materializing from particles of light. The product rotates slowly revealing its premium build.`,
-            camera: { movement: "slow orbit around product, 180 degrees", framing: "medium shot, centered" },
-            lighting: "soft volumetric lighting from above, subtle reflections",
+            stage: "Product Orbit",
+            description: `The camera begins a smooth 360-degree orbit around the ${pName}. The product rotates on its axis as volumetric light sweeps across its surface, revealing every angle and detail. Subtle dust particles float in the air catching the light.`,
+            camera: { movement: "continuous 360-degree orbit, steady speed", framing: "medium shot, product centered" },
+            lighting: "soft volumetric lighting from above with moving rim light",
             duration: "4 seconds"
           },
           {
-            stage: "Detail Showcase",
-            description: `Extreme close-up of the product's key features and textures. Light plays across the surface highlighting premium materials.`,
-            camera: { movement: "smooth dolly push-in to extreme close-up", framing: "macro detail shots" },
-            lighting: "warm accent lighting with bokeh background",
+            stage: "Macro Detail Sweep",
+            description: `The camera pushes in smoothly to an extreme close-up, gliding across the surface of the ${pName}. Light sweeps across textures and details. The focus pulls between different features creating depth.`,
+            camera: { movement: "smooth dolly push-in with lateral micro-movements", framing: "extreme macro, rack focus" },
+            lighting: "warm accent light moving across surface, bokeh background",
             duration: "3 seconds"
           },
           {
-            stage: "Closing — Call to Action",
-            description: `The product settles into its final hero pose against a clean gradient. A subtle glow emanates from behind.`,
-            camera: { movement: "slow pull-out to reveal full product", framing: "centered hero shot" },
-            lighting: "clean white backlight with soft shadows",
+            stage: "Hero Finale",
+            description: `The camera slowly pulls back as the ${pName} settles into a hero pose. A gradient glow builds behind the product. The product does one final slow rotation as text fades in smoothly above.`,
+            camera: { movement: "slow pull-out with slight upward tilt", framing: "full product hero shot, centered" },
+            lighting: "clean gradient backlight, soft shadows falling forward",
             duration: "3 seconds"
           }
         ],
@@ -1991,7 +1993,8 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
         text_overlays: [
           { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
           { time: "12s", text: "Available Now", style: "smaller, beneath title" }
-        ]
+        ],
+        veo3_video_prompt: `A cinematic video of a ${pName} floating in a dark void, slowly rotating as particles of light swirl around it in elegant slow motion. The camera begins with a dramatic tracking shot from left to right, then smoothly transitions into a full 360-degree orbit around the product, revealing every angle and surface detail. Volumetric light rays sweep across the product's surface as the camera pushes in for extreme macro close-ups of key features and textures. The video ends with a slow pull-out to a hero shot as a clean gradient glow builds behind the product. Premium studio lighting with rim lights and subtle reflections throughout, dust particles floating in the air catching light.`
       }, null, 2);
       return res.json({ success: true, prompt: fallback });
     }
@@ -2025,14 +2028,16 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
     const hasImage = parts.length > 0;
 
     const jsonStructure = `{
-  "title": "[Product Name] [Style] Advert",
+  "product_short_name": "[SHORT brand+model name, max 5 words, e.g. 'Netac NVMe M.2 SSD']",
+  "product_appearance": "[PRECISE physical description: exact shape, colors, materials, textures, labels, ports, components visible — describe what someone would SEE if holding this product]",
+  "title": "[Short Product Name] — [Style] Video Ad",
   "style": "[Cinematic/Minimalist/Energetic/Luxury], [style description]",
   "duration": "10-15 seconds",
   "aspect_ratio": "9:16",
   "sequence": [
     {
       "stage": "Opening — [Stage Name]",
-      "description": "[Detailed visual description of what happens in this stage]",
+      "description": "[Detailed VIDEO scene description — describe MOTION, movement, transitions, particles, light rays. Must describe a MOVING VIDEO SCENE not a static image. Reference the product's EXACT appearance.]",
       "camera": {
         "movement": "[e.g. slow-motion tracking from left to right]",
         "framing": "[e.g. macro to medium-wide, transitioning smoothly]"
@@ -2045,42 +2050,46 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
   "mood": "[overall mood description]",
   "music_style": "[music description]",
   "text_overlays": [
-    {"time": "[e.g. 8s]", "text": "[overlay text]", "style": "[text style]"}
-  ]
+    {"time": "[e.g. 8s]", "text": "[SHORT product name only]", "style": "[text style]"}
+  ],
+  "veo3_video_prompt": "[A SINGLE PARAGRAPH ready-to-paste text prompt for Google Veo 3 VIDEO generation. Must start with 'A cinematic video of...' or 'A slow-motion video showing...'. Describe the product's EXACT physical appearance in detail. Describe continuous camera MOTION and MOVEMENT throughout. Emphasize this is a VIDEO with flowing motion, not a still image. Include lighting, atmosphere, and transitions. 4-6 sentences.]"
 }`;
 
     const textPrompt = hasImage
-      ? `Look at this product image carefully. Identify exactly what the product is (its type, brand if visible, color, shape, key features you can see).
+      ? `Look at this product image VERY carefully. Study every detail: the exact shape, color, material, texture, brand markings, ports, components, heatsink fins, labels — everything you can see.
 
-Generate a detailed Google Veo 3 video advertisement prompt as a JSON object for this exact product.
+Generate a Google Veo 3 VIDEO advertisement prompt as JSON for this EXACT product.
 
-The ad style should be: ${styleDesc}
-
-The JSON must follow this exact structure with 3-5 stages in the sequence:
-${jsonStructure}
-
-Rules:
-- Identify the product precisely from the image (brand, model, color, type)
-- Each stage should have rich, cinematic descriptions specific to THIS product
-- Camera movements should be detailed and professional
-- Include product-specific elements (e.g. for a phone: screen lighting up, for headphones: sound waves)
-- The sequence should flow naturally: dramatic intro → product reveal → feature showcase → close-up details → call to action
-- All descriptions should be in English
-- Write ONLY valid JSON, no markdown code blocks, no explanations before or after`
-      : `Generate a detailed Google Veo 3 video advertisement prompt as a JSON object for this product: "${productName}"
+CRITICAL RULES:
+1. "product_short_name": Extract a SHORT name (max 5 words). For example "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink" should become "Netac NVMe M.2 SSD". Just brand + product type.
+2. "product_appearance": Describe EXACTLY what the product looks like in the image — its real physical shape, color, size, visible components, textures, labels. Be extremely precise so the video shows THIS exact product, not a generic one.
+3. Every "description" in the sequence MUST describe a MOVING VIDEO SCENE — camera orbiting, product rotating, particles flowing, light sweeping. NOT a static image.
+4. Use the SHORT product name everywhere, never the full long title.
+5. "veo3_video_prompt": Write a SINGLE PARAGRAPH starting with "A cinematic video of..." that describes the product's exact appearance and continuous motion. This must generate a VIDEO not an image.
 
 The ad style should be: ${styleDesc}
 
-The JSON must follow this exact structure with 3-5 stages in the sequence:
+JSON structure to follow (3-5 stages in sequence):
 ${jsonStructure}
 
-Rules:
-- Each stage should have rich, cinematic descriptions specific to this product
-- Camera movements should be detailed and professional
-- Include product-specific elements relevant to what "${productName}" is
-- The sequence should flow naturally: dramatic intro → product reveal → feature showcase → close-up details → call to action
-- All descriptions should be in English
-- Write ONLY valid JSON, no markdown code blocks, no explanations before or after`;
+- All descriptions in English
+- Write ONLY valid JSON, no markdown code blocks, no text before or after`
+      : `Generate a Google Veo 3 VIDEO advertisement prompt as JSON for: "${productName}"
+
+CRITICAL RULES:
+1. "product_short_name": Shorten the name to max 5 words. For example "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink for Laptop Desktop" → "Netac NVMe M.2 SSD"
+2. "product_appearance": Describe the typical physical appearance of this type of product accurately (shape, color, materials, components).
+3. Every "description" MUST describe a MOVING VIDEO SCENE with camera motion, product rotation, particles, light movement. NOT a static image.
+4. Use the SHORT product name everywhere, never the full long title.
+5. "veo3_video_prompt": Write a SINGLE PARAGRAPH starting with "A cinematic video of..." describing continuous motion. This must generate a VIDEO not an image.
+
+The ad style should be: ${styleDesc}
+
+JSON structure (3-5 stages):
+${jsonStructure}
+
+- All descriptions in English
+- Write ONLY valid JSON, no markdown code blocks, no text before or after`;
 
     parts.push({ text: textPrompt });
 
@@ -2094,55 +2103,76 @@ Rules:
     let cleanText = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
     try {
       const parsed = JSON.parse(cleanText);
+      if (parsed.product_short_name && parsed.product_short_name.split(/\s+/).length > 6) {
+        parsed.product_short_name = parsed.product_short_name.split(/\s+/).slice(0, 5).join(' ');
+      }
+      if (parsed.title && parsed.title.length > 60) {
+        parsed.title = `${parsed.product_short_name || 'Product'} — Video Ad`;
+      }
+      if (parsed.text_overlays && Array.isArray(parsed.text_overlays)) {
+        parsed.text_overlays = parsed.text_overlays.map(o => {
+          if (o.text && o.text.split(/\s+/).length > 8) {
+            o.text = parsed.product_short_name || o.text.split(/\s+/).slice(0, 5).join(' ');
+          }
+          return o;
+        });
+      }
       cleanText = JSON.stringify(parsed, null, 2);
     } catch (e) {}
 
     res.json({ success: true, prompt: cleanText });
   } catch (error) {
     console.log('Veo prompt error:', error.message);
-    const pName = req.body?.productName || 'Product';
+    const rawName = req.body?.productName || 'Product';
+    const pName = rawName.split(/\s+/).slice(0, 5).join(' ');
+    const selStyle = req.body?.style || 'apple';
+    const catchStyleNames = { apple: 'Apple-style clean minimalist', cinematic: 'cinematic dramatic slow-motion', energetic: 'fast-paced energetic TikTok style', luxury: 'luxury premium gold and black' };
+    const catchStyleLbl = catchStyleNames[selStyle] || catchStyleNames.apple;
     const fallback = JSON.stringify({
-      title: `${pName} Transformation Advert`,
-      style: "Cinematic, Apple-style product reveal",
+      product_short_name: pName,
+      product_appearance: `A premium ${pName} with modern industrial design.`,
+      title: `${pName} — ${catchStyleLbl} Video Ad`,
+      style: `Cinematic, ${catchStyleLbl}`,
       duration: "10-15 seconds",
       aspect_ratio: "9:16",
       sequence: [
         {
-          stage: "Opening — Ingredient Ballet",
-          description: `A black void space is suddenly illuminated. Elements related to ${pName} float and swirl through the air in elegant slow-motion, catching dramatic rim lighting as they dance.`,
-          camera: { movement: "slow-motion tracking from left to right", framing: "macro to medium-wide, transitioning smoothly" },
-          lighting: "high-contrast studio lighting with rim light, dark background",
+          stage: "Opening — Dark Reveal",
+          description: `A cinematic video opens in darkness. Light particles swirl and converge in slow motion as the ${pName} materializes, rotating slowly into frame with dramatic rim lighting.`,
+          camera: { movement: "slow-motion tracking, continuous flow", framing: "wide to medium transition" },
+          lighting: "high-contrast rim lighting, dark background",
           duration: "3 seconds"
         },
         {
-          stage: "Transformation — Product Reveal",
-          description: `The floating elements converge and morph into the ${pName}, materializing from particles of light. The product rotates slowly, revealing its premium build quality and design details.`,
-          camera: { movement: "slow orbit around product, 180 degrees", framing: "medium shot, centered" },
-          lighting: "soft volumetric lighting from above, subtle reflections on surface",
+          stage: "Product Orbit",
+          description: `The camera orbits 360 degrees around the ${pName} as volumetric light sweeps across its surface. Dust particles float, catching light. Every angle revealed.`,
+          camera: { movement: "continuous 360-degree orbit", framing: "medium shot, centered" },
+          lighting: "soft volumetric light from above, moving rim light",
           duration: "4 seconds"
         },
         {
-          stage: "Detail Showcase",
-          description: `Extreme close-up of the product's key features and textures. Light plays across the surface highlighting craftsmanship and premium materials.`,
-          camera: { movement: "smooth dolly push-in to extreme close-up", framing: "macro detail shots" },
-          lighting: "warm accent lighting with bokeh background",
+          stage: "Macro Detail Sweep",
+          description: `Camera pushes into extreme close-up, gliding across the ${pName}'s surface. Light sweeps across textures. Focus racks between features.`,
+          camera: { movement: "smooth dolly push-in", framing: "extreme macro, rack focus" },
+          lighting: "warm accent light, bokeh background",
           duration: "3 seconds"
         },
         {
-          stage: "Closing — Call to Action",
-          description: `The product settles into its final hero pose against a clean gradient background. A subtle glow emanates from behind as text fades in.`,
-          camera: { movement: "slow pull-out to reveal full product", framing: "centered hero shot" },
-          lighting: "clean white backlight with soft shadows",
+          stage: "Hero Finale",
+          description: `Camera pulls back as the ${pName} settles into hero pose. Gradient glow builds behind. Final slow rotation as text fades in.`,
+          camera: { movement: "slow pull-out with upward tilt", framing: "centered hero shot" },
+          lighting: "clean gradient backlight, soft shadows",
           duration: "3 seconds"
         }
       ],
       color_palette: ["#000000", "#FFFFFF", "#C0C0C0"],
       mood: "Premium, aspirational, sleek and modern",
-      music_style: "Minimal electronic with deep bass, building to a crescendo",
+      music_style: "Minimal electronic with deep bass, building to crescendo",
       text_overlays: [
         { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
-        { time: "12s", text: "Available Now", style: "smaller, beneath title, subtle fade" }
-      ]
+        { time: "12s", text: "Available Now", style: "smaller, beneath title" }
+      ],
+      veo3_video_prompt: `A cinematic video of a ${pName} floating in a dark void, slowly rotating as particles of light swirl around it. The camera tracks smoothly then transitions into a 360-degree orbit revealing every surface detail. Volumetric light rays sweep across the product as the camera pushes in for extreme macro close-ups. The video ends with a slow pull-out to a hero shot with gradient glow behind. Premium studio lighting throughout.`
     }, null, 2);
     res.json({ success: true, prompt: fallback });
   }
