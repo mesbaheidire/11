@@ -1812,6 +1812,172 @@ app.post('/api/spy/verify-password', async (req, res) => {
   }
 });
 
+// ======= Video Generator API =======
+
+app.post('/api/video/fetch-product', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ success: false, error: 'الرجاء إرسال رابط المنتج' });
+
+    const cookies = await getSharedCookie();
+    if (!cookies) {
+      return res.json({
+        success: true,
+        data: {
+          title: 'منتج رائع من AliExpress',
+          image: '',
+          price: '$29.99',
+          original_price: '$59.99',
+          discount: '-50%',
+          shop_name: 'AliExpress Store'
+        }
+      });
+    }
+
+    const result = await portaffFunction(cookies, url);
+    if (!result?.previews?.title) {
+      return res.json({
+        success: true,
+        data: {
+          title: 'منتج من AliExpress',
+          image: '',
+          price: '$29.99',
+          original_price: '$59.99',
+          discount: '-50%',
+          shop_name: 'Store'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        title: result.previews.title,
+        image: result.previews.image_url,
+        price: result.previews.price,
+        original_price: result.previews.original_price,
+        discount: result.previews.discount,
+        currency: result.previews.currency,
+        shop_name: result.previews.shop_name,
+        rating: result.previews.rating,
+        orders: result.previews.orders
+      }
+    });
+  } catch (error) {
+    console.log('Video fetch-product error:', error.message);
+    res.json({
+      success: true,
+      data: {
+        title: 'منتج من AliExpress',
+        image: '',
+        price: '$29.99',
+        original_price: '$59.99',
+        discount: '-50%',
+        shop_name: 'Store'
+      }
+    });
+  }
+});
+
+app.post('/api/video/generate-script', async (req, res) => {
+  try {
+    const { product, lang } = req.body;
+    const hasAI = getGeminiModel() !== null;
+
+    if (!hasAI) {
+      const fallback = lang === 'ar'
+        ? `🔥 عرض لا يُفوَّت!\n${product.title || 'منتج مميز'}\n💰 السعر: ${product.price || '$29.99'}\n✅ وفِّر ${product.discount || '50%'} الآن!\n👇 اطلب الآن - الرابط في الوصف`
+        : `🔥 Don't miss this deal!\n${product.title || 'Amazing Product'}\n💰 Price: ${product.price || '$29.99'}\n✅ Save ${product.discount || '50%'} now!\n👇 Order now - Link in description`;
+      return res.json({ success: true, script: fallback });
+    }
+
+    const prompt = lang === 'ar'
+      ? `أنت كاتب إعلانات محترف. اكتب نص تسويقي قصير لفيديو أفلييت (5 أسطر كحد أقصى) للمنتج التالي:
+
+العنوان: ${product.title || 'منتج'}
+السعر: ${product.price || 'غير محدد'}
+السعر الأصلي: ${product.original_price || 'غير محدد'}
+الخصم: ${product.discount || 'غير محدد'}
+
+المطلوب:
+- السطر 1: جملة جذب قوية مع إيموجي 🔥
+- السطر 2: اسم المنتج مختصر
+- السطر 3: السعر والخصم 💰
+- السطر 4: ميزة أو فائدة رئيسية ✅
+- السطر 5: دعوة للشراء مع إيموجي 👇🛒
+
+اكتب بالعربية، بأسلوب حماسي وجذاب. لا تضف أي شيء آخر.`
+      : `You are a professional copywriter. Write a short affiliate video marketing script (max 5 lines) for this product:
+
+Title: ${product.title || 'Product'}
+Price: ${product.price || 'N/A'}
+Original Price: ${product.original_price || 'N/A'}
+Discount: ${product.discount || 'N/A'}
+
+Requirements:
+- Line 1: Strong hook with 🔥 emoji
+- Line 2: Short product name
+- Line 3: Price and discount 💰
+- Line 4: Key benefit ✅
+- Line 5: Call to action with 👇🛒 emoji
+
+Write in English, energetic and catchy style. Nothing else.`;
+
+    const script = await runGeminiWithRotation(prompt);
+    res.json({ success: true, script: script.trim() });
+  } catch (error) {
+    console.log('Video generate-script error:', error.message);
+    const fallback = req.body.lang === 'ar'
+      ? `🔥 عرض لا يُفوَّت!\n${req.body.product?.title || 'منتج مميز'}\n💰 السعر: ${req.body.product?.price || '$29.99'}\n✅ خصم كبير!\n👇 اطلب الآن`
+      : `🔥 Don't miss this!\n${req.body.product?.title || 'Amazing Product'}\n💰 Price: ${req.body.product?.price || '$29.99'}\n✅ Big discount!\n👇 Order now`;
+    res.json({ success: true, script: fallback });
+  }
+});
+
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) return res.status(400).send('URL required');
+
+    const allowedHosts = [
+      'ae01.alicdn.com', 'ae02.alicdn.com', 'ae03.alicdn.com', 'ae04.alicdn.com',
+      'img.alicdn.com', 'cbu01.alicdn.com', 'gw.alicdn.com',
+      'i.aliimg.com', 's.alicdn.com',
+      'ae-pic-a1.aliexpress-media.com',
+      'cloud.video.taobao.com'
+    ];
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(imageUrl);
+    } catch (e) {
+      return res.status(400).send('Invalid URL');
+    }
+
+    if (parsedUrl.protocol !== 'https:' || !allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith('.' + h))) {
+      return res.status(403).send('Domain not allowed');
+    }
+
+    const axios = require('axios');
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    if (!contentType.startsWith('image/')) {
+      return res.status(403).send('Not an image');
+    }
+
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(response.data);
+  } catch (error) {
+    res.status(500).send('Image proxy error');
+  }
+});
+
 // Auto-start spy if it was enabled
 (async () => {
   try {

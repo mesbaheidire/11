@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>مولد فيديوهات أفلييت</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', sans-serif; background: #0f0f1a; min-height: 100vh; color: #fff; overflow-x: hidden; }
+
+        .header {
+            background: linear-gradient(135deg, #e44d26, #c0392b);
+            padding: 50px 20px 30px;
+            border-radius: 0 0 30px 30px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(228, 77, 38, 0.4);
+        }
+        .header h1 { font-size: 24px; font-weight: 800; margin-bottom: 3px; }
+        .header p { opacity: 0.8; font-size: 12px; }
+        .back-btn {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(255,255,255,0.15); border: none; border-radius: 50%;
+            width: 36px; height: 36px; color: #fff; font-size: 16px;
+            cursor: pointer; text-decoration: none;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .content { padding: 15px; max-width: 600px; margin: 0 auto; }
+
+        .card {
+            background: linear-gradient(135deg, #16213e, #1a1a2e);
+            border-radius: 16px; padding: 20px;
+            margin: 15px 0; border: 1px solid #2d2d44;
+        }
+        .card-title {
+            font-size: 16px; font-weight: 700; margin-bottom: 14px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card-title i { color: #e44d26; }
+
+        .form-group { margin-bottom: 14px; }
+        .form-group label {
+            display: block; margin-bottom: 6px;
+            color: #aaa; font-size: 13px; font-weight: 600;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 12px 14px;
+            border-radius: 12px; border: 2px solid #2d2d44;
+            background: #0f0f1a; color: #fff;
+            font-family: 'Cairo', sans-serif; font-size: 14px;
+            direction: rtl; transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: #e44d26;
+        }
+        .form-group textarea { resize: vertical; min-height: 100px; }
+
+        .lang-select {
+            display: flex; gap: 10px;
+        }
+        .lang-option {
+            flex: 1; padding: 12px;
+            border: 2px solid #2d2d44; border-radius: 12px;
+            background: #0f0f1a; color: #aaa;
+            text-align: center; cursor: pointer;
+            font-family: 'Cairo', sans-serif; font-size: 14px; font-weight: 600;
+            transition: all 0.3s;
+        }
+        .lang-option.selected {
+            border-color: #e44d26;
+            background: rgba(228, 77, 38, 0.15);
+            color: #e44d26;
+        }
+
+        .generate-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #e44d26, #c0392b);
+            border: none; border-radius: 14px;
+            color: #fff; font-family: 'Cairo', sans-serif;
+            font-size: 16px; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .generate-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(228, 77, 38, 0.4); }
+        .generate-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .download-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            border: none; border-radius: 14px;
+            color: #fff; font-family: 'Cairo', sans-serif;
+            font-size: 16px; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-top: 10px;
+        }
+        .download-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(39, 174, 96, 0.4); }
+
+        .progress-section {
+            display: none; margin: 15px 0;
+        }
+        .progress-bar-container {
+            background: #16213e; border-radius: 10px;
+            height: 8px; overflow: hidden; margin-top: 10px;
+        }
+        .progress-bar {
+            height: 100%; background: linear-gradient(90deg, #e44d26, #f39c12);
+            border-radius: 10px; transition: width 0.5s ease;
+            width: 0%;
+        }
+        .progress-text {
+            font-size: 13px; color: #aaa; margin-top: 8px;
+            text-align: center;
+        }
+
+        .loading-spinner {
+            display: inline-block; width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%; border-top-color: #fff;
+            animation: spin 0.8s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .product-preview {
+            display: none;
+            background: #0f0f1a; border-radius: 12px;
+            padding: 14px; margin-top: 14px;
+            border: 1px solid #2d2d44;
+        }
+        .product-preview img {
+            width: 100%; max-height: 200px;
+            object-fit: contain; border-radius: 10px;
+            margin-bottom: 10px;
+        }
+        .product-preview .product-title {
+            font-size: 14px; font-weight: 600;
+            margin-bottom: 6px; line-height: 1.5;
+        }
+        .product-preview .product-price {
+            color: #e44d26; font-size: 18px; font-weight: 800;
+        }
+        .product-preview .product-original {
+            color: #666; font-size: 13px;
+            text-decoration: line-through; margin-right: 8px;
+        }
+
+        .video-section {
+            display: none; margin: 15px 0;
+        }
+        .video-container {
+            background: #000; border-radius: 14px; overflow: hidden;
+            border: 2px solid #2d2d44;
+            position: relative;
+        }
+        .video-container video {
+            width: 100%; display: block;
+            border-radius: 12px;
+        }
+
+        .script-preview {
+            display: none;
+            background: #0f0f1a; border-radius: 12px;
+            padding: 14px; margin-top: 14px;
+            border: 1px solid rgba(228, 77, 38, 0.3);
+        }
+        .script-preview h4 {
+            font-size: 14px; color: #e44d26;
+            margin-bottom: 8px;
+        }
+        .script-preview p {
+            font-size: 13px; line-height: 1.8;
+            white-space: pre-wrap;
+        }
+
+        .step-indicator {
+            display: flex; justify-content: center;
+            gap: 6px; margin: 15px 0;
+        }
+        .step {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 11px; color: #555;
+        }
+        .step.active { color: #e44d26; }
+        .step.done { color: #27ae60; }
+        .step-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%; background: #333;
+        }
+        .step.active .step-dot { background: #e44d26; animation: pulse 1.5s infinite; }
+        .step.done .step-dot { background: #27ae60; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .edit-script-btn {
+            background: rgba(228, 77, 38, 0.15);
+            border: 1px solid rgba(228, 77, 38, 0.3);
+            color: #e44d26; border-radius: 8px;
+            padding: 6px 14px; font-family: 'Cairo', sans-serif;
+            font-size: 12px; cursor: pointer;
+            margin-top: 8px;
+        }
+
+        .settings-row {
+            display: flex; gap: 10px; margin-bottom: 14px;
+        }
+        .settings-row .form-group { flex: 1; margin-bottom: 0; }
+
+        .style-options {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 8px; margin-top: 8px;
+        }
+        .style-option {
+            padding: 10px 6px; border: 2px solid #2d2d44;
+            border-radius: 12px; background: #0f0f1a;
+            text-align: center; cursor: pointer;
+            font-size: 11px; font-weight: 600;
+            transition: all 0.3s; color: #aaa;
+        }
+        .style-option.selected {
+            border-color: #e44d26;
+            background: rgba(228, 77, 38, 0.15);
+            color: #e44d26;
+        }
+        .style-option i { display: block; font-size: 20px; margin-bottom: 4px; }
+
+        .toast {
+            position: fixed; bottom: 30px; left: 50%;
+            transform: translateX(-50%); background: #333;
+            color: #fff; padding: 10px 24px;
+            border-radius: 10px; font-family: 'Cairo', sans-serif;
+            font-size: 13px; z-index: 9999;
+            opacity: 0; transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .toast.error { background: #e74c3c; }
+        .toast.success { background: #27ae60; }
+
+        canvas#renderCanvas { display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-btn"><i class="fas fa-arrow-right"></i></a>
+        <h1><i class="fas fa-video"></i> مولد فيديوهات أفلييت</h1>
+        <p>أنشئ فيديوهات تسويقية احترافية بالذكاء الاصطناعي</p>
+    </div>
+
+    <div class="content">
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step" id="step1"><span class="step-dot"></span> رابط المنتج</div>
+            <div class="step" id="step2"><span class="step-dot"></span> النص التسويقي</div>
+            <div class="step" id="step3"><span class="step-dot"></span> معاينة صوتية</div>
+            <div class="step" id="step4"><span class="step-dot"></span> الفيديو</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fas fa-link"></i> رابط المنتج</div>
+            <div class="form-group">
+                <label>أدخل رابط المنتج من AliExpress</label>
+                <input type="url" id="productUrl" placeholder="https://www.aliexpress.com/item/..." dir="ltr">
+            </div>
+
+            <div class="settings-row">
+                <div class="form-group">
+                    <label>لغة الفيديو</label>
+                    <div class="lang-select">
+                        <div class="lang-option selected" data-lang="ar" onclick="selectLang('ar')">
+                            🇸🇦 العربية
+                        </div>
+                        <div class="lang-option" data-lang="en" onclick="selectLang('en')">
+                            🇺🇸 English
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>نمط الفيديو</label>
+                <div class="style-options">
+                    <div class="style-option selected" data-style="modern" onclick="selectStyle('modern')">
+                        <i class="fas fa-bolt"></i> عصري
+                    </div>
+                    <div class="style-option" data-style="elegant" onclick="selectStyle('elegant')">
+                        <i class="fas fa-gem"></i> أنيق
+                    </div>
+                    <div class="style-option" data-style="fire" onclick="selectStyle('fire')">
+                        <i class="fas fa-fire"></i> حماسي
+                    </div>
+                </div>
+            </div>
+
+            <div class="product-preview" id="productPreview">
+                <img id="previewImage" src="" alt="">
+                <div class="product-title" id="previewTitle"></div>
+                <div>
+                    <span class="product-original" id="previewOriginal"></span>
+                    <span class="product-price" id="previewPrice"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card script-preview" id="scriptPreview">
+            <h4><i class="fas fa-pen-fancy"></i> النص التسويقي المُولَّد</h4>
+            <p id="scriptText"></p>
+            <button class="edit-script-btn" onclick="toggleEditScript()">
+                <i class="fas fa-edit"></i> تعديل النص
+            </button>
+            <div class="form-group" id="editScriptGroup" style="display:none; margin-top: 10px;">
+                <textarea id="editScriptArea"></textarea>
+                <button class="edit-script-btn" onclick="applyEditedScript()" style="margin-top: 6px;">
+                    <i class="fas fa-check"></i> تطبيق التعديلات
+                </button>
+            </div>
+        </div>
+
+        <div class="progress-section" id="progressSection">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="progress-text" id="progressText">جارٍ التحميل...</div>
+        </div>
+
+        <button class="generate-btn" id="generateBtn" onclick="generateVideo()">
+            <i class="fas fa-magic"></i> إنشاء الفيديو
+        </button>
+
+        <div class="video-section" id="videoSection">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-play-circle"></i> الفيديو الجاهز</div>
+                <div class="video-container">
+                    <video id="outputVideo" controls playsinline></video>
+                </div>
+                <button class="download-btn" onclick="downloadVideo()">
+                    <i class="fas fa-download"></i> تحميل الفيديو
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="renderCanvas" width="720" height="1280"></canvas>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+    let selectedLang = 'ar';
+    let selectedStyle = 'modern';
+    let productData = null;
+    let generatedScript = '';
+    let videoBlobUrl = null;
+
+    function selectLang(lang) {
+        selectedLang = lang;
+        document.querySelectorAll('.lang-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.lang === lang);
+        });
+    }
+
+    function selectStyle(style) {
+        selectedStyle = style;
+        document.querySelectorAll('.style-option').forEach(el => {
+            el.classList.toggle('selected', el.dataset.style === style);
+        });
+    }
+
+    function showToast(msg, type = '') {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.className = 'toast show ' + type;
+        setTimeout(() => toast.className = 'toast', 3000);
+    }
+
+    function setStep(num) {
+        for (let i = 1; i <= 4; i++) {
+            const el = document.getElementById('step' + i);
+            el.className = 'step' + (i < num ? ' done' : (i === num ? ' active' : ''));
+        }
+    }
+
+    function setProgress(pct, text) {
+        document.getElementById('progressBar').style.width = pct + '%';
+        document.getElementById('progressText').textContent = text;
+    }
+
+    function toggleEditScript() {
+        const g = document.getElementById('editScriptGroup');
+        if (g.style.display === 'none') {
+            g.style.display = 'block';
+            document.getElementById('editScriptArea').value = generatedScript;
+        } else {
+            g.style.display = 'none';
+        }
+    }
+
+    function applyEditedScript() {
+        generatedScript = document.getElementById('editScriptArea').value;
+        document.getElementById('scriptText').textContent = generatedScript;
+        document.getElementById('editScriptGroup').style.display = 'none';
+        showToast('تم تحديث النص', 'success');
+    }
+
+    async function fetchProductData(url) {
+        try {
+            const res = await fetch('/api/video/fetch-product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            const data = await res.json();
+            if (data.success) return data.data;
+            throw new Error(data.error || 'فشل جلب بيانات المنتج');
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    async function generateMarketingScript(product, lang) {
+        try {
+            const res = await fetch('/api/video/generate-script', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product, lang })
+            });
+            const data = await res.json();
+            if (data.success) return data.script;
+            throw new Error(data.error || 'فشل توليد النص');
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    function speakText(text, lang) {
+        return new Promise((resolve, reject) => {
+            if (!('speechSynthesis' in window)) {
+                reject(new Error('TTS غير مدعوم في هذا المتصفح'));
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text.replace(/[🔥✅📌🎁⚠️📢💰❤️👇🛒]/g, ''));
+            utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-US';
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            const preferred = voices.find(v => v.lang.startsWith(lang === 'ar' ? 'ar' : 'en'));
+            if (preferred) utterance.voice = preferred;
+
+            utterance.onend = () => resolve();
+            utterance.onerror = (e) => reject(e);
+            window.speechSynthesis.speak(utterance);
+        });
+    }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => {
+                const fallback = new Image();
+                fallback.onload = () => resolve(fallback);
+                fallback.onerror = () => reject(new Error('فشل تحميل الصورة'));
+                fallback.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400"><rect fill="%23333" width="400" height="400"/><text fill="%23fff" x="200" y="200" text-anchor="middle" font-size="30">المنتج</text></svg>');
+            };
+            img.src = '/api/proxy-image?url=' + encodeURIComponent(src);
+        });
+    }
+
+    function getStyleColors(style) {
+        const styles = {
+            modern: {
+                bg1: '#0f0f1a', bg2: '#1a1a2e',
+                accent: '#e44d26', accent2: '#f39c12',
+                text: '#ffffff', subtext: '#cccccc',
+                gradient: ['#e44d26', '#f39c12']
+            },
+            elegant: {
+                bg1: '#1a0a2e', bg2: '#2d1b69',
+                accent: '#bb86fc', accent2: '#e040fb',
+                text: '#ffffff', subtext: '#d4c4e8',
+                gradient: ['#bb86fc', '#e040fb']
+            },
+            fire: {
+                bg1: '#1a0000', bg2: '#3d0000',
+                accent: '#ff4444', accent2: '#ff8800',
+                text: '#ffffff', subtext: '#ffcccc',
+                gradient: ['#ff4444', '#ff8800']
+            }
+        };
+        return styles[style] || styles.modern;
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(' ');
+        let line = '';
+        let lines = [];
+        for (const word of words) {
+            const testLine = line + word + ' ';
+            if (ctx.measureText(testLine).width > maxWidth && line) {
+                lines.push(line.trim());
+                line = word + ' ';
+            } else {
+                line = testLine;
+            }
+        }
+        lines.push(line.trim());
+        lines.forEach((l, i) => {
+            ctx.fillText(l, x, y + i * lineHeight);
+        });
+        return lines.length;
+    }
+
+    async function createVideoFromCanvas(product, script, style) {
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d');
+        const W = 720, H = 1280;
+        const colors = getStyleColors(style);
+        const isAr = selectedLang === 'ar';
+
+        let productImg = null;
+        if (product.image) {
+            try {
+                productImg = await loadImage(product.image);
+            } catch (e) {
+                console.log('Image load failed, using placeholder');
+            }
+        }
+
+        const scriptLines = script.split('\n').filter(l => l.trim());
+        const totalSlides = 2 + scriptLines.length;
+        const slideDuration = 3000;
+        const totalDuration = totalSlides * slideDuration;
+        const fps = 30;
+        const totalFrames = Math.ceil(totalDuration / 1000 * fps);
+
+        const stream = canvas.captureStream(fps);
+        const mediaRecorder = new MediaRecorder(stream, {
+            mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm',
+            videoBitsPerSecond: 2500000
+        });
+
+        const chunks = [];
+        mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+        return new Promise((resolve, reject) => {
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                resolve(URL.createObjectURL(blob));
+            };
+            mediaRecorder.onerror = reject;
+            mediaRecorder.start();
+
+            let frame = 0;
+
+            function drawFrame() {
+                const time = frame / fps * 1000;
+                const slideIndex = Math.min(Math.floor(time / slideDuration), totalSlides - 1);
+                const slideProgress = (time % slideDuration) / slideDuration;
+
+                ctx.clearRect(0, 0, W, H);
+
+                const grd = ctx.createLinearGradient(0, 0, W, H);
+                grd.addColorStop(0, colors.bg1);
+                grd.addColorStop(1, colors.bg2);
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, 0, W, H);
+
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    const cx = (W * (i + 1) / 6) + Math.sin(time / 1000 + i) * 30;
+                    const cy = (H * (i + 1) / 6) + Math.cos(time / 800 + i) * 20;
+                    const r = 80 + Math.sin(time / 500 + i) * 20;
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.fillStyle = colors.accent + '08';
+                    ctx.fill();
+                }
+
+                const fadeIn = Math.min(slideProgress * 4, 1);
+                const fadeOut = slideProgress > 0.8 ? 1 - (slideProgress - 0.8) * 5 : 1;
+                const alpha = fadeIn * fadeOut;
+                ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+
+                if (slideIndex === 0) {
+                    drawIntroSlide(ctx, W, H, colors, product, productImg, slideProgress, isAr);
+                } else if (slideIndex === totalSlides - 1) {
+                    drawOutroSlide(ctx, W, H, colors, product, isAr);
+                } else {
+                    const lineIdx = slideIndex - 1;
+                    drawTextSlide(ctx, W, H, colors, scriptLines[lineIdx] || '', productImg, slideProgress, isAr);
+                }
+
+                ctx.globalAlpha = 1;
+                drawProgressIndicator(ctx, W, H, colors, time / totalDuration);
+
+                frame++;
+                if (frame <= totalFrames) {
+                    const pct = Math.round(frame / totalFrames * 100);
+                    setProgress(50 + pct * 0.45, `إنشاء الفيديو... ${pct}%`);
+                    requestAnimationFrame(drawFrame);
+                } else {
+                    mediaRecorder.stop();
+                }
+            }
+
+            drawFrame();
+        });
+    }
+
+    function drawIntroSlide(ctx, W, H, colors, product, productImg, progress, isAr) {
+        const slideIn = Math.min(progress * 3, 1);
+        const scale = 0.8 + slideIn * 0.2;
+
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-W / 2, -H / 2);
+
+        if (productImg) {
+            const imgSize = 350;
+            const imgX = (W - imgSize) / 2;
+            const imgY = 200;
+
+            ctx.save();
+            ctx.shadowColor = colors.accent;
+            ctx.shadowBlur = 30;
+            ctx.beginPath();
+            ctx.roundRect(imgX, imgY, imgSize, imgSize, 20);
+            ctx.clip();
+            ctx.drawImage(productImg, imgX, imgY, imgSize, imgSize);
+            ctx.restore();
+
+            ctx.strokeStyle = colors.accent;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(imgX, imgY, imgSize, imgSize, 20);
+            ctx.stroke();
+        }
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = colors.text;
+        ctx.font = 'bold 36px Cairo';
+        const title = product.title ? (product.title.length > 40 ? product.title.substring(0, 40) + '...' : product.title) : (isAr ? 'منتج مميز' : 'Amazing Product');
+        wrapText(ctx, title, W / 2, 650, W - 80, 48);
+
+        if (product.price) {
+            const priceGrd = ctx.createLinearGradient(0, 750, W, 750);
+            priceGrd.addColorStop(0, colors.gradient[0]);
+            priceGrd.addColorStop(1, colors.gradient[1]);
+            ctx.fillStyle = priceGrd;
+
+            ctx.beginPath();
+            ctx.roundRect(W / 2 - 140, 770, 280, 70, 16);
+            ctx.fill();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 38px Cairo';
+            ctx.fillText(product.price, W / 2, 815);
+        }
+
+        if (product.original_price && product.discount) {
+            ctx.fillStyle = '#999';
+            ctx.font = '22px Cairo';
+            ctx.fillText(product.original_price, W / 2, 870);
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 2;
+            const tw = ctx.measureText(product.original_price).width;
+            ctx.beginPath();
+            ctx.moveTo(W / 2 - tw / 2, 865);
+            ctx.lineTo(W / 2 + tw / 2, 865);
+            ctx.stroke();
+
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 26px Cairo';
+            ctx.fillText(product.discount, W / 2, 910);
+        }
+
+        ctx.restore();
+    }
+
+    function drawTextSlide(ctx, W, H, colors, text, productImg, progress, isAr) {
+        const slideUp = Math.min(progress * 3, 1);
+        const yOff = (1 - slideUp) * 50;
+
+        if (productImg) {
+            ctx.globalAlpha = 0.15;
+            ctx.drawImage(productImg, 0, 0, W, H);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = colors.bg1 + 'cc';
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        const barY = H / 2 - 120 + yOff;
+        const barGrd = ctx.createLinearGradient(0, barY, W, barY);
+        barGrd.addColorStop(0, colors.gradient[0] + '33');
+        barGrd.addColorStop(1, colors.gradient[1] + '33');
+        ctx.fillStyle = barGrd;
+        ctx.beginPath();
+        ctx.roundRect(40, barY, W - 80, 240, 20);
+        ctx.fill();
+
+        ctx.strokeStyle = colors.accent + '44';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(40, barY, W - 80, 240, 20);
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = colors.text;
+        ctx.font = 'bold 34px Cairo';
+        ctx.direction = isAr ? 'rtl' : 'ltr';
+        wrapText(ctx, text, W / 2, barY + 80, W - 140, 50);
+    }
+
+    function drawOutroSlide(ctx, W, H, colors, product, isAr) {
+        const ctaText = isAr ? '🛒 اشترِ الآن!' : '🛒 Buy Now!';
+        const linkText = isAr ? '👇 الرابط في الوصف' : '👇 Link in description';
+
+        const ctaGrd = ctx.createLinearGradient(0, 0, W, H);
+        ctaGrd.addColorStop(0, colors.gradient[0]);
+        ctaGrd.addColorStop(1, colors.gradient[1]);
+
+        ctx.beginPath();
+        ctx.roundRect(60, H / 2 - 140, W - 120, 280, 30);
+        ctx.fillStyle = ctaGrd;
+        ctx.fill();
+
+        ctx.shadowColor = colors.accent;
+        ctx.shadowBlur = 40;
+        ctx.beginPath();
+        ctx.roundRect(60, H / 2 - 140, W - 120, 280, 30);
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 46px Cairo';
+        ctx.fillText(ctaText, W / 2, H / 2 - 20);
+
+        ctx.font = '28px Cairo';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText(linkText, W / 2, H / 2 + 50);
+
+        if (product.price) {
+            ctx.font = 'bold 40px Cairo';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(product.price, W / 2, H / 2 + 110);
+        }
+    }
+
+    function drawProgressIndicator(ctx, W, H, colors, progress) {
+        const barW = W - 60;
+        const barH = 4;
+        const barY = H - 40;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.roundRect(30, barY, barW, barH, 2);
+        ctx.fill();
+
+        const progGrd = ctx.createLinearGradient(30, barY, 30 + barW, barY);
+        progGrd.addColorStop(0, colors.gradient[0]);
+        progGrd.addColorStop(1, colors.gradient[1]);
+        ctx.fillStyle = progGrd;
+        ctx.beginPath();
+        ctx.roundRect(30, barY, barW * progress, barH, 2);
+        ctx.fill();
+    }
+
+    async function generateVideo() {
+        const url = document.getElementById('productUrl').value.trim();
+        if (!url) {
+            showToast('الرجاء إدخال رابط المنتج', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span> جارٍ الإنشاء...';
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('videoSection').style.display = 'none';
+        document.getElementById('scriptPreview').style.display = 'none';
+
+        try {
+            setStep(1);
+            setProgress(5, 'جارٍ جلب بيانات المنتج...');
+            try {
+                productData = await fetchProductData(url);
+            } catch (e) {
+                productData = {
+                    title: 'منتج رائع من AliExpress',
+                    image: '',
+                    price: '$29.99',
+                    original_price: '$59.99',
+                    discount: '-50%',
+                    shop_name: 'AliExpress Store'
+                };
+                showToast('تم استخدام بيانات تجريبية', '');
+            }
+
+            document.getElementById('previewImage').src = productData.image || '';
+            document.getElementById('previewImage').style.display = productData.image ? 'block' : 'none';
+            document.getElementById('previewTitle').textContent = productData.title || '';
+            document.getElementById('previewPrice').textContent = productData.price || '';
+            document.getElementById('previewOriginal').textContent = productData.original_price || '';
+            document.getElementById('productPreview').style.display = 'block';
+            setProgress(20, 'تم جلب بيانات المنتج ✓');
+
+            setStep(2);
+            setProgress(25, 'جارٍ توليد النص التسويقي بالذكاء الاصطناعي...');
+            try {
+                generatedScript = await generateMarketingScript(productData, selectedLang);
+            } catch (e) {
+                if (selectedLang === 'ar') {
+                    generatedScript = `🔥 عرض لا يُفوَّت!\n${productData.title || 'منتج مميز'}\n💰 السعر: ${productData.price || '$29.99'}\n✅ وفِّر ${productData.discount || '50%'} الآن!\n👇 اطلب الآن - الرابط في الوصف`;
+                } else {
+                    generatedScript = `🔥 Don't miss this deal!\n${productData.title || 'Amazing Product'}\n💰 Price: ${productData.price || '$29.99'}\n✅ Save ${productData.discount || '50%'} now!\n👇 Order now - Link in description`;
+                }
+                showToast('تم استخدام نص تسويقي افتراضي', '');
+            }
+
+            document.getElementById('scriptText').textContent = generatedScript;
+            document.getElementById('scriptPreview').style.display = 'block';
+            setProgress(40, 'تم توليد النص ✓');
+
+            setStep(3);
+            setProgress(45, 'جارٍ معاينة النص صوتياً...');
+            try {
+                const cleanScript = generatedScript.replace(/[🔥✅📌🎁⚠️📢💰❤️👇🛒]/g, '').trim();
+                await speakText(cleanScript, selectedLang);
+            } catch (e) {
+                console.log('TTS skipped:', e.message);
+            }
+            setProgress(50, 'تمت المعاينة الصوتية ✓');
+
+            setStep(4);
+            setProgress(55, 'جارٍ إنشاء الفيديو...');
+            videoBlobUrl = await createVideoFromCanvas(productData, generatedScript, selectedStyle);
+
+            setProgress(100, 'تم إنشاء الفيديو بنجاح! ✓');
+
+            const video = document.getElementById('outputVideo');
+            video.src = videoBlobUrl;
+            document.getElementById('videoSection').style.display = 'block';
+            video.play();
+
+            showToast('تم إنشاء الفيديو بنجاح!', 'success');
+
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('حدث خطأ: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic"></i> إنشاء الفيديو';
+        }
+    }
+
+    function downloadVideo() {
+        if (!videoBlobUrl) {
+            showToast('لا يوجد فيديو لتحميله', 'error');
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = videoBlobUrl;
+        a.download = 'affiliate_video_' + Date.now() + '.webm';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast('جارٍ تحميل الفيديو...', 'success');
+    }
+
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+    </script>
+</body>
+</html>

@@ -15,6 +15,7 @@ An Arabic-language web application for generating AliExpress affiliate links and
   - `spy.html` - Channel spy management page
   - `collections.html` - Collections page
   - `telegram.html` - Telegram publishing page
+  - `video-generator.html` - Affiliate video generator page (AI-powered)
   - `manifest.json` - PWA manifest
   - `sw.js` - Service worker for offline support
 
