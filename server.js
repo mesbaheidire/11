@@ -1936,105 +1936,90 @@ Write in English, energetic and catchy style. Nothing else.`;
 
 app.post('/api/video/generate-veo-prompt', async (req, res) => {
   try {
-    const { productName, style, lang } = req.body;
-    if (!productName) return res.status(400).json({ success: false, error: 'Product name required' });
+    const { productName, imageUrl, style, lang } = req.body;
+    if (!productName && !imageUrl) return res.status(400).json({ success: false, error: 'Product name or image required' });
 
-    const hasAI = getGeminiModel() !== null;
-
-    const styleDescriptions = {
-      apple: {
-        en: 'Apple-style advertisement — clean, minimalist, elegant with smooth camera movements, white/silver backgrounds, dramatic lighting, floating product shots, and premium feel',
-        ar: 'إعلان بأسلوب Apple — نظيف، بسيط، أنيق مع حركات كاميرا سلسة، خلفيات بيضاء/فضية، إضاءة درامية'
-      },
-      cinematic: {
-        en: 'Cinematic epic style — dramatic slow-motion shots, deep depth of field, volumetric lighting, Hans Zimmer-style music feel, dark moody atmosphere with spotlight on product',
-        ar: 'أسلوب سينمائي ملحمي — لقطات حركة بطيئة درامية، عمق ميدان كبير، إضاءة حجمية، أجواء مظلمة مع ضوء مسلط على المنتج'
-      },
-      energetic: {
-        en: 'Fast-paced energetic style — quick cuts, dynamic camera movements, vibrant colors, particles and motion graphics, bass-heavy music feel, TikTok/Reels ready',
-        ar: 'أسلوب حماسي سريع — قطع سريعة، حركات كاميرا ديناميكية، ألوان نابضة، جسيمات ورسومات متحركة'
-      },
-      luxury: {
-        en: 'Luxury premium style — gold and black color palette, reflective surfaces, macro detail shots, silk/velvet textures, slow rotating product showcase, exclusive feel',
-        ar: 'أسلوب فاخر — لوحة ألوان ذهبية وسوداء، أسطح عاكسة، لقطات تفاصيل ماكرو، أقمشة حريرية'
-      }
-    };
-
-    const styleDesc = styleDescriptions[style]?.[lang] || styleDescriptions.apple.en;
-
-    if (!hasAI) {
-      const fallbackPrompt = lang === 'en'
-        ? `Create me a JSON prompt I can use for Google Veo 3 to show a ${productName} off in an ${styleDesc}. It needs to start off showing the product from a dramatic angle with particles and light rays flying through the air in one flowing motion, then it needs to transform into a full product showcase with text overlay showing the product name and a call to action. The video should be 10-15 seconds, vertical format (9:16), with smooth transitions between scenes.`
-        : `أنشئ لي برومبت JSON يمكنني استخدامه مع Google Veo 3 لعرض ${productName} بأسلوب ${styleDesc}. يجب أن يبدأ بعرض المنتج من زاوية درامية مع جسيمات وأشعة ضوئية تطير في الهواء في حركة سلسة واحدة، ثم يتحول إلى عرض كامل للمنتج مع نص يظهر اسم المنتج ودعوة للشراء. الفيديو يجب أن يكون 10-15 ثانية، بتنسيق عمودي (9:16)، مع انتقالات سلسة بين المشاهد.`;
-      return res.json({ success: true, prompt: fallbackPrompt });
+    const apiKey = getCurrentGeminiKey();
+    if (!apiKey) {
+      const fallback = `create me a prompt i can use for google veo3 to show a ${productName || 'product'} off in an apple style advert. it needs to start off showing the product from a dramatic angle with particles and light rays flying through the air in one flowing motion, then the camera slowly orbits around the product revealing its details and premium build quality. the lighting should be clean and minimal with a white background. the video should feel premium and elegant, 10-15 seconds vertical format.`;
+      return res.json({ success: true, prompt: fallback });
     }
 
-    const prompt = lang === 'en'
-      ? `You are an expert AI video prompt engineer for Google Veo 3 (Google's AI video generation model).
+    const styleNames = {
+      apple: 'Apple-style clean minimalist advert with white backgrounds, elegant smooth camera movements, floating product shots, and premium feel',
+      cinematic: 'cinematic epic advert with dramatic slow-motion, deep depth of field, volumetric lighting, dark moody atmosphere with spotlight on the product',
+      energetic: 'fast-paced energetic TikTok/Reels style advert with quick cuts, dynamic movements, vibrant colors, particles and motion graphics',
+      luxury: 'luxury premium advert with gold and black palette, reflective surfaces, macro detail shots, silk textures, slow rotating showcase'
+    };
+    const styleDesc = styleNames[style] || styleNames.apple;
 
-Generate a highly detailed, professional video generation prompt for the following product: "${productName}"
+    const parts = [];
 
-Style: ${styleDesc}
+    if (imageUrl) {
+      try {
+        const axios = require('axios');
+        const imgResponse = await axios.get(imageUrl, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        const base64 = Buffer.from(imgResponse.data).toString('base64');
+        const mimeType = imgResponse.headers['content-type'] || 'image/jpeg';
+        parts.push({ inlineData: { mimeType, data: base64 } });
+      } catch (e) {
+        console.log('Failed to download product image for Veo prompt:', e.message);
+      }
+    }
+
+    const hasImage = parts.length > 0;
+
+    const textPrompt = hasImage
+      ? `Look at this product image carefully. Identify exactly what the product is (its type, brand if visible, color, shape, key features).
+
+Then write a single detailed prompt paragraph that I can paste directly into Google Veo 3 to generate a video advertisement for this exact product.
+
+The ad style should be: ${styleDesc}
 
 The prompt must:
-1. Be written as a single, detailed paragraph that Google Veo 3 can use directly
-2. Describe the exact visual flow scene by scene (opening shot → product reveal → details → call to action)
-3. Include specific camera movements (dolly, orbit, crane, push-in, pull-out)
-4. Describe lighting (volumetric, rim light, backlight, studio lighting)
-5. Mention particle effects, reflections, and atmospheric elements
-6. Specify the mood, color grading, and overall tone
-7. Include text overlay descriptions if relevant
-8. Be 10-15 seconds duration, vertical format 9:16
-9. Be ready to paste directly into Google Veo 3 / AI Studio
+- Start with "create me a prompt i can use for google veo3 to show a [exact product name you identified] off in..."
+- Be written as one flowing paragraph, like a human would type it naturally (NOT JSON, NOT bullet points)
+- Describe the exact visual flow: opening dramatic shot → product reveal → feature showcase → ending
+- Include specific details about what elements should fly/move through the air based on what the product actually is
+- Mention camera movements naturally (orbit, dolly, push-in, slow-motion)
+- Describe the lighting and atmosphere
+- Be 10-15 seconds, vertical format (9:16)
+- Be detailed enough that Veo 3 can generate a stunning video from it
 
-Also provide it in JSON format like this:
-{
-  "prompt": "the detailed scene description...",
-  "duration": "10-15 seconds",
-  "aspect_ratio": "9:16",
-  "style": "${style}",
-  "camera_movements": ["list of camera movements"],
-  "lighting": "lighting description",
-  "color_palette": ["colors"],
-  "mood": "mood description"
-}
+Write ONLY the prompt text. No explanations, no JSON, no formatting. Just the raw prompt paragraph ready to paste.`
+      : `Write a single detailed prompt paragraph that I can paste directly into Google Veo 3 to generate a video advertisement for this product: "${productName}"
 
-Write ONLY the JSON output, no extra text.`
-      : `أنت خبير في كتابة برومبتات فيديو AI لـ Google Veo 3 (نموذج توليد الفيديو من Google).
+The ad style should be: ${styleDesc}
 
-أنشئ برومبت احترافي ومفصل لتوليد فيديو للمنتج التالي: "${productName}"
+The prompt must:
+- Start with "create me a prompt i can use for google veo3 to show a ${productName} off in..."
+- Be written as one flowing paragraph, like a human would type it naturally (NOT JSON, NOT bullet points)
+- Describe the exact visual flow: opening dramatic shot → product reveal → feature showcase → ending
+- Include specific details about what elements should fly/move through the air based on what the product is
+- Mention camera movements naturally (orbit, dolly, push-in, slow-motion)
+- Describe the lighting and atmosphere
+- Be 10-15 seconds, vertical format (9:16)
+- Be detailed enough that Veo 3 can generate a stunning video from it
 
-النمط: ${styleDesc}
+Write ONLY the prompt text. No explanations, no JSON, no formatting. Just the raw prompt paragraph ready to paste.`;
 
-البرومبت يجب أن:
-1. يكون مكتوباً كفقرة واحدة مفصلة يمكن لـ Google Veo 3 استخدامها مباشرة
-2. يصف التدفق البصري الدقيق مشهداً بمشهد (لقطة افتتاحية ← كشف المنتج ← التفاصيل ← دعوة للشراء)
-3. يتضمن حركات كاميرا محددة (dolly, orbit, crane, push-in)
-4. يصف الإضاءة (حجمية، إضاءة حافة، إضاءة خلفية)
-5. يذكر تأثيرات الجسيمات والانعكاسات
-6. يحدد المزاج وتدرج الألوان
-7. مدة 10-15 ثانية، تنسيق عمودي 9:16
+    parts.push({ text: textPrompt });
 
-قدمه بتنسيق JSON مثل هذا:
-{
-  "prompt": "وصف المشهد المفصل بالإنجليزية لأن Veo 3 يعمل بالإنجليزية...",
-  "prompt_ar": "الوصف بالعربية للفهم...",
-  "duration": "10-15 seconds",
-  "aspect_ratio": "9:16",
-  "style": "${style}",
-  "camera_movements": ["قائمة حركات الكاميرا"],
-  "lighting": "وصف الإضاءة",
-  "color_palette": ["الألوان"],
-  "mood": "وصف المزاج"
-}
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    const result = await model.generateContent(parts);
+    const response = await result.response;
+    const text = response.text().trim();
+    rotateGeminiKey();
 
-اكتب فقط JSON، بدون أي نص إضافي.`;
-
-    const result = await runGeminiWithRotation(prompt);
-    res.json({ success: true, prompt: result.trim() });
+    res.json({ success: true, prompt: text });
   } catch (error) {
     console.log('Veo prompt error:', error.message);
-    const fallback = `Create me a detailed prompt for Google Veo 3 to showcase "${req.body?.productName || 'product'}" in a professional advertisement style with dramatic lighting, smooth camera movements, and cinematic transitions. 10-15 seconds, vertical 9:16 format.`;
+    const fallback = `create me a prompt i can use for google veo3 to show a ${req.body?.productName || 'product'} off in an apple style advert. it needs to start off showing the product from a dramatic angle with particles and light rays flying through the air in one flowing motion, then it needs to transform into a full product showcase with the camera slowly orbiting around it. the lighting should be clean and premium with a white background, 10-15 seconds vertical format.`;
     res.json({ success: true, prompt: fallback });
   }
 });

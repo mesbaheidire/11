@@ -272,9 +272,6 @@
             color: #c8d6e5; direction: ltr; text-align: left;
             max-height: 400px; overflow-y: auto;
         }
-        .veo-prompt-box .json-key { color: #4285f4; }
-        .veo-prompt-box .json-string { color: #34a853; }
-        .veo-prompt-box .json-bracket { color: #fbbc04; }
 
         .veo-actions {
             display: flex; gap: 8px; margin-top: 12px;
@@ -442,8 +439,17 @@
             </p>
 
             <div class="form-group">
-                <label>رابط المنتج أو اسمه</label>
-                <input type="text" id="veoProductInput" placeholder="ضع رابط المنتج أو اكتب اسم المنتج..." dir="auto">
+                <label>رابط المنتج من AliExpress</label>
+                <input type="text" id="veoProductInput" placeholder="https://www.aliexpress.com/item/..." dir="ltr">
+                <div style="font-size: 11px; color: #556; margin-top: 4px;">سيتم تحليل صورة المنتج بالذكاء الاصطناعي لتوليد برومبت دقيق</div>
+            </div>
+
+            <div id="veoProductPreview" style="display:none; background: #0a1520; border-radius: 10px; padding: 10px; margin-bottom: 14px; border: 1px solid rgba(66,133,244,0.2); align-items: center; gap: 10px;">
+                <img id="veoPreviewImg" src="" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover; display: none;">
+                <div>
+                    <div id="veoPreviewName" style="font-size: 13px; font-weight: 600; color: #c8d6e5;"></div>
+                    <div id="veoPreviewPrice" style="font-size: 14px; font-weight: 700; color: #4285f4;"></div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -464,18 +470,6 @@
                     <div class="veo-style-opt" data-veo-style="luxury" onclick="selectVeoStyle('luxury')">
                         <i class="fas fa-crown"></i> فاخر
                         <small>ذهبي وراقي</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>لغة البرومبت</label>
-                <div class="lang-select">
-                    <div class="lang-option" data-veo-lang="en" onclick="selectVeoLang('en')" style="border-color: #4285f4; background: rgba(66,133,244,0.15); color: #4285f4;">
-                        🇺🇸 English
-                    </div>
-                    <div class="lang-option" data-veo-lang="ar" onclick="selectVeoLang('ar')">
-                        🇸🇦 العربية
                     </div>
                 </div>
             </div>
@@ -1041,8 +1035,8 @@
     }
 
     let selectedVeoStyle = 'apple';
-    let selectedVeoLang = 'en';
     let currentVeoPrompt = '';
+    let veoProductImageUrl = '';
 
     function selectVeoStyle(style) {
         selectedVeoStyle = style;
@@ -1051,58 +1045,61 @@
         });
     }
 
-    function selectVeoLang(lang) {
-        selectedVeoLang = lang;
-        document.querySelectorAll('[data-veo-lang]').forEach(el => {
-            if (el.dataset.veoLang === lang) {
-                el.style.borderColor = '#4285f4';
-                el.style.background = 'rgba(66,133,244,0.15)';
-                el.style.color = '#4285f4';
-            } else {
-                el.style.borderColor = '#2d2d44';
-                el.style.background = '#0f0f1a';
-                el.style.color = '#aaa';
-            }
-        });
-    }
-
     async function generateVeoPrompt() {
         const input = document.getElementById('veoProductInput').value.trim();
         if (!input) {
-            showToast('الرجاء إدخال رابط أو اسم المنتج', 'error');
+            showToast('الرجاء إدخال رابط المنتج', 'error');
             return;
         }
 
         const btn = document.getElementById('veoBtn');
         btn.disabled = true;
-        btn.innerHTML = '<span class="loading-spinner"></span> جارٍ التوليد...';
+        btn.innerHTML = '<span class="loading-spinner"></span> جارٍ جلب بيانات المنتج...';
+        document.getElementById('veoPromptBox').style.display = 'none';
 
         try {
-            let productName = input;
-            if (input.includes('aliexpress.com') || input.includes('ali.ski') || input.includes('s.click')) {
+            let productName = '';
+            veoProductImageUrl = '';
+
+            if (input.includes('aliexpress.com') || input.includes('ali.ski') || input.includes('s.click') || input.includes('http')) {
                 try {
                     const pData = await fetchProductData(input);
-                    if (pData && pData.title) {
-                        productName = pData.title;
+                    if (pData) {
+                        productName = pData.title || '';
+                        veoProductImageUrl = pData.image || '';
+                        const preview = document.getElementById('veoProductPreview');
+                        preview.style.display = 'flex';
+                        if (veoProductImageUrl) {
+                            document.getElementById('veoPreviewImg').src = veoProductImageUrl;
+                            document.getElementById('veoPreviewImg').style.display = 'block';
+                        }
+                        document.getElementById('veoPreviewName').textContent = productName ? (productName.length > 50 ? productName.substring(0, 50) + '...' : productName) : '';
+                        document.getElementById('veoPreviewPrice').textContent = pData.price || '';
                     }
-                } catch (e) {}
+                } catch (e) {
+                    productName = input;
+                }
+            } else {
+                productName = input;
             }
+
+            btn.innerHTML = '<span class="loading-spinner"></span> جارٍ توليد البرومبت بالذكاء الاصطناعي...';
 
             const res = await fetch('/api/video/generate-veo-prompt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     productName,
+                    imageUrl: veoProductImageUrl,
                     style: selectedVeoStyle,
-                    lang: selectedVeoLang
+                    lang: 'en'
                 })
             });
             const data = await res.json();
 
             if (data.success) {
                 currentVeoPrompt = data.prompt;
-                const box = document.getElementById('veoPromptBox');
-                box.style.display = 'block';
+                document.getElementById('veoPromptBox').style.display = 'block';
                 document.getElementById('veoPromptText').textContent = data.prompt;
                 showToast('تم توليد البرومبت بنجاح!', 'success');
             } else {
