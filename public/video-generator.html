@@ -241,6 +241,96 @@
         .toast.success { background: #27ae60; }
 
         canvas#renderCanvas { display: none; }
+
+        .section-divider {
+            display: flex; align-items: center; gap: 12px;
+            margin: 30px 0 15px; color: #555;
+        }
+        .section-divider::before, .section-divider::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, transparent, #333, transparent);
+        }
+        .section-divider span { font-size: 13px; font-weight: 600; white-space: nowrap; }
+
+        .veo-card {
+            background: linear-gradient(135deg, #0d1f2d, #1a2a3a);
+            border: 1px solid rgba(66, 133, 244, 0.3);
+        }
+        .veo-card .card-title i { color: #4285f4; }
+
+        .veo-prompt-box {
+            background: #0a1520;
+            border: 1px solid rgba(66, 133, 244, 0.2);
+            border-radius: 12px; padding: 16px;
+            margin-top: 12px; display: none;
+            position: relative;
+        }
+        .veo-prompt-box pre {
+            font-family: 'Cairo', monospace;
+            font-size: 13px; line-height: 1.8;
+            white-space: pre-wrap; word-wrap: break-word;
+            color: #c8d6e5; direction: ltr; text-align: left;
+            max-height: 400px; overflow-y: auto;
+        }
+        .veo-prompt-box .json-key { color: #4285f4; }
+        .veo-prompt-box .json-string { color: #34a853; }
+        .veo-prompt-box .json-bracket { color: #fbbc04; }
+
+        .veo-actions {
+            display: flex; gap: 8px; margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .veo-action-btn {
+            flex: 1; min-width: 120px;
+            padding: 10px 14px; border: none; border-radius: 10px;
+            font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .veo-action-btn.copy {
+            background: linear-gradient(135deg, #4285f4, #356ac3);
+            color: #fff;
+        }
+        .veo-action-btn.copy:hover { box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4); }
+        .veo-action-btn.open-veo {
+            background: linear-gradient(135deg, #34a853, #2d9249);
+            color: #fff;
+        }
+        .veo-action-btn.regen {
+            background: rgba(251, 188, 4, 0.15);
+            color: #fbbc04; border: 1px solid rgba(251, 188, 4, 0.3);
+        }
+
+        .generate-veo-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #4285f4, #356ac3);
+            border: none; border-radius: 14px;
+            color: #fff; font-family: 'Cairo', sans-serif;
+            font-size: 16px; font-weight: 700;
+            cursor: pointer; transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .generate-veo-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(66, 133, 244, 0.4); }
+        .generate-veo-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .veo-style-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr);
+            gap: 8px; margin-top: 8px;
+        }
+        .veo-style-opt {
+            padding: 12px 8px; border: 2px solid #2d2d44;
+            border-radius: 12px; background: #0a1520;
+            text-align: center; cursor: pointer;
+            font-size: 12px; font-weight: 600;
+            transition: all 0.3s; color: #8899aa;
+        }
+        .veo-style-opt.selected {
+            border-color: #4285f4;
+            background: rgba(66, 133, 244, 0.12);
+            color: #4285f4;
+        }
+        .veo-style-opt i { display: block; font-size: 22px; margin-bottom: 4px; }
+        .veo-style-opt small { display: block; font-size: 10px; color: #556; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -338,6 +428,75 @@
                 <button class="download-btn" onclick="downloadVideo()">
                     <i class="fas fa-download"></i> تحميل الفيديو
                 </button>
+            </div>
+        </div>
+
+        <div class="section-divider">
+            <span><i class="fab fa-google"></i> Google Veo 3 - مولد برومبت احترافي</span>
+        </div>
+
+        <div class="card veo-card">
+            <div class="card-title"><i class="fas fa-wand-magic-sparkles"></i> مولد برومبت Google Veo 3</div>
+            <p style="font-size: 12px; color: #8899aa; margin-bottom: 14px;">
+                أنشئ برومبت احترافي بأسلوب إعلانات Apple لاستخدامه مع Google Veo 3 لتوليد فيديو AI
+            </p>
+
+            <div class="form-group">
+                <label>رابط المنتج أو اسمه</label>
+                <input type="text" id="veoProductInput" placeholder="ضع رابط المنتج أو اكتب اسم المنتج..." dir="auto">
+            </div>
+
+            <div class="form-group">
+                <label>نمط الإعلان</label>
+                <div class="veo-style-grid">
+                    <div class="veo-style-opt selected" data-veo-style="apple" onclick="selectVeoStyle('apple')">
+                        <i class="fab fa-apple"></i> Apple Style
+                        <small>أنيق وبسيط</small>
+                    </div>
+                    <div class="veo-style-opt" data-veo-style="cinematic" onclick="selectVeoStyle('cinematic')">
+                        <i class="fas fa-film"></i> سينمائي
+                        <small>دراماتيكي وملحمي</small>
+                    </div>
+                    <div class="veo-style-opt" data-veo-style="energetic" onclick="selectVeoStyle('energetic')">
+                        <i class="fas fa-bolt"></i> حماسي
+                        <small>سريع وحيوي</small>
+                    </div>
+                    <div class="veo-style-opt" data-veo-style="luxury" onclick="selectVeoStyle('luxury')">
+                        <i class="fas fa-crown"></i> فاخر
+                        <small>ذهبي وراقي</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>لغة البرومبت</label>
+                <div class="lang-select">
+                    <div class="lang-option" data-veo-lang="en" onclick="selectVeoLang('en')" style="border-color: #4285f4; background: rgba(66,133,244,0.15); color: #4285f4;">
+                        🇺🇸 English
+                    </div>
+                    <div class="lang-option" data-veo-lang="ar" onclick="selectVeoLang('ar')">
+                        🇸🇦 العربية
+                    </div>
+                </div>
+            </div>
+
+            <button class="generate-veo-btn" id="veoBtn" onclick="generateVeoPrompt()">
+                <i class="fab fa-google"></i> توليد برومبت Veo 3
+            </button>
+
+            <div class="veo-prompt-box" id="veoPromptBox">
+                <pre id="veoPromptText"></pre>
+                <div class="veo-actions">
+                    <button class="veo-action-btn copy" onclick="copyVeoPrompt()">
+                        <i class="fas fa-copy"></i> نسخ البرومبت
+                    </button>
+                    <button class="veo-action-btn open-veo" onclick="window.open('https://aistudio.google.com/','_blank')">
+                        <i class="fas fa-external-link-alt"></i> فتح Google AI Studio
+                    </button>
+                    <button class="veo-action-btn regen" onclick="generateVeoPrompt()">
+                        <i class="fas fa-redo"></i> إعادة توليد
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -879,6 +1038,98 @@
     if ('speechSynthesis' in window) {
         window.speechSynthesis.getVoices();
         window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+
+    let selectedVeoStyle = 'apple';
+    let selectedVeoLang = 'en';
+    let currentVeoPrompt = '';
+
+    function selectVeoStyle(style) {
+        selectedVeoStyle = style;
+        document.querySelectorAll('.veo-style-opt').forEach(el => {
+            el.classList.toggle('selected', el.dataset.veoStyle === style);
+        });
+    }
+
+    function selectVeoLang(lang) {
+        selectedVeoLang = lang;
+        document.querySelectorAll('[data-veo-lang]').forEach(el => {
+            if (el.dataset.veoLang === lang) {
+                el.style.borderColor = '#4285f4';
+                el.style.background = 'rgba(66,133,244,0.15)';
+                el.style.color = '#4285f4';
+            } else {
+                el.style.borderColor = '#2d2d44';
+                el.style.background = '#0f0f1a';
+                el.style.color = '#aaa';
+            }
+        });
+    }
+
+    async function generateVeoPrompt() {
+        const input = document.getElementById('veoProductInput').value.trim();
+        if (!input) {
+            showToast('الرجاء إدخال رابط أو اسم المنتج', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('veoBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading-spinner"></span> جارٍ التوليد...';
+
+        try {
+            let productName = input;
+            if (input.includes('aliexpress.com') || input.includes('ali.ski') || input.includes('s.click')) {
+                try {
+                    const pData = await fetchProductData(input);
+                    if (pData && pData.title) {
+                        productName = pData.title;
+                    }
+                } catch (e) {}
+            }
+
+            const res = await fetch('/api/video/generate-veo-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    productName,
+                    style: selectedVeoStyle,
+                    lang: selectedVeoLang
+                })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                currentVeoPrompt = data.prompt;
+                const box = document.getElementById('veoPromptBox');
+                box.style.display = 'block';
+                document.getElementById('veoPromptText').textContent = data.prompt;
+                showToast('تم توليد البرومبت بنجاح!', 'success');
+            } else {
+                throw new Error(data.error || 'فشل التوليد');
+            }
+        } catch (error) {
+            showToast('حدث خطأ: ' + error.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-google"></i> توليد برومبت Veo 3';
+        }
+    }
+
+    async function copyVeoPrompt() {
+        if (!currentVeoPrompt) return;
+        try {
+            await navigator.clipboard.writeText(currentVeoPrompt);
+            showToast('تم نسخ البرومبت!', 'success');
+        } catch (e) {
+            const ta = document.createElement('textarea');
+            ta.value = currentVeoPrompt;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('تم نسخ البرومبت!', 'success');
+        }
     }
     </script>
 </body>
