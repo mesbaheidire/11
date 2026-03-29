@@ -2086,22 +2086,61 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
   "veo3_video_prompt": "[A DETAILED PARAGRAPH of 8-12 sentences ready to paste into Google Veo 3 for VIDEO generation. Must begin with 'A cinematic video advertisement showing...' and describe: 1) The product's EXACT physical appearance in precise detail (shape, color, material, texture, brand markings), 2) Continuous camera movements throughout the entire video (tracking shots, orbits, push-ins, pull-outs with specific angles), 3) Frame-by-frame visual progression (what happens at each moment), 4) Lighting changes and atmosphere (volumetric rays, rim lighting, color temperature shifts), 5) Particle effects and environmental elements, 6) The emotional arc from dramatic opening to satisfying close. The prompt must make clear this is a MOVING VIDEO with CONTINUOUS MOTION, not a still image. Total video duration 30-60 seconds.]"
 }`;
 
-    const textPrompt = hasImage
-      ? `Look at this product image VERY carefully. Analyze every pixel: exact shape and proportions, precise colors, material type (metal/plastic/rubber/PCB), surface finish (matte/glossy/brushed/textured), all visible text and logos with exact positions, ports and connectors, heatsink fin patterns, LED positions, cable attachments, PCB edges, sticker labels — everything visible.
+    const genAI = new GoogleGenerativeAI(apiKey);
+    let productDescription = '';
 
-Generate a HIGHLY DETAILED Google Veo 3 VIDEO advertisement prompt as JSON for this EXACT product. The video should be 30-60 seconds long.
+    if (hasImage) {
+      try {
+        const descPrompt = `You are a professional product photographer and 3D artist. Analyze this product image with extreme precision.
+
+Describe EXACTLY what you see in this image. Write a single detailed paragraph covering ALL of these:
+
+1. SHAPE: Exact form factor, proportions (length:width:height ratio), angles, edges (rounded or sharp)
+2. COLORS: Every color visible with approximate hex codes — the main body color, accent colors, connector colors, label colors
+3. MATERIALS: What each surface is made of — brushed aluminum, matte black plastic, glossy coating, bare copper, gold-plated pins, black PCB (printed circuit board), rubber, etc.
+4. BRAND/LOGO: Exact logo design (shape, color, position on product). Describe the logo symbol precisely (e.g. "a white geometric angular 'N' logo centered on the front face")
+5. COMPONENTS VISIBLE: Heatsink fins (count, direction, material), M.2 connector pins (gold pins at bottom edge), NAND chips, controller chips, stickers, thermal pads, screws
+6. TEXT: Any visible text, model numbers, capacity labels, certification marks and their exact positions
+7. OVERALL LOOK: The product's visual identity — is it gaming-style with aggressive angles? Minimal and clean? Industrial? Professional?
+
+Be EXTREMELY specific. A 3D artist must be able to recreate this EXACT product from your description alone — not a generic version, but THIS specific product with its exact logo, exact colors, exact heatsink pattern, exact proportions.
+
+Write ONLY the description paragraph, nothing else.`;
+
+        const descParts = [...parts.filter(p => p.inlineData), { text: descPrompt }];
+        const descModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+        const descResult = await descModel.generateContent(descParts);
+        const descResponse = await descResult.response;
+        productDescription = descResponse.text().trim();
+        console.log('Product description from Gemini:', productDescription.substring(0, 200));
+      } catch (descErr) {
+        console.log('Failed to get product description:', descErr.message);
+      }
+    }
+
+    const appearanceInstruction = productDescription
+      ? `USE THIS EXACT PRODUCT DESCRIPTION (from image analysis) for "product_appearance" and reference it in ALL scene descriptions and in veo3_video_prompt:\n"""${productDescription}"""\n\nDo NOT write a generic product description. Copy and expand on the description above.`
+      : `Write a detailed product_appearance based on what "${productName}" typically looks like.`;
+
+    const textPrompt = hasImage
+      ? `You have already analyzed the product image. Here is the precise description of the product:
+"""${productDescription}"""
+
+Now generate a HIGHLY DETAILED Google Veo 3 VIDEO advertisement prompt as JSON for this EXACT product. The video should be 30-60 seconds long.
+
+${appearanceInstruction}
 
 CRITICAL RULES:
-1. "product_short_name": Max 4 words. "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink" → "Netac NVMe M.2 SSD". Brand + type only.
-2. "product_appearance": Write a DETAILED paragraph as if briefing a 3D artist. Include: exact shape, dimensions ratio, every color with hex codes if possible, material types for each surface, texture descriptions, logo/text positions, connector locations, component details. The Veo 3 AI must see this text and generate the EXACT product, not a generic version.
-3. Create 6-8 stages in the sequence (not 3-5). Each "description" must be 3+ sentences describing continuous VIDEO MOTION: frame-by-frame what happens, how the product physically moves/rotates/floats, how light sweeps across specific materials and surfaces, particle behaviors, reflections on textures. Reference SPECIFIC physical details from the image (e.g. "light catches the brushed aluminum heatsink fins" not just "light on product").
-4. Each stage has "camera", "lighting", "environment", "vfx" fields — fill ALL with precise professional details.
-5. "veo3_video_prompt": Write 8-12 sentences. Start with "A cinematic video advertisement showing...". Describe the product's EXACT appearance in detail. Then describe continuous camera movements with specific angles and speeds. Then describe frame-by-frame visual progression, lighting changes, particle effects, environmental elements, and emotional arc. The total video is 30-60 seconds of CONTINUOUS MOTION.
-6. Use the SHORT product name everywhere, never the full title.
+1. "product_short_name": Max 4 words. Brand + product type only. Example: "Netac NVMe M.2 SSD"
+2. "product_appearance": MUST contain the detailed physical description above — include EVERY detail: exact logo design, exact colors with hex codes, exact materials for each surface, exact component layout. A 3D artist must recreate THIS EXACT product from the description.
+3. Create 6-8 stages. Each "description" must be 3+ sentences referencing the product's ACTUAL appearance: mention the specific logo, specific heatsink fin pattern, specific material colors, specific connector pins by name. For example: "light sweeps across the brushed black aluminum heatsink revealing 8 vertical fins, then catches the white geometric logo on the front face" — NOT generic "light on product surface".
+4. Fill ALL fields: camera (movement, framing, speed), lighting, environment, vfx.
+5. "veo3_video_prompt": 8-12 sentences. Start with "A cinematic video advertisement showing a [exact product description with shape, color, material, logo]...". The FIRST 2-3 sentences MUST describe the product's physical appearance in precise detail so Veo 3 renders the CORRECT product. Then describe camera motion, visual progression, lighting. 30-60 seconds of CONTINUOUS VIDEO MOTION.
+6. Use SHORT product name everywhere.
 
 The ad style should be: ${styleDesc}
 
-JSON structure to follow (6-8 stages in sequence):
+JSON structure (6-8 stages):
 ${jsonStructure}
 
 - All descriptions in English
@@ -2110,12 +2149,12 @@ ${jsonStructure}
 The video should be 30-60 seconds long.
 
 CRITICAL RULES:
-1. "product_short_name": Max 4 words. Example: "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink for Laptop Desktop" → "Netac NVMe M.2 SSD"
-2. "product_appearance": Write a DETAILED paragraph describing the typical physical appearance as if briefing a 3D artist — exact shape, proportions, colors with hex codes, material types (aluminum/plastic/rubber), textures (brushed/matte/glossy), logo positions, ports, components, packaging.
-3. Create 6-8 stages in the sequence. Each "description" must be 3+ sentences of continuous VIDEO MOTION: how the product moves, rotates, floats, how light interacts with specific materials, particle effects, reflections. NOT a static image description.
-4. Each stage needs "camera", "lighting", "environment", "vfx" — all with precise professional details.
-5. "veo3_video_prompt": Write 8-12 sentences starting with "A cinematic video advertisement showing...". Describe the product's detailed appearance, continuous camera motion with angles, frame-by-frame progression, lighting shifts, particles, and emotional arc. 30-60 seconds of CONTINUOUS MOTION.
-6. Use SHORT product name everywhere, never full title.
+1. "product_short_name": Max 4 words. Example: "Netac NVMe M.2 SSD"
+2. "product_appearance": Describe the typical physical appearance of "${productName}" in extreme detail — exact shape, proportions, colors with hex codes, material types, textures, logo design and position, connectors, components. A 3D artist must recreate the product from this description alone.
+3. Create 6-8 stages. Each "description" must be 3+ sentences referencing SPECIFIC physical features of the product. NOT generic descriptions.
+4. Fill ALL fields: camera, lighting, environment, vfx.
+5. "veo3_video_prompt": 8-12 sentences. Start with "A cinematic video advertisement showing a [detailed product appearance]...". First 2-3 sentences describe EXACT product appearance. 30-60 seconds CONTINUOUS VIDEO MOTION.
+6. Use SHORT product name everywhere.
 
 The ad style should be: ${styleDesc}
 
@@ -2127,7 +2166,6 @@ ${jsonStructure}
 
     parts.push({ text: textPrompt });
 
-    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     const result = await model.generateContent(parts);
     const response = await result.response;
