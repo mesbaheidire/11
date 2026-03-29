@@ -1949,52 +1949,79 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
 
     const apiKey = getCurrentGeminiKey();
     if (!apiKey) {
-      const pName = productName ? productName.split(/\s+/).slice(0, 5).join(' ') : 'Product';
+      const pName = productName ? productName.split(/\s+/).slice(0, 4).join(' ') : 'Product';
       const fallback = JSON.stringify({
         product_short_name: pName,
-        product_appearance: `A premium ${pName} product with sleek design and modern build quality.`,
-        title: `${pName} — Cinematic Video Ad`,
+        product_appearance: `A premium ${pName} with sleek modern industrial design, clean lines, and high-quality materials including brushed metal surfaces and matte black accents.`,
+        title: `${pName} — ${styleLbl} Video Ad`,
         style: `Cinematic, ${styleLbl}`,
-        duration: "10-15 seconds",
+        duration: "30-60 seconds",
         aspect_ratio: "9:16",
         sequence: [
           {
-            stage: "Opening — Dark Reveal",
-            description: `A cinematic video opens in pure darkness. Particles of light begin swirling and converging in slow motion. The camera tracks smoothly from left to right as the ${pName} gradually materializes from the light particles, rotating slowly into frame.`,
-            camera: { movement: "slow-motion tracking from left to right, continuous flow", framing: "wide to medium, smooth transition" },
-            lighting: "high-contrast rim lighting against deep black void",
-            duration: "3 seconds"
+            stage: "Stage 1 — Void Awakening",
+            description: `The video opens in absolute darkness. A single point of warm light (#FFD700) ignites at the center of frame and begins pulsing outward. Microscopic golden particles emerge from the light source, swirling in slow-motion spiral patterns. The particles gradually increase in density, creating a galaxy-like formation that hints at the shape of the ${pName}. Each particle catches rim light as it travels, creating thousands of tiny flares across the dark void.`,
+            camera: { movement: "Static centered, then slow push-in from 2m to 1m over 6 seconds", framing: "Wide establishing shot, f/2.8, center-weighted", speed: "0.3x slow-motion" },
+            lighting: "Single warm point light (3200K) expanding outward, no fill, absolute black surroundings",
+            environment: "Pure black void, no reflective surfaces, floating particles only",
+            vfx: "Golden particle swirl (10000+ particles), volumetric light cone expanding, subtle lens flare at light source center",
+            duration: "8 seconds"
           },
           {
-            stage: "Product Orbit",
-            description: `The camera begins a smooth 360-degree orbit around the ${pName}. The product rotates on its axis as volumetric light sweeps across its surface, revealing every angle and detail. Subtle dust particles float in the air catching the light.`,
-            camera: { movement: "continuous 360-degree orbit, steady speed", framing: "medium shot, product centered" },
-            lighting: "soft volumetric lighting from above with moving rim light",
-            duration: "4 seconds"
+            stage: "Stage 2 — Particle Convergence",
+            description: `The swirling particles begin accelerating toward a central point, converging from all directions. As they collide and merge, the solid form of the ${pName} begins materializing piece by piece — edges first, then surfaces filling in like a 3D print building layer by layer. Blue energy ripples (#00A8FF) pulse across each newly formed surface. The product's materials become visible as they solidify: brushed metal catches the light differently than matte black sections.`,
+            camera: { movement: "Slow orbit begins, 15°/sec clockwise, rising from eye-level to 30° above", framing: "Medium shot tightening to medium-close, f/1.8, shallow DOF", speed: "0.5x transitioning to real-time" },
+            lighting: "Cool blue key light (5600K) from upper right, warm rim light (3200K) from behind-left, ratio 3:1",
+            environment: "Dark void transitioning to subtle dark gradient floor reflection appearing below product",
+            vfx: "Particle convergence with blue energy pulses on surface formation, material texture reveal effect, micro-sparks at convergence points",
+            duration: "8 seconds"
           },
           {
-            stage: "Macro Detail Sweep",
-            description: `The camera pushes in smoothly to an extreme close-up, gliding across the surface of the ${pName}. Light sweeps across textures and details. The focus pulls between different features creating depth.`,
-            camera: { movement: "smooth dolly push-in with lateral micro-movements", framing: "extreme macro, rack focus" },
-            lighting: "warm accent light moving across surface, bokeh background",
-            duration: "3 seconds"
+            stage: "Stage 3 — Full Reveal Orbit",
+            description: `The ${pName} is now fully formed and floating at center frame. The camera continues its orbit, now revealing the complete product from every angle. As each face comes into view, specific details are highlighted: the brand logo catches a rim light flare, surface textures shift between glossy and matte as the viewing angle changes, ports and connectors create geometric shadow patterns. The product rotates slowly on its own axis counter to the camera's orbit, creating a dynamic dual-rotation showcase. Volumetric light rays sweep across the scene from behind.`,
+            camera: { movement: "Continuous 360° orbit at 20°/sec, maintaining 0.8m distance, height oscillates ±10°", framing: "Medium shot, f/2.0, product fills 60% of frame, focus tracks product surface", speed: "Real-time" },
+            lighting: "Three-point setup: key 45° upper-right (5000K), fill 30° left (4200K at 40% intensity), strong rim backlight (6000K). Volumetric fog at 15% density",
+            environment: "Reflective dark glass floor showing product underside reflection, dark gradient backdrop (#0a0a1a to #000000), subtle ambient particles",
+            vfx: "Rim light flares on edges, surface material reflections, volumetric god-rays sweeping left-to-right, subtle lens dust particles",
+            duration: "10 seconds"
           },
           {
-            stage: "Hero Finale",
-            description: `The camera slowly pulls back as the ${pName} settles into a hero pose. A gradient glow builds behind the product. The product does one final slow rotation as text fades in smoothly above.`,
-            camera: { movement: "slow pull-out with slight upward tilt", framing: "full product hero shot, centered" },
-            lighting: "clean gradient backlight, soft shadows falling forward",
-            duration: "3 seconds"
+            stage: "Stage 4 — Macro Detail Exploration",
+            description: `The camera breaks from its orbit and begins a smooth dolly push-in toward the ${pName}'s most distinctive feature. As it approaches extreme close-up range, surface textures become dramatically visible — every grain of brushed metal, every pixel of printed text, the precise machining lines and tolerances. The focus racks slowly between the nearest surface detail and the product edge behind, creating cinematic depth. Warm accent light slides across the surface left-to-right, revealing micro-textures and material quality. A subtle reflection of the studio lights glides across any glossy surfaces.`,
+            camera: { movement: "Smooth dolly push-in from medium to extreme macro over 6 seconds, then slow lateral slide right", framing: "Extreme close-up, f/1.4, shallow DOF with rack focus, product surface fills 90% of frame", speed: "0.7x slight slow-motion" },
+            lighting: "Warm moving accent (3500K) sweeping left-to-right, cool static fill from above (5500K at 20%), strong separation backlight",
+            environment: "Completely out of focus background, all attention on surface detail, bokeh circles from rim lights",
+            vfx: "Surface texture enhancement, light sweep reflection, focus rack animation, micro dust particles in DOF bokeh",
+            duration: "8 seconds"
+          },
+          {
+            stage: "Stage 5 — Dynamic Feature Showcase",
+            description: `The camera pulls back rapidly to a medium-wide shot as the ${pName} begins a dramatic slow rotation on a vertical axis. During the rotation, transparent holographic info-graphic elements appear floating beside the product, highlighting key features with clean lines connecting to specific product areas. The product pauses at its most photogenic angle as each feature callout animates in. Energy lines pulse along the product's edges in the brand's color scheme. The entire scene has a tech-forward, premium feel with the product commanding absolute attention.`,
+            camera: { movement: "Quick pull-out to medium-wide, then steady hold with subtle 2% zoom pulse", framing: "Medium-wide, f/2.8, product centered with space for floating UI elements, 16:9 safe area", speed: "Pull-out at 2x speed, then real-time hold" },
+            lighting: "Dramatic split-lighting: cool blue left (6500K), warm amber right (2800K). Rim light intensifies during rotation. Subtle under-glow from reflective floor",
+            environment: "Dark reflective floor, abstract gradient backdrop, floating holographic UI elements in product's color scheme",
+            vfx: "Holographic feature callouts (thin lines, minimal text), edge energy pulses, rotation motion blur trails, ambient particle field",
+            duration: "8 seconds"
+          },
+          {
+            stage: "Stage 6 — Atmospheric Hero Landing",
+            description: `The holographic elements dissolve into particles. The ${pName} slowly descends and settles onto the reflective surface with a satisfying subtle impact — a ring of light ripples outward from the landing point across the floor. The camera smoothly pulls back and rises to a classic hero angle (30° above, slightly off-center). A gradient glow (#FFD700 to #FF6B00) builds behind the product, creating a warm halo effect. The product does one final quarter-rotation to its hero angle as clean typography fades in above: the short product name in a modern sans-serif font, followed by a subtle tagline below.`,
+            camera: { movement: "Slow pull-out and rise to 30° hero angle, final position 1.5m from product, gentle ease-out deceleration", framing: "Hero composition, rule-of-thirds with product slightly below center, f/2.8, deep focus", speed: "0.8x elegant slow-motion" },
+            lighting: "Warm gradient backlight building in intensity, soft key from above (4500K), floor reflection catch-light, final clean even illumination",
+            environment: "Reflective dark surface with light ripple effect, warm gradient backdrop building from black to golden amber, clean and minimal",
+            vfx: "Floor light ripple from landing, gradient glow build, text fade-in animation (0.5s ease), particle dissolve from previous stage, subtle lens bloom on backlight",
+            duration: "10 seconds"
           }
         ],
-        color_palette: ["#000000", "#FFFFFF", "#C0C0C0"],
-        mood: "Premium, aspirational, sleek and modern",
-        music_style: "Minimal electronic with deep bass, building to a crescendo",
+        color_palette: ["#000000", "#FFD700", "#00A8FF", "#1a1a2e"],
+        mood: "Begins mysterious and dark, builds through technical awe, resolves into confident premium elegance. The emotional arc mirrors unboxing a luxury product for the first time.",
+        music_style: "Deep electronic ambient: 85 BPM, sub-bass foundation, minimal synth pads building slowly, crystalline arpeggios entering at stage 3, bass drop at landing moment, resolving to warm pad chord",
+        sound_design: "Stage 1: deep sub-rumble building. Stage 2: crystalline particle chimes, electric crackle on convergence. Stage 3: smooth whoosh on orbit, subtle material sounds. Stage 4: intimate close-up ambiance, fabric/metal texture sounds. Stage 5: tech UI sounds for callouts, energy pulse hum. Stage 6: satisfying impact thud with reverb, light ripple shimmer, typography whoosh",
         text_overlays: [
-          { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
-          { time: "12s", text: "Available Now", style: "smaller, beneath title" }
+          { time: "48s", text: pName, style: "32px Inter/Helvetica, white, fade-in 0.5s ease, center-top third" },
+          { time: "50s", text: "Redefine Performance", style: "18px Inter Light, #CCCCCC, fade-in 0.3s ease, below title" }
         ],
-        veo3_video_prompt: `A cinematic video of a ${pName} floating in a dark void, slowly rotating as particles of light swirl around it in elegant slow motion. The camera begins with a dramatic tracking shot from left to right, then smoothly transitions into a full 360-degree orbit around the product, revealing every angle and surface detail. Volumetric light rays sweep across the product's surface as the camera pushes in for extreme macro close-ups of key features and textures. The video ends with a slow pull-out to a hero shot as a clean gradient glow builds behind the product. Premium studio lighting with rim lights and subtle reflections throughout, dust particles floating in the air catching light.`
+        veo3_video_prompt: `A cinematic video advertisement showing a ${pName} with premium industrial design, featuring brushed metal surfaces and matte black accents. The video opens in complete darkness as a single warm golden light ignites and thousands of golden particles begin swirling in slow-motion spiral patterns. The particles gradually accelerate and converge, materializing the product piece by piece with blue energy ripples pulsing across each newly formed surface. Once fully formed, the camera begins a smooth continuous 360-degree orbit around the floating product at a distance of 0.8 meters, revealing every angle as volumetric light rays sweep through the scene from behind. The camera then pushes in for extreme macro close-ups gliding across the surface textures — every grain of brushed metal, every printed logo, every machining line becomes dramatically visible as warm accent light slides left-to-right across the surface. Pulling back to a medium-wide shot, the product performs a dramatic slow rotation while transparent holographic feature callouts appear beside it. The product then descends and settles onto a reflective dark surface with a satisfying impact, sending a ring of light rippling outward across the floor. The camera rises to a 30-degree hero angle as a warm golden gradient glow builds behind the product, and clean modern typography fades in above. The lighting transitions from a single point source through dramatic three-point studio lighting to warm gradient backlighting, while the mood evolves from mysterious darkness through technical showcase to confident premium elegance. Total duration 30-60 seconds with continuous fluid camera motion throughout.`
       }, null, 2);
       return res.json({ success: true, prompt: fallback });
     }
@@ -2028,64 +2055,71 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
     const hasImage = parts.length > 0;
 
     const jsonStructure = `{
-  "product_short_name": "[SHORT brand+model name, max 5 words, e.g. 'Netac NVMe M.2 SSD']",
-  "product_appearance": "[PRECISE physical description: exact shape, colors, materials, textures, labels, ports, components visible — describe what someone would SEE if holding this product]",
+  "product_short_name": "[SHORT brand+model name, max 4 words, e.g. 'Netac NVMe M.2 SSD']",
+  "product_appearance": "[VERY DETAILED physical description: exact dimensions/proportions, precise colors with hex if possible, material types (matte aluminum, glossy plastic, brushed metal, rubber grip, etc.), surface textures, visible labels/logos with their exact position, ports/connectors, LED indicators, heatsink fins count/shape, PCB edges if visible, packaging elements — describe as if writing for a 3D artist who must recreate this product perfectly]",
   "title": "[Short Product Name] — [Style] Video Ad",
-  "style": "[Cinematic/Minimalist/Energetic/Luxury], [style description]",
-  "duration": "10-15 seconds",
+  "style": "[Cinematic/Minimalist/Energetic/Luxury], [detailed style description]",
+  "duration": "30-60 seconds",
   "aspect_ratio": "9:16",
   "sequence": [
     {
-      "stage": "Opening — [Stage Name]",
-      "description": "[Detailed VIDEO scene description — describe MOTION, movement, transitions, particles, light rays. Must describe a MOVING VIDEO SCENE not a static image. Reference the product's EXACT appearance.]",
+      "stage": "Stage 1 — [Stage Name]",
+      "description": "[RICH VIDEO scene description, minimum 3 sentences. Describe: what is physically happening frame-by-frame, how the product moves/rotates/transforms, particle effects with specific colors and behaviors, light ray directions and color temperatures, reflections on surfaces, environmental elements. Reference the product's EXACT physical appearance from product_appearance — mention specific materials, colors, textures, logo positions as they catch light or come into view.]",
       "camera": {
-        "movement": "[e.g. slow-motion tracking from left to right]",
-        "framing": "[e.g. macro to medium-wide, transitioning smoothly]"
+        "movement": "[Precise camera path: starting position, trajectory, speed changes, e.g. 'begins at 45° low angle, slowly rises while tracking left at 15°/sec, accelerates into a smooth arc']",
+        "framing": "[Exact framing: e.g. 'extreme close-up filling 80% of frame, shallow depth of field at f/1.4, focus rack from logo to heatsink fins']",
+        "speed": "[e.g. '0.5x slow-motion for first 2 seconds, then real-time']"
       },
-      "lighting": "[e.g. high-contrast studio lighting with rim light]",
-      "duration": "[e.g. 3 seconds]"
+      "lighting": "[Precise lighting setup: key light position/color temp/intensity, fill light, rim/back light, practical lights, volumetric fog density, shadow direction and softness]",
+      "environment": "[Background/environment: e.g. 'floating in dark void', 'reflective black glass surface', 'abstract particle field', 'gradient backdrop #1a1a2e to #000']",
+      "vfx": "[Visual effects: particle types/colors/behavior, light rays, lens flares, reflections, material reveals, morphing effects]",
+      "duration": "[e.g. 5 seconds]"
     }
   ],
-  "color_palette": ["[color1]", "[color2]", "[color3]"],
-  "mood": "[overall mood description]",
-  "music_style": "[music description]",
+  "color_palette": ["[hex1]", "[hex2]", "[hex3]", "[hex4]"],
+  "mood": "[detailed mood with emotional progression through the video]",
+  "music_style": "[specific music: tempo BPM, instruments, build/drop moments, bass characteristics]",
+  "sound_design": "[specific sound effects: whooshes, impacts, risers, bass drops, ambient textures timed to visual moments]",
   "text_overlays": [
-    {"time": "[e.g. 8s]", "text": "[SHORT product name only]", "style": "[text style]"}
+    {"time": "[timestamp]", "text": "[SHORT product name only, max 4 words]", "style": "[font, size, animation, position]"}
   ],
-  "veo3_video_prompt": "[A SINGLE PARAGRAPH ready-to-paste text prompt for Google Veo 3 VIDEO generation. Must start with 'A cinematic video of...' or 'A slow-motion video showing...'. Describe the product's EXACT physical appearance in detail. Describe continuous camera MOTION and MOVEMENT throughout. Emphasize this is a VIDEO with flowing motion, not a still image. Include lighting, atmosphere, and transitions. 4-6 sentences.]"
+  "veo3_video_prompt": "[A DETAILED PARAGRAPH of 8-12 sentences ready to paste into Google Veo 3 for VIDEO generation. Must begin with 'A cinematic video advertisement showing...' and describe: 1) The product's EXACT physical appearance in precise detail (shape, color, material, texture, brand markings), 2) Continuous camera movements throughout the entire video (tracking shots, orbits, push-ins, pull-outs with specific angles), 3) Frame-by-frame visual progression (what happens at each moment), 4) Lighting changes and atmosphere (volumetric rays, rim lighting, color temperature shifts), 5) Particle effects and environmental elements, 6) The emotional arc from dramatic opening to satisfying close. The prompt must make clear this is a MOVING VIDEO with CONTINUOUS MOTION, not a still image. Total video duration 30-60 seconds.]"
 }`;
 
     const textPrompt = hasImage
-      ? `Look at this product image VERY carefully. Study every detail: the exact shape, color, material, texture, brand markings, ports, components, heatsink fins, labels — everything you can see.
+      ? `Look at this product image VERY carefully. Analyze every pixel: exact shape and proportions, precise colors, material type (metal/plastic/rubber/PCB), surface finish (matte/glossy/brushed/textured), all visible text and logos with exact positions, ports and connectors, heatsink fin patterns, LED positions, cable attachments, PCB edges, sticker labels — everything visible.
 
-Generate a Google Veo 3 VIDEO advertisement prompt as JSON for this EXACT product.
+Generate a HIGHLY DETAILED Google Veo 3 VIDEO advertisement prompt as JSON for this EXACT product. The video should be 30-60 seconds long.
 
 CRITICAL RULES:
-1. "product_short_name": Extract a SHORT name (max 5 words). For example "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink" should become "Netac NVMe M.2 SSD". Just brand + product type.
-2. "product_appearance": Describe EXACTLY what the product looks like in the image — its real physical shape, color, size, visible components, textures, labels. Be extremely precise so the video shows THIS exact product, not a generic one.
-3. Every "description" in the sequence MUST describe a MOVING VIDEO SCENE — camera orbiting, product rotating, particles flowing, light sweeping. NOT a static image.
-4. Use the SHORT product name everywhere, never the full long title.
-5. "veo3_video_prompt": Write a SINGLE PARAGRAPH starting with "A cinematic video of..." that describes the product's exact appearance and continuous motion. This must generate a VIDEO not an image.
+1. "product_short_name": Max 4 words. "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink" → "Netac NVMe M.2 SSD". Brand + type only.
+2. "product_appearance": Write a DETAILED paragraph as if briefing a 3D artist. Include: exact shape, dimensions ratio, every color with hex codes if possible, material types for each surface, texture descriptions, logo/text positions, connector locations, component details. The Veo 3 AI must see this text and generate the EXACT product, not a generic version.
+3. Create 6-8 stages in the sequence (not 3-5). Each "description" must be 3+ sentences describing continuous VIDEO MOTION: frame-by-frame what happens, how the product physically moves/rotates/floats, how light sweeps across specific materials and surfaces, particle behaviors, reflections on textures. Reference SPECIFIC physical details from the image (e.g. "light catches the brushed aluminum heatsink fins" not just "light on product").
+4. Each stage has "camera", "lighting", "environment", "vfx" fields — fill ALL with precise professional details.
+5. "veo3_video_prompt": Write 8-12 sentences. Start with "A cinematic video advertisement showing...". Describe the product's EXACT appearance in detail. Then describe continuous camera movements with specific angles and speeds. Then describe frame-by-frame visual progression, lighting changes, particle effects, environmental elements, and emotional arc. The total video is 30-60 seconds of CONTINUOUS MOTION.
+6. Use the SHORT product name everywhere, never the full title.
 
 The ad style should be: ${styleDesc}
 
-JSON structure to follow (3-5 stages in sequence):
+JSON structure to follow (6-8 stages in sequence):
 ${jsonStructure}
 
 - All descriptions in English
 - Write ONLY valid JSON, no markdown code blocks, no text before or after`
-      : `Generate a Google Veo 3 VIDEO advertisement prompt as JSON for: "${productName}"
+      : `Generate a HIGHLY DETAILED Google Veo 3 VIDEO advertisement prompt as JSON for: "${productName}"
+The video should be 30-60 seconds long.
 
 CRITICAL RULES:
-1. "product_short_name": Shorten the name to max 5 words. For example "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink for Laptop Desktop" → "Netac NVMe M.2 SSD"
-2. "product_appearance": Describe the typical physical appearance of this type of product accurately (shape, color, materials, components).
-3. Every "description" MUST describe a MOVING VIDEO SCENE with camera motion, product rotation, particles, light movement. NOT a static image.
-4. Use the SHORT product name everywhere, never the full long title.
-5. "veo3_video_prompt": Write a SINGLE PARAGRAPH starting with "A cinematic video of..." describing continuous motion. This must generate a VIDEO not an image.
+1. "product_short_name": Max 4 words. Example: "Netac SSD NVME M2 1TB 2TB SSD 250GB 500GB M2 Solid State Hard Disk Drive PCIe 3.0X4 with Heat Sink for Laptop Desktop" → "Netac NVMe M.2 SSD"
+2. "product_appearance": Write a DETAILED paragraph describing the typical physical appearance as if briefing a 3D artist — exact shape, proportions, colors with hex codes, material types (aluminum/plastic/rubber), textures (brushed/matte/glossy), logo positions, ports, components, packaging.
+3. Create 6-8 stages in the sequence. Each "description" must be 3+ sentences of continuous VIDEO MOTION: how the product moves, rotates, floats, how light interacts with specific materials, particle effects, reflections. NOT a static image description.
+4. Each stage needs "camera", "lighting", "environment", "vfx" — all with precise professional details.
+5. "veo3_video_prompt": Write 8-12 sentences starting with "A cinematic video advertisement showing...". Describe the product's detailed appearance, continuous camera motion with angles, frame-by-frame progression, lighting shifts, particles, and emotional arc. 30-60 seconds of CONTINUOUS MOTION.
+6. Use SHORT product name everywhere, never full title.
 
 The ad style should be: ${styleDesc}
 
-JSON structure (3-5 stages):
+JSON structure (6-8 stages):
 ${jsonStructure}
 
 - All descriptions in English
@@ -2124,55 +2158,82 @@ ${jsonStructure}
   } catch (error) {
     console.log('Veo prompt error:', error.message);
     const rawName = req.body?.productName || 'Product';
-    const pName = rawName.split(/\s+/).slice(0, 5).join(' ');
+    const pName = rawName.split(/\s+/).slice(0, 4).join(' ');
     const selStyle = req.body?.style || 'apple';
     const catchStyleNames = { apple: 'Apple-style clean minimalist', cinematic: 'cinematic dramatic slow-motion', energetic: 'fast-paced energetic TikTok style', luxury: 'luxury premium gold and black' };
     const catchStyleLbl = catchStyleNames[selStyle] || catchStyleNames.apple;
     const fallback = JSON.stringify({
       product_short_name: pName,
-      product_appearance: `A premium ${pName} with modern industrial design.`,
+      product_appearance: `A premium ${pName} with modern industrial design, clean lines, brushed metal and matte black surfaces.`,
       title: `${pName} — ${catchStyleLbl} Video Ad`,
       style: `Cinematic, ${catchStyleLbl}`,
-      duration: "10-15 seconds",
+      duration: "30-60 seconds",
       aspect_ratio: "9:16",
       sequence: [
         {
-          stage: "Opening — Dark Reveal",
-          description: `A cinematic video opens in darkness. Light particles swirl and converge in slow motion as the ${pName} materializes, rotating slowly into frame with dramatic rim lighting.`,
-          camera: { movement: "slow-motion tracking, continuous flow", framing: "wide to medium transition" },
-          lighting: "high-contrast rim lighting, dark background",
-          duration: "3 seconds"
+          stage: "Stage 1 — Void Awakening",
+          description: `The video opens in absolute darkness. A single warm golden light ignites at center frame, pulsing outward. Thousands of golden particles emerge, swirling in slow-motion spirals that gradually form the silhouette of the ${pName}. Each particle catches rim light creating tiny flares across the void. The density builds until the product shape is unmistakable.`,
+          camera: { movement: "Static centered, slow push-in from 2m to 1m", framing: "Wide establishing, f/2.8", speed: "0.3x slow-motion" },
+          lighting: "Single warm point light (3200K) expanding, absolute black surroundings",
+          environment: "Pure black void, floating golden particles only",
+          vfx: "Golden particle swirl, volumetric light cone, lens flare at center",
+          duration: "8 seconds"
         },
         {
-          stage: "Product Orbit",
-          description: `The camera orbits 360 degrees around the ${pName} as volumetric light sweeps across its surface. Dust particles float, catching light. Every angle revealed.`,
-          camera: { movement: "continuous 360-degree orbit", framing: "medium shot, centered" },
-          lighting: "soft volumetric light from above, moving rim light",
-          duration: "4 seconds"
+          stage: "Stage 2 — Particle Convergence",
+          description: `The particles accelerate inward from all directions, converging at center. The solid form of the ${pName} materializes piece by piece — edges first, then surfaces filling in layer by layer. Blue energy ripples pulse across each newly formed surface. Materials become visible as they solidify: brushed metal catches light differently than matte sections.`,
+          camera: { movement: "Slow orbit begins, 15°/sec clockwise, rising from eye-level to 30° above", framing: "Medium to medium-close, f/1.8, shallow DOF", speed: "0.5x to real-time" },
+          lighting: "Cool blue key (5600K) upper right, warm rim (3200K) behind-left",
+          environment: "Dark void with gradient floor reflection appearing",
+          vfx: "Particle convergence, blue energy surface pulses, micro-sparks at merge points",
+          duration: "8 seconds"
         },
         {
-          stage: "Macro Detail Sweep",
-          description: `Camera pushes into extreme close-up, gliding across the ${pName}'s surface. Light sweeps across textures. Focus racks between features.`,
-          camera: { movement: "smooth dolly push-in", framing: "extreme macro, rack focus" },
-          lighting: "warm accent light, bokeh background",
-          duration: "3 seconds"
+          stage: "Stage 3 — Full Reveal Orbit",
+          description: `The ${pName} floats fully formed at center. The camera orbits 360°, revealing every angle. The brand logo catches rim light flare, surface textures shift between glossy and matte with viewing angle. The product counter-rotates slowly on its axis. Volumetric light rays sweep from behind, creating dramatic depth.`,
+          camera: { movement: "Continuous 360° orbit at 20°/sec, 0.8m distance, height oscillates ±10°", framing: "Medium, f/2.0, product fills 60%", speed: "Real-time" },
+          lighting: "Three-point: key 45° upper-right (5000K), fill 30° left (4200K 40%), strong rim backlight (6000K), volumetric fog 15%",
+          environment: "Reflective dark glass floor, gradient backdrop #0a0a1a to #000, ambient particles",
+          vfx: "Rim light edge flares, surface reflections, volumetric god-rays, lens dust",
+          duration: "10 seconds"
         },
         {
-          stage: "Hero Finale",
-          description: `Camera pulls back as the ${pName} settles into hero pose. Gradient glow builds behind. Final slow rotation as text fades in.`,
-          camera: { movement: "slow pull-out with upward tilt", framing: "centered hero shot" },
-          lighting: "clean gradient backlight, soft shadows",
-          duration: "3 seconds"
+          stage: "Stage 4 — Macro Detail Exploration",
+          description: `Camera pushes into extreme close-up, gliding across the ${pName}'s surface. Every grain of brushed metal, every printed character becomes visible. Focus racks slowly between nearest surface and product edge behind. Warm accent light slides left-to-right revealing micro-textures and material quality.`,
+          camera: { movement: "Smooth dolly push-in to extreme macro, then slow lateral slide", framing: "Extreme close-up f/1.4, rack focus, surface fills 90%", speed: "0.7x slight slow-motion" },
+          lighting: "Warm moving accent (3500K) sweeping L-R, cool static fill above (5500K 20%), separation backlight",
+          environment: "Out of focus background, bokeh circles from rim lights",
+          vfx: "Surface texture enhancement, light sweep reflection, focus rack, bokeh particles",
+          duration: "8 seconds"
+        },
+        {
+          stage: "Stage 5 — Feature Showcase",
+          description: `Camera pulls back rapidly to medium-wide as the ${pName} begins dramatic slow rotation. Transparent holographic callouts appear, highlighting key features with clean lines connecting to product areas. Energy lines pulse along edges. The scene feels tech-forward and premium.`,
+          camera: { movement: "Quick pull-out to medium-wide, steady hold with subtle 2% zoom pulse", framing: "Medium-wide f/2.8, space for UI elements", speed: "Pull-out 2x, then real-time" },
+          lighting: "Split-lighting: cool blue left (6500K), warm amber right (2800K), rim intensifies, under-glow from floor",
+          environment: "Dark reflective floor, abstract gradient, floating holographic UI elements",
+          vfx: "Holographic callouts, edge energy pulses, rotation motion blur trails, ambient particle field",
+          duration: "8 seconds"
+        },
+        {
+          stage: "Stage 6 — Hero Landing",
+          description: `Holographic elements dissolve to particles. The ${pName} descends slowly to the reflective surface — on impact, a ring of light ripples outward across the floor. Camera pulls back and rises to 30° hero angle. Warm golden gradient builds behind the product. One final quarter-rotation to hero angle, then clean modern typography fades in above.`,
+          camera: { movement: "Slow pull-out and rise to 30° hero angle, 1.5m from product, ease-out deceleration", framing: "Hero composition, rule-of-thirds, f/2.8 deep focus", speed: "0.8x elegant slow-motion" },
+          lighting: "Warm gradient backlight building, soft key from above (4500K), floor reflection catch-light",
+          environment: "Reflective dark surface with light ripple, warm gradient backdrop black to golden amber",
+          vfx: "Floor light ripple, gradient glow build, text fade-in 0.5s ease, particle dissolve, subtle lens bloom",
+          duration: "10 seconds"
         }
       ],
-      color_palette: ["#000000", "#FFFFFF", "#C0C0C0"],
-      mood: "Premium, aspirational, sleek and modern",
-      music_style: "Minimal electronic with deep bass, building to crescendo",
+      color_palette: ["#000000", "#FFD700", "#00A8FF", "#1a1a2e"],
+      mood: "Mysterious darkness building through technical awe to confident premium elegance",
+      music_style: "Deep electronic ambient, 85 BPM, sub-bass foundation, minimal synth pads building, crystalline arpeggios at stage 3, bass drop at landing",
+      sound_design: "Sub-rumble building → crystalline particle chimes → smooth orbit whoosh → intimate texture sounds → tech UI sounds → impact thud with reverb and shimmer",
       text_overlays: [
-        { time: "10s", text: pName, style: "clean sans-serif, fade-in center" },
-        { time: "12s", text: "Available Now", style: "smaller, beneath title" }
+        { time: "48s", text: pName, style: "32px Inter, white, fade-in 0.5s, center-top third" },
+        { time: "50s", text: "Redefine Performance", style: "18px Inter Light, #CCC, fade-in below title" }
       ],
-      veo3_video_prompt: `A cinematic video of a ${pName} floating in a dark void, slowly rotating as particles of light swirl around it. The camera tracks smoothly then transitions into a 360-degree orbit revealing every surface detail. Volumetric light rays sweep across the product as the camera pushes in for extreme macro close-ups. The video ends with a slow pull-out to a hero shot with gradient glow behind. Premium studio lighting throughout.`
+      veo3_video_prompt: `A cinematic video advertisement showing a ${pName} with premium industrial design featuring brushed metal surfaces and matte black accents. The video opens in complete darkness as a single warm golden light ignites and thousands of golden particles begin swirling in slow-motion spiral patterns, gradually forming the product's silhouette. The particles then accelerate inward from all directions, converging and materializing the product piece by piece with blue energy ripples pulsing across each newly formed surface as materials solidify. Once fully formed and floating, the camera begins a smooth continuous 360-degree orbit revealing every angle, with the product counter-rotating slowly on its own axis while volumetric light rays sweep through the scene. The camera then pushes in for extreme macro close-ups, gliding across the surface where every grain of brushed metal and every printed logo becomes dramatically visible as warm accent light slides across the textures. Pulling back to medium-wide, the product performs a dramatic slow rotation while transparent holographic feature callouts appear alongside it with energy lines pulsing along its edges. Finally the product descends to a reflective dark surface with a satisfying impact sending a ring of light rippling outward across the floor. The camera rises to a 30-degree hero angle as a warm golden gradient glow builds behind the product and clean modern typography fades in above. The lighting evolves from a single point source through dramatic three-point studio setup to warm gradient backlighting, while the mood transitions from mysterious darkness through technical showcase to confident premium elegance. Total duration 30-60 seconds with continuous fluid camera motion and seamless transitions throughout the entire video.`
     }, null, 2);
     res.json({ success: true, prompt: fallback });
   }
