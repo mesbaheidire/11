@@ -1531,7 +1531,9 @@ async function startSpy(config) {
       }
 
       console.log(`🔗 وجد ${aliLinks.length} رابط AliExpress — بدء المعالجة`);
-      await processPost(config, text, sourceImage, chatTitle);
+      const liveConfig = await getCachedConfig();
+      const mergedConfig = { ...config, ...liveConfig, targetChannels: config.targetChannels };
+      await processPost(mergedConfig, text, sourceImage, chatTitle);
     } catch (err) {
       console.log('❌ خطأ Userbot:', err.message);
     }
