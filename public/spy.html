@@ -144,7 +144,7 @@
 
         <div class="tab-bar">
             <button class="tab-btn active" onclick="switchTab('settings')"><i class="fas fa-cog"></i> الإعدادات</button>
-            <button class="tab-btn" onclick="switchTab('template')"><i class="fas fa-edit"></i> القالب</button>
+            <button class="tab-btn" onclick="switchTab('template')"><i class="fas fa-filter"></i> الكوبونات</button>
             <button class="tab-btn" onclick="switchTab('log')"><i class="fas fa-list"></i> السجل</button>
         </div>
 
@@ -348,42 +348,24 @@
         <div class="tab-content" id="tab-template">
             <div class="collapse-section" style="margin-bottom:0;">
                 <div class="collapse-header" onclick="toggleCollapse(this)" style="cursor:default;">
-                    <span class="title"><i class="fas fa-pen-fancy"></i> قالب الرسالة</span>
+                    <span class="title"><i class="fas fa-filter"></i> فلاتر الكوبونات</span>
                 </div>
                 <div class="collapse-body open">
-                    <div class="form-group">
-                        <label>مقدمة عامة (تظهر أعلى كل منشور):</label>
-                        <textarea id="tmplHeaderText" rows="2" placeholder="🔥 عروض اليوم من AliOffersDz 🔥" style="resize: vertical; font-family: 'Cairo', sans-serif;"></textarea>
-                    </div>
-                    <div class="inline-fields" style="margin-bottom:10px;">
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>بادئة العنوان:</label>
-                            <input type="text" id="tmplPrefix" placeholder="🔥 عرض حصري">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>عنوان السعر:</label>
-                            <input type="text" id="tmplPriceLabel" placeholder="💰 السعر:">
-                        </div>
-                    </div>
-                    <div class="inline-fields" style="margin-bottom:10px;">
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>عنوان الرابط:</label>
-                            <input type="text" id="tmplLinkLabel" placeholder="🛒 رابط الشراء:">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>عنوان الكوبون:</label>
-                            <input type="text" id="tmplCouponLabel" placeholder="كوبون">
-                        </div>
-                    </div>
-                    <div class="form-group" style="margin-bottom:10px;">
-                        <label>كوبونات ثابتة (تُضاف دائماً):</label>
-                        <input type="text" id="tmplFixedCoupons" placeholder="AFAS5, ZNQ005" style="direction:ltr; text-align:left;">
-                        <small style="color:#999; font-size:10px;">افصل بين الكوبونات بفاصلة — تُضاف تلقائياً لكل منشور</small>
+                    <div style="background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.3); border-radius: 10px; padding: 12px; margin-bottom: 15px;">
+                        <p style="color: #FF6B35; font-size: 12px; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-info-circle"></i>
+                            القالب الأساسي يُؤخذ من الإعدادات العامة في الصفحة الرئيسية. هنا فقط إعدادات الكوبونات الخاصة بالتجسس.
+                        </p>
                     </div>
                     <div class="form-group" style="margin-bottom:10px;">
                         <label>فلتر الكوبونات (بادئات مقبولة):</label>
                         <input type="text" id="tmplCouponFilter" placeholder="AFAS, ZNQ" style="direction:ltr; text-align:left;">
                         <small style="color:#999; font-size:10px;">الكوبونات المستخرجة التي لا تبدأ بهذه البادئات يتم تجاهلها — اتركه فارغاً لقبول الكل</small>
+                    </div>
+                    <div class="form-group" style="margin-bottom:10px;">
+                        <label>كوبونات ثابتة (تُضاف دائماً):</label>
+                        <input type="text" id="tmplFixedCoupons" placeholder="AFAS5, ZNQ005" style="direction:ltr; text-align:left;">
+                        <small style="color:#999; font-size:10px;">افصل بين الكوبونات بفاصلة — تُضاف تلقائياً لكل منشور</small>
                     </div>
                     <div class="form-group" style="margin-bottom:10px;">
                         <label>🎁 احجز قسيمة البائع:</label>
@@ -394,20 +376,6 @@
                         <label>كود الخصم:</label>
                         <input type="text" id="tmplSellerCouponCode" placeholder="مثال: SALE10" style="direction:ltr; text-align:left;">
                         <small style="color:#999; font-size:10px;">الكود يُضاف على سطر منفصل بعد قسيمة البائع</small>
-                    </div>
-                    <div class="form-group">
-                        <label>التذييل:</label>
-                        <input type="text" id="tmplFooter" placeholder="⚠️ لا تنس استخدام البوت الرسمي...">
-                    </div>
-                    <div class="inline-fields">
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>رابط البوت:</label>
-                            <input type="text" id="tmplBotLink" placeholder="@AliOffersDZ_bot">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>الهاشتاقات:</label>
-                            <input type="text" id="tmplHashtags" placeholder="#Aliexpress #تخفيضات">
-                        </div>
                     </div>
                 </div>
             </div>
@@ -451,14 +419,10 @@
             useTypedLinks: false,
             linkType: 'coin',
             messageTemplate: {
-                headerText: '',
-                prefix: '🔥 عرض حصري',
-                priceLabel: '💰 السعر:',
-                linkLabel: '🛒 رابط الشراء:',
-                couponLabel: 'كوبون',
-                footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz',
-                botLink: '@AliOffersDZ_bot',
-                hashtags: '#Aliexpress #تخفيضات'
+                fixedCoupons: '',
+                couponFilter: '',
+                sellerCoupon: '',
+                sellerCouponCode: ''
             }
         };
 
@@ -588,19 +552,20 @@
             config.manualReview = document.getElementById('manualReview').checked;
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
+            const mainSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
             config.messageTemplate = {
-                headerText: document.getElementById('tmplHeaderText').value,
-                prefix: document.getElementById('tmplPrefix').value,
-                priceLabel: document.getElementById('tmplPriceLabel').value,
-                linkLabel: document.getElementById('tmplLinkLabel').value,
-                couponLabel: document.getElementById('tmplCouponLabel').value,
+                headerText: '',
+                prefix: mainSettings.prefix || '',
+                priceLabel: mainSettings.salePrice || '💰 السعر:',
+                linkLabel: mainSettings.linkText || '🛒 رابط الشراء:',
+                couponLabel: mainSettings.couponText || 'كوبون',
                 fixedCoupons: document.getElementById('tmplFixedCoupons').value,
                 couponFilter: document.getElementById('tmplCouponFilter').value,
                 sellerCoupon: document.getElementById('tmplSellerCoupon').value,
                 sellerCouponCode: document.getElementById('tmplSellerCouponCode').value,
-                footer: document.getElementById('tmplFooter').value,
-                botLink: document.getElementById('tmplBotLink').value,
-                hashtags: document.getElementById('tmplHashtags').value
+                footer: mainSettings.footer || '',
+                botLink: mainSettings.botLink || '',
+                hashtags: mainSettings.hashtags || ''
             };
             return config;
         }
@@ -624,18 +589,10 @@
             renderChannels('source');
             renderChannels('target');
             const t = config.messageTemplate || {};
-            document.getElementById('tmplHeaderText').value = t.headerText || '';
-            document.getElementById('tmplPrefix').value = t.prefix || '';
-            document.getElementById('tmplPriceLabel').value = t.priceLabel || '';
-            document.getElementById('tmplLinkLabel').value = t.linkLabel || '';
-            document.getElementById('tmplCouponLabel').value = t.couponLabel || '';
             document.getElementById('tmplFixedCoupons').value = t.fixedCoupons || '';
             document.getElementById('tmplCouponFilter').value = t.couponFilter || '';
             document.getElementById('tmplSellerCoupon').value = t.sellerCoupon || '';
             document.getElementById('tmplSellerCouponCode').value = t.sellerCouponCode || '';
-            document.getElementById('tmplFooter').value = t.footer || '';
-            document.getElementById('tmplBotLink').value = t.botLink || '';
-            document.getElementById('tmplHashtags').value = t.hashtags || '';
         }
 
         function updateStatusUI(running) {
