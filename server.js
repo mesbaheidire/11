@@ -1131,32 +1131,75 @@ app.post('/api/ai-analyze-post', async (req, res) => {
       return res.json({ success: true, result: null });
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const prompt = `حلّل منشور عروض بدقة واخرج فقط JSON:
-{
-  "productName":"اسم المنتج",
-  "price":"السعر إن وجد",
-  "coupon":"الكوبون العام إن وجد",
-  "sellerCoupon":"قسيمة البائع إن وجدت",
-  "links":["رابط1","رابط2"],
-  "notes":"وصف مختصر جداً"
-}
-القواعد:
-- استخرج الروابط الخاصة بـ AliExpress فقط.
-- اجعل links مصفوفة بدون تكرار.
-- إذا لم تجد قيمة ضع null أو [].
-- لا تكتب أي شرح خارج JSON.
+    const hasAI = getGeminiModel() !== null;
+    if (!hasAI) {
+      return res.json({ success: true, result: null, method: 'no_ai' });
+    }
 
-النص:
-${text}`;
-    const raw = await model.generateContent(prompt);
-    const output = raw.response.text();
-    const match = output.match(/\{[\s\S]*\}/);
-    if (!match) return res.json({ success: true, result: null, raw: output });
-    const parsed = JSON.parse(match[0]);
-    res.json({ success: true, result: parsed });
+    const prompt = `أنت خبير في تحليل منشورات قنوات عروض AliExpress بالعربية. حلّل المنشور التالي واستخرج كل المعلومات بدقة عالية.
+
+## أنماط المنشورات الشائعة:
+- المنشور يحتوي عادة على: اسم المنتج، السعر بعد التخفيض، كوبونات عامة، قسيمة البائع (Store Coupon)، وروابط شراء.
+- الكوبونات العامة: أكواد مثل CDOF06, OD20, AZRA2, SEBOT, PAD11 — تأتي بعد كلمة "كوبون" أو مفصولة بـ | أو على سطور منفصلة.
+- قسيمة البائع (Store Coupon): تأتي بعد عبارة "قسيمة البائع" أو "إحجز قسيمة البائع" أو "حصل قسيمة البائع" — وتكون عادة مبلغ مثل "$32" أو "$0.87" أو كود مثل ONE8EV82.
+- الروابط: تكون بصيغة s.click.aliexpress.com/e/XXXX أو aliexpress.com/item/XXXX — قد يكون هناك أكثر من رابط.
+- السعر: يأتي بعد "السعر" أو "الثمن" أو "السعر بعد التخفيض" — مثل $105.7 أو 105.7$.
+
+## قواعد صارمة:
+1. استخرج اسم المنتج الإنجليزي الدقيق (العلامة التجارية + الموديل + النسخة). مثال: "Lenovo Xiaoxin Pad 11 (6/128)".
+2. استخرج السعر النهائي بعد التخفيض فقط (بالدولار).
+3. استخرج كل الكوبونات العامة كمصفوفة منفصلة. تجاهل قسيمة البائع من هذه القائمة.
+4. استخرج قسيمة البائع (المبلغ أو الكود) — هذه منفصلة عن الكوبونات العامة.
+5. استخرج كل روابط AliExpress (s.click أو aliexpress.com) كمصفوفة بدون تكرار.
+6. حدد إذا كان المنتج هاتف ذكي أم لا.
+
+## أمثلة:
+مثال 1: "كوبون: CDOF06 | OD20 | OTO20" → coupons: ["CDOF06", "OD20", "OTO20"]
+مثال 2: "إحجز قسيمة البائع: $0.87" → sellerCoupon: "$0.87"
+مثال 3: "حصل قسيمة البائع $32: ONE8EV82" → sellerCoupon: "$32", sellerCouponCode: "ONE8EV82"
+مثال 4: "SEBOT | PAD11 | CDOF06" → coupons: ["SEBOT", "PAD11", "CDOF06"]
+
+## النص:
+${text}
+
+## رد بـ JSON فقط (بدون markdown أو شرح):
+{
+  "productName": "اسم المنتج بالإنجليزية أو null",
+  "price": "السعر النهائي أو null",
+  "coupons": ["كوبون1", "كوبون2"],
+  "sellerCoupon": "مبلغ قسيمة البائع أو null",
+  "sellerCouponCode": "كود قسيمة البائع أو null",
+  "links": ["رابط1", "رابط2"],
+  "isPhone": false
+}`;
+
+    try {
+      const rawResult = await runGeminiWithRotation(prompt);
+      console.log(`🧠 AI analyze-post raw: "${rawResult.substring(0, 200)}"`);
+      let result = null;
+      try {
+        const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0]);
+          if (result.productName) result.productName = stripAIFormatting(String(result.productName));
+          if (!Array.isArray(result.coupons)) result.coupons = [];
+          if (!Array.isArray(result.links)) result.links = [];
+          result.coupons = result.coupons.map(c => String(c).trim().toUpperCase()).filter(c => c && c !== 'NULL');
+          result.links = result.links.map(l => String(l).trim()).filter(l => l && l.includes('aliexpress'));
+        }
+      } catch (parseErr) {
+        console.log(`⚠️ AI analyze-post parse error: ${parseErr.message}`);
+      }
+
+      console.log(`✅ AI analyze-post result: ${JSON.stringify(result)}`);
+      res.json({ success: true, result, method: 'ai' });
+    } catch (aiError) {
+      console.log('AI analyze-post failed:', aiError.message);
+      res.json({ success: true, result: null, method: 'fallback' });
+    }
   } catch (error) {
+    console.error('Analyze post error:', error.message || error);
     res.json({ success: true, result: null, error: error.message });
   }
 });
@@ -1228,68 +1271,6 @@ ${text}
   }
 });
 
-// Comprehensive AI analysis of post text for issues and insights
-app.post('/api/ai-analyze-post', async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text || typeof text !== 'string') {
-      return res.json({ success: true, analysis: null });
-    }
-
-    const hasAI = getGeminiModel() !== null;
-    if (!hasAI) {
-      return res.json({ success: true, analysis: null, method: 'no_ai' });
-    }
-
-    const prompt = `أنت خبير تحليل منشورات العروض. حلّل المنشور التالي وأعطِ تقرير شامل.
-
-النص:
-${text}
-
-حلّل:
-1. هل يحتوي على رابط AliExpress؟
-2. هل يحتوي على سعر منتج؟
-3. هل يحتوي على كوبونات/أكواد؟
-4. هل هناك اسم منتج واضح؟
-5. هل النص واضح ومفهوم؟
-6. المشاكل المحتملة (إن وجدت)
-7. التوصيات للإصلاح
-
-رد بـ JSON فقط (بدون markdown):
-{
-  "hasLink": true/false,
-  "hasPrice": true/false,
-  "hasCoupons": true/false,
-  "hasProductName": true/false,
-  "isTextClear": true/false,
-  "issues": ["المشكلة 1", "المشكلة 2"],
-  "recommendations": ["التوصية 1", "التوصية 2"],
-  "overallQuality": "عالية/متوسطة/منخفضة",
-  "readiness": true/false
-}`;
-
-    try {
-      const rawResult = await runGeminiWithRotation(prompt);
-      let analysis = null;
-      try {
-        const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
-        const jsonMatch = cleaned.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
-          analysis = JSON.parse(jsonMatch[0]);
-        }
-      } catch {}
-
-      console.log(`🔍 Post analysis: ${JSON.stringify(analysis)}`);
-      res.json({ success: true, analysis, method: 'ai' });
-    } catch (aiError) {
-      console.log('AI post analysis failed:', aiError.message);
-      res.json({ success: true, analysis: null, method: 'fallback' });
-    }
-  } catch (error) {
-    console.error('Post analysis error:', error.message || error);
-    res.json({ success: false, error: error.message || error });
-  }
-});
 
 // Generate Algerian-style hook/intro for product
 app.post('/api/generate-algerian-hook', async (req, res) => {

@@ -997,7 +997,11 @@ async function extractSellerCouponWithAI(text) {
   });
 }
 
-async function analyzePostWithAI(text) {
+async function generateHook(title) {
+  return callAiRefine(title, true);
+}
+
+async function analyzePostFull(text) {
   return new Promise((resolve) => {
     const postData = JSON.stringify({ text });
     const options = {
@@ -1013,33 +1017,49 @@ async function analyzePostWithAI(text) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed.success && parsed.analysis ? parsed.analysis : null);
+          resolve(parsed.success && parsed.result ? parsed.result : null);
         } catch { resolve(null); }
       });
     });
     req.on('error', () => resolve(null));
-    req.setTimeout(15000, () => { req.destroy(); resolve(null); });
+    req.setTimeout(20000, () => { req.destroy(); resolve(null); });
     req.write(postData);
     req.end();
   });
-}
-
-async function generateHook(title) {
-  return callAiRefine(title, true);
 }
 
 async function processPost(config, text, sourceImage, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
   if (aliLinks.length === 0) return;
 
-  let priceFromPost = null;
+  let aiResult = null;
   try {
-    priceFromPost = await extractPriceWithAI(text);
-    if (priceFromPost) {
-      console.log(`🤖 سعر مستخرج بالذكاء الاصطناعي: ${priceFromPost}`);
+    aiResult = await analyzePostFull(text);
+    if (aiResult) {
+      console.log(`🧠 تحليل جيميني الشامل:`);
+      console.log(`   📦 المنتج: ${aiResult.productName || '—'}`);
+      console.log(`   💰 السعر: ${aiResult.price || '—'}`);
+      console.log(`   🎟 كوبونات: ${(aiResult.coupons || []).join(', ') || '—'}`);
+      console.log(`   🎁 قسيمة البائع: ${aiResult.sellerCoupon || '—'} ${aiResult.sellerCouponCode ? '(كود: ' + aiResult.sellerCouponCode + ')' : ''}`);
+      console.log(`   🔗 روابط: ${(aiResult.links || []).length}`);
+      console.log(`   📱 هاتف: ${aiResult.isPhone ? 'نعم' : 'لا'}`);
+    } else {
+      console.log(`⚠️ فشل تحليل جيميني الشامل — سيتم استخدام الطرق البديلة`);
     }
   } catch (e) {
-    console.log('⚠️ فشل استخراج السعر بالذكاء الاصطناعي:', e.message);
+    console.log(`⚠️ خطأ في تحليل جيميني: ${e.message}`);
+  }
+
+  let priceFromPost = (aiResult && aiResult.price) ? aiResult.price : null;
+  if (!priceFromPost) {
+    try {
+      priceFromPost = await extractPriceWithAI(text);
+      if (priceFromPost) {
+        console.log(`🤖 سعر مستخرج بالذكاء الاصطناعي: ${priceFromPost}`);
+      }
+    } catch (e) {
+      console.log('⚠️ فشل استخراج السعر بالذكاء الاصطناعي:', e.message);
+    }
   }
   if (!priceFromPost) {
     priceFromPost = extractPrice(text);
@@ -1139,39 +1159,33 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
 
-      let productTitle = apiTitle;
+      let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : apiTitle;
       if (!productTitle) {
         const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
         if (postLines.length > 0) {
           productTitle = postLines[0];
-          console.log(`📝 جميع طرق API فشلت — استخدام عنوان المنشور كاحتياط أخير: ${productTitle}`);
+          console.log(`📝 استخدام عنوان المنشور كاحتياط: ${productTitle}`);
         }
       }
-
-      try {
-        const aiInfo = await extractProductInfoWithAI(text, apiTitle);
-        if (aiInfo && aiInfo.productName) {
-          productTitle = aiInfo.productName;
-          console.log(`🤖 AI استخرج المنتج: "${productTitle}" (هاتف: ${aiInfo.isPhone ? 'نعم' : 'لا'})`);
-        } else {
-          console.log(`⚠️ AI لم يتعرف على المنتج — محاولة تحسين عنوان API`);
+      if (!productTitle || productTitle === apiTitle) {
+        try {
+          const aiInfo = await extractProductInfoWithAI(text, apiTitle);
+          if (aiInfo && aiInfo.productName) {
+            productTitle = aiInfo.productName;
+            console.log(`🤖 AI استخرج المنتج: "${productTitle}"`);
+          } else if (apiTitle) {
+            try {
+              const refined = await refineTitle(apiTitle);
+              productTitle = refined || apiTitle;
+            } catch (aiErr) {}
+          }
+        } catch (e) {
           if (apiTitle) {
             try {
               const refined = await refineTitle(apiTitle);
               productTitle = refined || apiTitle;
-              console.log(`🤖 عنوان محسّن: ${productTitle}`);
-            } catch (aiErr) {
-              console.log(`⚠️ فشل تحسين العنوان: ${aiErr.message}`);
-            }
+            } catch (aiErr) {}
           }
-        }
-      } catch (e) {
-        console.log(`⚠️ فشل استخراج معلومات المنتج: ${e.message}`);
-        if (apiTitle) {
-          try {
-            const refined = await refineTitle(apiTitle);
-            productTitle = refined || apiTitle;
-          } catch (aiErr) {}
         }
       }
 
@@ -1184,21 +1198,20 @@ async function processPost(config, text, sourceImage, sourceName) {
       const t = config.messageTemplate || {};
 
       let extractedCoupon = null;
-      try {
-        extractedCoupon = await extractCouponWithAI(text);
-        if (extractedCoupon) {
-          console.log(`🤖 كوبون مستخرج بالذكاء الاصطناعي: ${extractedCoupon}`);
-        }
-      } catch (e) {
-        console.log('⚠️ فشل استخراج الكوبون بالذكاء الاصطناعي:', e.message);
+      if (aiResult && Array.isArray(aiResult.coupons) && aiResult.coupons.length > 0) {
+        extractedCoupon = aiResult.coupons.join(' | ');
+        console.log(`🧠 كوبونات من جيميني: ${extractedCoupon}`);
+      }
+      if (!extractedCoupon) {
+        try {
+          extractedCoupon = await extractCouponWithAI(text);
+          if (extractedCoupon) console.log(`🤖 كوبون مستخرج بالذكاء الاصطناعي: ${extractedCoupon}`);
+        } catch (e) {}
       }
       if (!extractedCoupon) {
         extractedCoupon = extractCouponFromPost(text);
-        if (extractedCoupon) {
-          console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
-        } else {
-          console.log(`⚠️ لم يتم العثور على كوبون في النص`);
-        }
+        if (extractedCoupon) console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
+        else console.log(`⚠️ لم يتم العثور على كوبون في النص`);
       }
 
       const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
@@ -1248,49 +1261,26 @@ async function processPost(config, text, sourceImage, sourceName) {
         message += `${label}: ${extractedCoupon}\n`;
       }
 
-      let aiAnalysis = null;
-      try {
-        const r = await fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/ai-analyze-post`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        const d = await r.json();
-        if (d && d.success && d.result) aiAnalysis = d.result;
-      } catch (e) {}
-
-      const lines = (text || '').split('\n').map(line => line.trim()).filter(Boolean);
       const linkLines = [];
-      const couponLines = [];
       const sellerCouponLines = [];
-      if (aiAnalysis && Array.isArray(aiAnalysis.links)) {
-        aiAnalysis.links.forEach(link => {
+      if (aiResult && Array.isArray(aiResult.links)) {
+        aiResult.links.forEach(link => {
           if (link && !linkLines.includes(link)) linkLines.push(link);
         });
       }
+      const lines = (text || '').split('\n').map(line => line.trim()).filter(Boolean);
       for (const line of lines) {
         if (/(?:s\.click\.)?aliexpress\.com/i.test(line)) {
           const cleanLine = line.replace(/[)\].,;!?]+$/g, '');
           if (!linkLines.includes(cleanLine)) linkLines.push(cleanLine);
         }
-        const couponLine = extractCouponFromTextLine(line);
-        if (couponLine && !couponLines.includes(couponLine)) couponLines.push(couponLine);
-        const sellerCouponLine = extractSellerCouponFromTextLine(line);
-        if (sellerCouponLine && !sellerCouponLines.includes(sellerCouponLine)) sellerCouponLines.push(sellerCouponLine);
       }
-      if (aiAnalysis && aiAnalysis.coupon && !couponLines.includes(String(aiAnalysis.coupon).trim().toUpperCase())) {
-        couponLines.unshift(String(aiAnalysis.coupon).trim().toUpperCase());
-      }
-      if (aiAnalysis && aiAnalysis.sellerCoupon && !sellerCouponLines.includes(String(aiAnalysis.sellerCoupon).trim())) {
-        sellerCouponLines.unshift(String(aiAnalysis.sellerCoupon).trim());
-      }
-      if (couponLines.length === 0) {
-        let extractedCouponText = null;
-        try {
-          extractedCouponText = await extractCouponWithAI(text);
-        } catch (e) {}
-        if (!extractedCouponText) extractedCouponText = extractCouponFromPost(text);
-        if (extractedCouponText) couponLines.push(...extractedCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
+
+      if (aiResult && aiResult.sellerCoupon) {
+        sellerCouponLines.push(String(aiResult.sellerCoupon).trim());
+        if (aiResult.sellerCouponCode) {
+          console.log(`🧠 كود قسيمة البائع من جيميني: ${aiResult.sellerCouponCode}`);
+        }
       }
       if (sellerCouponLines.length === 0) {
         let sellerCouponText = t.sellerCoupon || '';
@@ -1598,31 +1588,6 @@ async function startSpy(config) {
       }
 
       const aliLinks = extractAliExpressLinks(text);
-      
-      let postAnalysis = null;
-      try {
-        postAnalysis = await analyzePostWithAI(text);
-        if (postAnalysis) {
-          console.log(`📊 تحليل المنشور:`);
-          console.log(`   - رابط: ${postAnalysis.hasLink ? '✅' : '❌'}`);
-          console.log(`   - سعر: ${postAnalysis.hasPrice ? '✅' : '❌'}`);
-          console.log(`   - كوبونات: ${postAnalysis.hasCoupons ? '✅' : '❌'}`);
-          console.log(`   - اسم منتج: ${postAnalysis.hasProductName ? '✅' : '❌'}`);
-          console.log(`   - جودة النص: ${postAnalysis.overallQuality}`);
-          
-          if (postAnalysis.issues && postAnalysis.issues.length > 0) {
-            console.log(`   ⚠️ مشاكل مكتشفة:`);
-            postAnalysis.issues.forEach(issue => console.log(`      - ${issue}`));
-          }
-          
-          if (postAnalysis.recommendations && postAnalysis.recommendations.length > 0) {
-            console.log(`   💡 التوصيات:`);
-            postAnalysis.recommendations.forEach(rec => console.log(`      - ${rec}`));
-          }
-        }
-      } catch (e) {
-        console.log(`⚠️ فشل تحليل المنشور: ${e.message}`);
-      }
       
       if (aliLinks.length === 0) {
         console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة`);
