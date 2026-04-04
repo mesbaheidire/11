@@ -1287,20 +1287,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         message += `${label}: ${extractedCoupon}\n`;
       }
 
-      const linkLines = [];
       const sellerCouponLines = [];
-      if (aiResult && Array.isArray(aiResult.links)) {
-        aiResult.links.forEach(link => {
-          if (link && !linkLines.includes(link)) linkLines.push(link);
-        });
-      }
-      const lines = (text || '').split('\n').map(line => line.trim()).filter(Boolean);
-      for (const line of lines) {
-        if (/(?:s\.click\.)?aliexpress\.com/i.test(line)) {
-          const cleanLine = line.replace(/[)\].,;!?]+$/g, '');
-          if (!linkLines.includes(cleanLine)) linkLines.push(cleanLine);
-        }
-      }
 
       if (aiResult && aiResult.sellerCoupon) {
         sellerCouponLines.push(String(aiResult.sellerCoupon).trim());
@@ -1324,17 +1311,8 @@ async function processPost(config, text, sourceImage, sourceName) {
         message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
       }
       message += '\n';
-      if (linkLines.length > 0) {
-        if (t.linkLabel) message += `${t.linkLabel}\n`;
-        linkLines.forEach(link => {
-          message += `${link}\n`;
-        });
-        message += '\n';
-      } else if (t.linkLabel) {
-        message += `${t.linkLabel}\n${affLink}\n\n`;
-      } else {
-        message += `${affLink}\n\n`;
-      }
+      if (t.linkLabel) message += `${t.linkLabel}\n`;
+      message += `${affLink}\n\n`;
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
