@@ -292,7 +292,7 @@ function extractCouponFromPost(text) {
   }
 
   const patterns = [
-    /(?:كوبون|قسيمة|coupon|code|كود|رمز|حصل)[:\s]*(?:البائع\s*)?(?:\$?\d+\s*)?([A-Z][A-Z0-9]{3,19})/gi,
+    /(?:كوبون|coupon|كود|رمز)[:\s]*(?:\$?\d+[/]\d+\s*[:\s]*)?([A-Z][A-Z0-9]{3,19})/gi,
     /(?:استخدم|use|ادخل|enter)[:\s]*([A-Z][A-Z0-9]{3,19})/gi,
     /\b(?:CODE)\s+([A-Z0-9]{4,20})/gi,
   ];
@@ -330,14 +330,23 @@ function extractSellerCouponFromPost(text) {
   if (!text) return null;
   const coupons = new Set();
   const patterns = [
-    /(?:قسيمة\s*البائع|coupon\s*code|seller\s*coupon|seller\s*code|coupon|code|كود|رمز)[:\s]*([A-Z0-9]{3,20})/gi,
-    /\b([A-Z]{2,8}[0-9]{1,6})\b/g
+    /(?:قسيمة\s*البائع|إحجز\s*قسيمة\s*البائع|حصل\s*قسيمة\s*البائع|خصم\s*البائع|عرض\s*المتجر|قسيمة\s*المتجر|seller\s*coupon|store\s*coupon)[:\s]*([A-Z0-9$/.\-\s]{3,30})/gi,
   ];
   for (const pat of patterns) {
     let match;
     while ((match = pat.exec(text)) !== null) {
-      const code = (match[1] || '').trim().toUpperCase();
-      if (code.length >= 3) coupons.add(code);
+      const code = (match[1] || '').trim();
+      if (code.length >= 2) coupons.add(code);
+    }
+  }
+  const pricePatterns = [
+    /(?:قسيمة\s*البائع|إحجز\s*قسيمة|seller\s*coupon|store\s*coupon)[:\s]*(\$\d+(?:[./]\d+)?)/gi,
+  ];
+  for (const pat of pricePatterns) {
+    let match;
+    while ((match = pat.exec(text)) !== null) {
+      const val = (match[1] || '').trim();
+      if (val) coupons.add(val);
     }
   }
   if (coupons.size === 0) return null;
@@ -1294,11 +1303,23 @@ async function processPost(config, text, sourceImage, sourceName) {
     message += `${label}: ${extractedCoupon}\n`;
   }
 
+  const platformCouponCodes = extractedCoupon
+    ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()).filter(Boolean)
+    : [];
+
   const sellerCouponLines = [];
   if (aiResult && aiResult.sellerCoupon) {
-    sellerCouponLines.push(String(aiResult.sellerCoupon).trim());
+    const sc = String(aiResult.sellerCoupon).trim();
+    if (!platformCouponCodes.includes(sc.toUpperCase())) {
+      sellerCouponLines.push(sc);
+    } else {
+      console.log(`⚠️ قسيمة البائع من جيميني "${sc}" موجودة ضمن الكوبونات العادية — تجاهل`);
+    }
     if (aiResult.sellerCouponCode) {
-      console.log(`🧠 كود قسيمة البائع من جيميني: ${aiResult.sellerCouponCode}`);
+      const scc = String(aiResult.sellerCouponCode).trim();
+      if (!platformCouponCodes.includes(scc.toUpperCase())) {
+        console.log(`🧠 كود قسيمة البائع من جيميني: ${scc}`);
+      }
     }
   }
   if (sellerCouponLines.length === 0) {
@@ -1306,10 +1327,22 @@ async function processPost(config, text, sourceImage, sourceName) {
     if (!sellerCouponText.trim()) {
       try {
         const aiCoupon = await extractSellerCouponWithAI(text);
-        if (aiCoupon) sellerCouponText = aiCoupon;
+        if (aiCoupon) {
+          const parts = aiCoupon.split(' | ').map(c => c.trim()).filter(Boolean);
+          const filtered = parts.filter(c => !platformCouponCodes.includes(c.toUpperCase()));
+          if (filtered.length > 0) sellerCouponText = filtered.join(' | ');
+          else console.log(`⚠️ قسائم البائع AI كلها موجودة ضمن الكوبونات — تجاهل`);
+        }
       } catch (e) {}
     }
-    if (!sellerCouponText.trim()) sellerCouponText = extractSellerCouponFromPost(text) || '';
+    if (!sellerCouponText.trim()) {
+      const regexResult = extractSellerCouponFromPost(text) || '';
+      if (regexResult) {
+        const parts = regexResult.split(' | ').map(c => c.trim()).filter(Boolean);
+        const filtered = parts.filter(c => !platformCouponCodes.includes(c.toUpperCase()));
+        if (filtered.length > 0) sellerCouponText = filtered.join(' | ');
+      }
+    }
     if (sellerCouponText.trim()) sellerCouponLines.push(...sellerCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
   }
   if (sellerCouponLines.length > 0) {
