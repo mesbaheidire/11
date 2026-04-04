@@ -1079,6 +1079,15 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   console.log(`🕵️ رصد منشور من ${sourceName} يحتوي على ${aliLinks.length} رابط`);
 
+  // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
+  const convertedLinks = [];
+  let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
+  const cookie = await getCookie();
+  if (!cookie) {
+    addLogEntry({ source: sourceName, originalLink: aliLinks[0], status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
+    return;
+  }
+
   for (const originalLink of aliLinks) {
     if (await isLinkProcessed(originalLink)) {
       console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
@@ -1088,16 +1097,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     reserveLink(originalLink);
 
     try {
-      const cookie = await getCookie();
-      if (!cookie) {
-        addLogEntry({ source: sourceName, originalLink, status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
-        inFlightLinks.delete(normalizeAliLink(originalLink));
-        continue;
-      }
-      let affLink, resolvedProductId = null;
-
-      // تحويل الرابط إلى أفليت
+      let affLink = null, resolvedProductId = null;
       let result, directResult;
+
       if (config.useTypedLinks) {
         try {
           result = await portaffFunction(cookie, originalLink);
@@ -1109,9 +1111,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           const linkType = config.linkType || 'coin';
           affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
           resolvedProductId = result.productId || null;
-          if (affLink) {
-            console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
-          }
+          if (affLink) console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
         }
         if (!affLink) {
           console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
@@ -1126,40 +1126,23 @@ async function processPost(config, text, sourceImage, sourceName) {
             console.log(`❌ فشل التحويل المباشر أيضاً: ${directErr.message}`);
           }
         }
-        if (!affLink) {
-          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط (نوع + مباشر)' });
-          inFlightLinks.delete(normalizeAliLink(originalLink));
-          continue;
-        }
       } else {
         try {
           directResult = await directAffLink(cookie, originalLink);
+          if (directResult && directResult.affLink) {
+            affLink = directResult.affLink;
+            resolvedProductId = directResult.productId || null;
+            console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
+          }
         } catch (directErr) {
           console.log(`❌ فشل التحويل المباشر: ${directErr.message}`);
-          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: `فشل تحويل الرابط: ${directErr.message}` });
-          inFlightLinks.delete(normalizeAliLink(originalLink));
-          continue;
         }
-        if (!directResult || !directResult.affLink) {
-          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
-          inFlightLinks.delete(normalizeAliLink(originalLink));
-          continue;
-        }
-        affLink = directResult.affLink;
-        resolvedProductId = directResult.productId || null;
-        console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
       }
 
-      // جلب بيانات المنتج بـ 4 طرق متتالية
-      let apiTitle = '', productImage = '', productPrice = priceFromPost || '';
-      if (resolvedProductId) {
-        const preview = await fetchLinkPreview(resolvedProductId);
-        if (preview) {
-          console.log(`✅ بيانات المنتج (الطريقة: ${preview.method})`);
-          apiTitle = preview.title || '';
-          productImage = preview.image_url || '';
-          productPrice = priceFromPost || preview.price || '';
-        }
+      if (!affLink) {
+        addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
+        inFlightLinks.delete(normalizeAliLink(originalLink));
+        continue;
       }
 
       markLinkProcessed(originalLink);
@@ -1178,212 +1161,233 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
 
-      if (!productImage && sourceImage) {
-        productImage = { source: sourceImage };
-        console.log(`🖼 جميع طرق API فشلت — استخدام صورة المنشور الأصلي كاحتياط أخير`);
-      }
+      convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
-      const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
-
-      let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : apiTitle;
-      if (!productTitle) {
-        const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-        if (postLines.length > 0) {
-          productTitle = postLines[0];
-          console.log(`📝 استخدام عنوان المنشور كاحتياط: ${productTitle}`);
+      if (!firstProductId && resolvedProductId) {
+        firstProductId = resolvedProductId;
+        const preview = await fetchLinkPreview(resolvedProductId);
+        if (preview) {
+          console.log(`✅ بيانات المنتج (الطريقة: ${preview.method})`);
+          firstApiTitle = preview.title || '';
+          firstProductImage = preview.image_url || '';
+          firstProductPrice = priceFromPost || preview.price || '';
         }
-      }
-      if (!productTitle || productTitle === apiTitle) {
-        try {
-          const aiInfo = await extractProductInfoWithAI(text, apiTitle);
-          if (aiInfo && aiInfo.productName) {
-            productTitle = aiInfo.productName;
-            console.log(`🤖 AI استخرج المنتج: "${productTitle}"`);
-          } else if (apiTitle) {
-            try {
-              const refined = await refineTitle(apiTitle);
-              productTitle = refined || apiTitle;
-            } catch (aiErr) {}
-          }
-        } catch (e) {
-          if (apiTitle) {
-            try {
-              const refined = await refineTitle(apiTitle);
-              productTitle = refined || apiTitle;
-            } catch (aiErr) {}
-          }
-        }
-      }
-
-      if (productTitle && productTitle.length > 60) {
-        console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
-        productTitle = shortenTitleFallback(productTitle);
-        console.log(`✂️ بعد التقصير: ${productTitle}`);
-      }
-
-      const t = config.messageTemplate || {};
-
-      let extractedCoupon = null;
-      if (aiResult && Array.isArray(aiResult.coupons) && aiResult.coupons.length > 0) {
-        extractedCoupon = aiResult.coupons.join(' | ');
-        console.log(`🧠 كوبونات من جيميني: ${extractedCoupon}`);
-      }
-      if (!extractedCoupon) {
-        try {
-          extractedCoupon = await extractCouponWithAI(text);
-          if (extractedCoupon) console.log(`🤖 كوبون مستخرج بالذكاء الاصطناعي: ${extractedCoupon}`);
-        } catch (e) {}
-      }
-      if (!extractedCoupon) {
-        extractedCoupon = extractCouponFromPost(text);
-        if (extractedCoupon) console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
-        else console.log(`⚠️ لم يتم العثور على كوبون في النص`);
-      }
-
-      const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
-      console.log(`🔍 Coupon filter config: "${t.couponFilter}" → prefixes: [${couponPrefixes.join(', ')}]`);
-      if (couponPrefixes.length > 0 && extractedCoupon) {
-        console.log(`🔍 Filtering coupon: "${extractedCoupon}" with prefixes: [${couponPrefixes.join(', ')}]`);
-        const filtered = extractedCoupon.split(' | ')
-          .map(c => c.trim())
-          .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
-        if (filtered.length > 0) {
-          extractedCoupon = filtered.join(' | ');
-          console.log(`🔍 كوبونات بعد الفلترة: ${extractedCoupon}`);
-        } else {
-          console.log(`🚫 كل الكوبونات المستخرجة لا تطابق الفلتر — تم تجاهلها`);
-          extractedCoupon = null;
-        }
-      }
-
-      let fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
-      
-      if (couponPrefixes.length > 0 && fixedCoupons.length > 0) {
-        const filteredFixed = fixedCoupons.filter(fc => couponPrefixes.some(prefix => fc.startsWith(prefix)));
-        console.log(`🔍 كوبونات ثابتة قبل الفلترة: ${fixedCoupons.join(', ')} → بعد: ${filteredFixed.join(', ')}`);
-        fixedCoupons = filteredFixed;
-      }
-      
-      if (fixedCoupons.length > 0) {
-        const existingCoupons = extractedCoupon ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()) : [];
-        const newCoupons = fixedCoupons.filter(fc => !existingCoupons.includes(fc));
-        if (newCoupons.length > 0) {
-          extractedCoupon = extractedCoupon
-            ? extractedCoupon + ' | ' + newCoupons.join(' | ')
-            : newCoupons.join(' | ');
-          console.log(`📌 كوبونات ثابتة مضافة بعد الفلترة: ${newCoupons.join(', ')}`);
-        }
-      }
-
-      productTitle = cleanTitle(productTitle);
-
-      let message = '';
-      if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n\n`;
-      if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
-      else if (productTitle) message += `${productTitle}\n\n`;
-      if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
-      if (extractedCoupon) {
-        const label = t.couponLabel || 'كوبون';
-        message += `${label}: ${extractedCoupon}\n`;
-      }
-
-      const sellerCouponLines = [];
-
-      if (aiResult && aiResult.sellerCoupon) {
-        sellerCouponLines.push(String(aiResult.sellerCoupon).trim());
-        if (aiResult.sellerCouponCode) {
-          console.log(`🧠 كود قسيمة البائع من جيميني: ${aiResult.sellerCouponCode}`);
-        }
-      }
-      if (sellerCouponLines.length === 0) {
-        let sellerCouponText = t.sellerCoupon || '';
-        if (!sellerCouponText.trim()) {
-          try {
-            const aiCoupon = await extractSellerCouponWithAI(text);
-            if (aiCoupon) sellerCouponText = aiCoupon;
-          } catch (e) {}
-        }
-        if (!sellerCouponText.trim()) sellerCouponText = extractSellerCouponFromPost(text) || '';
-        if (sellerCouponText.trim()) sellerCouponLines.push(...sellerCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
-      }
-      if (sellerCouponLines.length > 0) {
-        const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-        message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
-      }
-      message += '\n';
-      if (t.linkLabel) message += `${t.linkLabel}\n`;
-      message += `${affLink}\n\n`;
-      if (t.footer) message += `${t.footer}\n`;
-      if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
-      if (t.hashtags) message += t.hashtags;
-
-      const botToken = await getBotToken();
-
-      if (isDailyLimitReached(config)) {
-        console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
-        addLogEntry({
-          source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: imageUrlForLog,
-          status: 'daily_limit', targets: targetIds
-        });
-        continue;
-      }
-
-      const reviewData = {
-        message, productImage, targetIds, sourceName, originalLink,
-        affiliateLink: affLink, productTitle, productPrice, imageUrlForLog,
-        originalText: text
-      };
-
-      if (config.manualReview && config.ownerId && botToken) {
-        console.log(`📋 إرسال للمراجعة اليدوية...`);
-        addLogEntry({
-          source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: imageUrlForLog,
-          status: 'review', targets: targetIds
-        });
-        await sendForReview(botToken, config.ownerId, reviewData);
-      } else if (config.autoPublish) {
-        const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
-        const delayMinutes = Math.round(delayMs / 60000);
-
-        if (config.notifyOwner && config.ownerId && botToken) {
-          await sendOwnerNotification(botToken, config.ownerId, {
-            source: sourceName, title: productTitle, price: productPrice,
-            affiliateLink: affLink, delayMinutes
-          });
-        }
-
-        const publishFn = async () => {
-          await executePublish(reviewData);
-        };
-
-        if (delayMs > 0) {
-          console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
-          addLogEntry({
-            source: sourceName, originalLink, affiliateLink: affLink,
-            title: productTitle, price: productPrice, image: imageUrlForLog,
-            status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
-          });
-          setTimeout(publishFn, delayMs);
-        } else {
-          await publishFn();
-        }
-      } else {
-        addLogEntry({
-          source: sourceName, originalLink, affiliateLink: affLink,
-          title: productTitle, price: productPrice, image: imageUrlForLog,
-          status: 'detected', targets: targetIds
-        });
       }
     } catch (linkErr) {
       inFlightLinks.delete(normalizeAliLink(originalLink));
       const isCookieError = linkErr.message && (linkErr.message.includes('الكوكي منتهي') || linkErr.message.includes('login') || linkErr.message.includes('DOCTYPE'));
-      const errorStatus = isCookieError ? 'cookie_expired' : 'error';
       const errorMsg = isCookieError ? '⚠️ الكوكي منتهي الصلاحية — جدّد الكوكي' : linkErr.message;
       console.log(`❌ خطأ في معالجة الرابط: ${errorMsg}`);
-      addLogEntry({ source: sourceName, originalLink, status: errorStatus, error: errorMsg });
+      addLogEntry({ source: sourceName, originalLink, status: isCookieError ? 'cookie_expired' : 'error', error: errorMsg });
     }
+  }
+
+  // === لا توجد روابط محوّلة بنجاح ===
+  if (convertedLinks.length === 0) {
+    console.log(`⚠️ لم يتم تحويل أي رابط بنجاح من المنشور`);
+    return;
+  }
+
+  console.log(`✅ تم تحويل ${convertedLinks.length} رابط من أصل ${aliLinks.length} — بناء منشور واحد`);
+
+  // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
+  let productImage = firstProductImage;
+  if (!productImage && sourceImage) {
+    productImage = { source: sourceImage };
+    console.log(`🖼 جميع طرق API فشلت — استخدام صورة المنشور الأصلي كاحتياط أخير`);
+  }
+
+  const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
+
+  let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
+  if (!productTitle) {
+    const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
+    if (postLines.length > 0) {
+      productTitle = postLines[0];
+      console.log(`📝 استخدام عنوان المنشور كاحتياط: ${productTitle}`);
+    }
+  }
+  if (!productTitle || productTitle === firstApiTitle) {
+    try {
+      const aiInfo = await extractProductInfoWithAI(text, firstApiTitle);
+      if (aiInfo && aiInfo.productName) {
+        productTitle = aiInfo.productName;
+        console.log(`🤖 AI استخرج المنتج: "${productTitle}"`);
+      } else if (firstApiTitle) {
+        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
+      }
+    } catch (e) {
+      if (firstApiTitle) {
+        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
+      }
+    }
+  }
+
+  if (productTitle && productTitle.length > 60) {
+    console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
+    productTitle = shortenTitleFallback(productTitle);
+    console.log(`✂️ بعد التقصير: ${productTitle}`);
+  }
+
+  const t = config.messageTemplate || {};
+  const productPrice = firstProductPrice;
+
+  let extractedCoupon = null;
+  if (aiResult && Array.isArray(aiResult.coupons) && aiResult.coupons.length > 0) {
+    extractedCoupon = aiResult.coupons.join(' | ');
+    console.log(`🧠 كوبونات من جيميني: ${extractedCoupon}`);
+  }
+  if (!extractedCoupon) {
+    try {
+      extractedCoupon = await extractCouponWithAI(text);
+      if (extractedCoupon) console.log(`🤖 كوبون مستخرج بالذكاء الاصطناعي: ${extractedCoupon}`);
+    } catch (e) {}
+  }
+  if (!extractedCoupon) {
+    extractedCoupon = extractCouponFromPost(text);
+    if (extractedCoupon) console.log(`📋 كوبون مستخرج بالأنماط: ${extractedCoupon}`);
+    else console.log(`⚠️ لم يتم العثور على كوبون في النص`);
+  }
+
+  const couponPrefixes = (t.couponFilter || '').split(',').map(p => p.trim().toUpperCase()).filter(p => p);
+  console.log(`🔍 Coupon filter config: "${t.couponFilter}" → prefixes: [${couponPrefixes.join(', ')}]`);
+  if (couponPrefixes.length > 0 && extractedCoupon) {
+    console.log(`🔍 Filtering coupon: "${extractedCoupon}" with prefixes: [${couponPrefixes.join(', ')}]`);
+    const filtered = extractedCoupon.split(' | ')
+      .map(c => c.trim())
+      .filter(c => couponPrefixes.some(prefix => c.toUpperCase().startsWith(prefix)));
+    if (filtered.length > 0) {
+      extractedCoupon = filtered.join(' | ');
+      console.log(`🔍 كوبونات بعد الفلترة: ${extractedCoupon}`);
+    } else {
+      console.log(`🚫 كل الكوبونات المستخرجة لا تطابق الفلتر — تم تجاهلها`);
+      extractedCoupon = null;
+    }
+  }
+
+  let fixedCoupons = (t.fixedCoupons || '').split(',').map(c => c.trim().toUpperCase()).filter(c => c);
+  if (couponPrefixes.length > 0 && fixedCoupons.length > 0) {
+    const filteredFixed = fixedCoupons.filter(fc => couponPrefixes.some(prefix => fc.startsWith(prefix)));
+    console.log(`🔍 كوبونات ثابتة قبل الفلترة: ${fixedCoupons.join(', ')} → بعد: ${filteredFixed.join(', ')}`);
+    fixedCoupons = filteredFixed;
+  }
+  if (fixedCoupons.length > 0) {
+    const existingCoupons = extractedCoupon ? extractedCoupon.split(' | ').map(c => c.trim().toUpperCase()) : [];
+    const newCoupons = fixedCoupons.filter(fc => !existingCoupons.includes(fc));
+    if (newCoupons.length > 0) {
+      extractedCoupon = extractedCoupon
+        ? extractedCoupon + ' | ' + newCoupons.join(' | ')
+        : newCoupons.join(' | ');
+      console.log(`📌 كوبونات ثابتة مضافة بعد الفلترة: ${newCoupons.join(', ')}`);
+    }
+  }
+
+  productTitle = cleanTitle(productTitle);
+
+  let message = '';
+  if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n\n`;
+  if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
+  else if (productTitle) message += `${productTitle}\n\n`;
+  if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
+  if (extractedCoupon) {
+    const label = t.couponLabel || 'كوبون';
+    message += `${label}: ${extractedCoupon}\n`;
+  }
+
+  const sellerCouponLines = [];
+  if (aiResult && aiResult.sellerCoupon) {
+    sellerCouponLines.push(String(aiResult.sellerCoupon).trim());
+    if (aiResult.sellerCouponCode) {
+      console.log(`🧠 كود قسيمة البائع من جيميني: ${aiResult.sellerCouponCode}`);
+    }
+  }
+  if (sellerCouponLines.length === 0) {
+    let sellerCouponText = t.sellerCoupon || '';
+    if (!sellerCouponText.trim()) {
+      try {
+        const aiCoupon = await extractSellerCouponWithAI(text);
+        if (aiCoupon) sellerCouponText = aiCoupon;
+      } catch (e) {}
+    }
+    if (!sellerCouponText.trim()) sellerCouponText = extractSellerCouponFromPost(text) || '';
+    if (sellerCouponText.trim()) sellerCouponLines.push(...sellerCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
+  }
+  if (sellerCouponLines.length > 0) {
+    const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
+    message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
+  }
+
+  message += '\n';
+  if (t.linkLabel) message += `${t.linkLabel}\n`;
+  convertedLinks.forEach(cl => {
+    message += `${cl.affLink}\n`;
+  });
+  message += '\n';
+  if (t.footer) message += `${t.footer}\n`;
+  if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
+  if (t.hashtags) message += t.hashtags;
+
+  // === المرحلة 3: النشر ===
+  const botToken = await getBotToken();
+  const allOriginalLinks = convertedLinks.map(cl => cl.originalLink).join(', ');
+  const firstAffLink = convertedLinks[0].affLink;
+
+  if (isDailyLimitReached(config)) {
+    console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
+    addLogEntry({
+      source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
+      title: productTitle, price: productPrice, image: imageUrlForLog,
+      status: 'daily_limit', targets: targetIds
+    });
+    return;
+  }
+
+  const reviewData = {
+    message, productImage, targetIds, sourceName, originalLink: allOriginalLinks,
+    affiliateLink: firstAffLink, productTitle, productPrice, imageUrlForLog,
+    originalText: text
+  };
+
+  if (config.manualReview && config.ownerId && botToken) {
+    console.log(`📋 إرسال للمراجعة اليدوية...`);
+    addLogEntry({
+      source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
+      title: productTitle, price: productPrice, image: imageUrlForLog,
+      status: 'review', targets: targetIds
+    });
+    await sendForReview(botToken, config.ownerId, reviewData);
+  } else if (config.autoPublish) {
+    const delayMs = config.publishDelay ? randomDelay(config.delayMin || 1, config.delayMax || 5) : 0;
+    const delayMinutes = Math.round(delayMs / 60000);
+
+    if (config.notifyOwner && config.ownerId && botToken) {
+      await sendOwnerNotification(botToken, config.ownerId, {
+        source: sourceName, title: productTitle, price: productPrice,
+        affiliateLink: firstAffLink, delayMinutes
+      });
+    }
+
+    const publishFn = async () => {
+      await executePublish(reviewData);
+    };
+
+    if (delayMs > 0) {
+      console.log(`⏱ تأخير ${delayMinutes} دقيقة قبل النشر...`);
+      addLogEntry({
+        source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
+        title: productTitle, price: productPrice, image: imageUrlForLog,
+        status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+      });
+      setTimeout(publishFn, delayMs);
+    } else {
+      await publishFn();
+    }
+  } else {
+    addLogEntry({
+      source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
+      title: productTitle, price: productPrice, image: imageUrlForLog,
+      status: 'detected', targets: targetIds
+    });
   }
 }
 
