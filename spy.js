@@ -1247,9 +1247,14 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
       message += '\n';
       const linksDisplay = normalizeAliExpressLinks(text);
-      if (linksDisplay) message += `${linksDisplay}\n\n`;
-      else if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
-      else message += `${affLink}\n\n`;
+      if (linksDisplay) {
+        if (t.linkLabel) message += `${t.linkLabel}\n`;
+        message += `${linksDisplay}\n\n`;
+      } else if (t.linkLabel) {
+        message += `${t.linkLabel}\n${affLink}\n\n`;
+      } else {
+        message += `${affLink}\n\n`;
+      }
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
       if (t.hashtags) message += t.hashtags;
