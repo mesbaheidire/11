@@ -165,16 +165,28 @@ async function getLog(limit = 200) {
       'SELECT * FROM spy_log ORDER BY timestamp DESC LIMIT $1',
       [limit]
     );
-    return result.rows.map(row => ({
-      source: row.source,
-      originalLink: row.original_link,
-      affiliateLink: row.affiliate_link,
-      title: row.title,
-      price: row.price,
-      status: row.status,
-      error: row.error,
-      timestamp: row.timestamp,
-    }));
+    return result.rows.map(row => {
+      let extraData = {};
+      try {
+        if (row.data) {
+          extraData = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        }
+      } catch {}
+      return {
+        id: row.id,
+        source: row.source,
+        originalLink: row.original_link,
+        affiliateLink: row.affiliate_link,
+        title: row.title,
+        price: row.price,
+        status: row.status,
+        error: row.error,
+        timestamp: row.timestamp,
+        image: extraData.image || null,
+        targets: extraData.targets || [],
+        message: extraData.message || null,
+      };
+    });
   } catch (e) {
     console.log('⚠️ Failed to load log:', e.message);
     return [];

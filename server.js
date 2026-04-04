@@ -11,7 +11,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -1790,6 +1790,48 @@ app.get('/api/spy/log', async (req, res) => {
   try {
     const log = await loadSpyLog();
     res.json({ success: true, log });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/spy/republish', async (req, res) => {
+  try {
+    const { message, image, targets, delayMinutes } = req.body;
+    if (!message || !targets || !Array.isArray(targets) || targets.length === 0) {
+      return res.status(400).json({ success: false, error: 'بيانات غير كافية لإعادة النشر' });
+    }
+    const spyConfig = await loadSpyConfigCached();
+    const allowedTargets = (spyConfig.targetChannels || []).map(ch => String(ch.id || ch));
+    const validTargets = targets.filter(t => allowedTargets.includes(String(t)));
+    if (validTargets.length === 0) {
+      return res.status(400).json({ success: false, error: 'لا توجد قنوات هدف مسموح بها' });
+    }
+    const delay = Number(delayMinutes);
+    if (delayMinutes !== undefined && (!Number.isFinite(delay) || delay < 0 || delay > 1440)) {
+      return res.status(400).json({ success: false, error: 'قيمة التأخير غير صالحة (0-1440 دقيقة)' });
+    }
+    const reviewData = {
+      message,
+      productImage: image || null,
+      targetIds: validTargets,
+      sourceName: 'إعادة نشر',
+      originalLink: '',
+      affiliateLink: '',
+      productTitle: '',
+      productPrice: '',
+      imageUrlForLog: image || null
+    };
+    const delayMs = delay > 0 ? delay * 60000 : 0;
+    if (delayMs > 0) {
+      setTimeout(async () => {
+        try { await executePublish(reviewData); } catch (e) { console.log('❌ فشل إعادة النشر المؤجل:', e.message); }
+      }, delayMs);
+      res.json({ success: true, message: `سيتم إعادة النشر بعد ${Math.round(delay)} دقيقة` });
+    } else {
+      await executePublish(reviewData);
+      res.json({ success: true, message: 'تم إعادة النشر بنجاح' });
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

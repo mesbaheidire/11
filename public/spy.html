@@ -69,6 +69,12 @@
         .log-item .log-status.expired { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
         .log-item .log-status.daily_limit { background: rgba(121, 85, 72, 0.2); color: #BCAAA4; }
         .log-item .log-price { color: #4CAF50; font-weight: 700; font-size: 13px; }
+        .log-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .log-btn { border: none; border-radius: 8px; padding: 5px 10px; font-family: 'Cairo'; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+        .log-btn.republish-btn { background: rgba(76, 175, 80, 0.2); color: #4CAF50; border: 1px solid rgba(76, 175, 80, 0.4); }
+        .log-btn.republish-btn:hover { background: rgba(76, 175, 80, 0.35); }
+        .log-btn.delay-btn { background: rgba(33, 150, 243, 0.2); color: #2196F3; border: 1px solid rgba(33, 150, 243, 0.4); }
+        .log-btn.delay-btn:hover { background: rgba(33, 150, 243, 0.35); }
         .empty-log { text-align: center; color: #555; padding: 30px 20px; }
         .empty-log i { font-size: 40px; margin-bottom: 8px; display: block; }
 
@@ -810,17 +816,18 @@
             btn.innerHTML = '<i class="fas fa-sign-out-alt"></i> تسجيل الخروج';
         }
 
+        let logData = [];
         async function refreshLog() {
             try {
                 const r = await fetch('/api/spy/log');
                 const data = await r.json();
-                const entries = Array.isArray(data) ? data : (data.log || []);
+                logData = Array.isArray(data) ? data : (data.log || []);
                 const list = document.getElementById('logList');
-                if (!entries.length) {
+                if (!logData.length) {
                     list.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
                     return;
                 }
-                list.innerHTML = entries.reverse().slice(0, 50).map(e => {
+                list.innerHTML = logData.slice(0, 50).map((e, idx) => {
                     const statusMap = {
                         published: 'تم النشر', detected: 'تم الرصد', failed: 'فشل', error: 'خطأ',
                         publish_failed: 'فشل النشر', cookie_expired: 'كوكي منتهي', pending: 'قيد الانتظار',
@@ -828,6 +835,7 @@
                         daily_limit: 'حد يومي', duplicate: 'مكرر', no_link: 'بدون رابط'
                     };
                     const time = e.timestamp ? new Date(e.timestamp).toLocaleString('ar-DZ') : '';
+                    const hasRepublishData = e.message && e.targets && e.targets.length > 0;
                     return `<div class="log-item">
                         ${e.image ? `<img src="${esc(typeof e.image === 'string' ? e.image : '')}" class="log-img" onerror="this.style.display='none'">` : ''}
                         <div class="log-header">
@@ -837,11 +845,47 @@
                         <div class="log-title">${esc(e.title || '')}</div>
                         ${e.price ? `<span class="log-price">${esc(e.price)}</span>` : ''}
                         <span class="log-status ${e.status || ''}">${statusMap[e.status] || e.status || ''}</span>
+                        ${hasRepublishData ? `<div class="log-actions">
+                            <button class="log-btn republish-btn" onclick="republishEntry(${idx})"><i class="fas fa-redo"></i> إعادة نشر</button>
+                            <button class="log-btn delay-btn" onclick="republishDelayed(${idx})"><i class="fas fa-clock"></i> نشر مؤجل</button>
+                        </div>` : ''}
                     </div>`;
                 }).join('');
             } catch (e) {
                 console.log('Failed to load log');
             }
+        }
+
+        async function republishEntry(idx) {
+            const e = logData[idx];
+            if (!e || !e.message) { showToast('لا توجد بيانات كافية', 'error'); return; }
+            if (!confirm('هل تريد إعادة نشر هذا المنشور الآن؟')) return;
+            try {
+                const r = await fetch('/api/spy/republish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: e.message, image: e.image, targets: e.targets })
+                });
+                const d = await r.json();
+                showToast(d.success ? (d.message || 'تم إعادة النشر') : (d.error || 'فشل'), d.success ? 'success' : 'error');
+                if (d.success) setTimeout(refreshLog, 3000);
+            } catch (err) { showToast('خطأ في إعادة النشر', 'error'); }
+        }
+
+        async function republishDelayed(idx) {
+            const e = logData[idx];
+            if (!e || !e.message) { showToast('لا توجد بيانات كافية', 'error'); return; }
+            const minutes = prompt('كم دقيقة تأخير؟', '5');
+            if (!minutes || isNaN(minutes) || Number(minutes) <= 0) return;
+            try {
+                const r = await fetch('/api/spy/republish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: e.message, image: e.image, targets: e.targets, delayMinutes: Number(minutes) })
+                });
+                const d = await r.json();
+                showToast(d.success ? (d.message || 'تمت جدولة النشر') : (d.error || 'فشل'), d.success ? 'success' : 'error');
+            } catch (err) { showToast('خطأ في جدولة النشر', 'error'); }
         }
 
         async function saveSpyCookie() {

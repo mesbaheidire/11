@@ -691,7 +691,7 @@ async function executePublish(review) {
     addLogEntry({
       source: sourceName, originalLink, affiliateLink,
       title: productTitle, price: productPrice, image: logImage,
-      status: 'daily_limit', targets: targetIds
+      status: 'daily_limit', targets: targetIds, message
     });
     return;
   }
@@ -741,7 +741,7 @@ async function executePublish(review) {
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,
     title: productTitle, price: productPrice, image: logImage,
-    status: finalStatus, targets: targetIds
+    status: finalStatus, targets: targetIds, message
   });
 }
 
@@ -1337,7 +1337,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     addLogEntry({
       source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
       title: productTitle, price: productPrice, image: imageUrlForLog,
-      status: 'daily_limit', targets: targetIds
+      status: 'daily_limit', targets: targetIds, message
     });
     return;
   }
@@ -1353,7 +1353,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     addLogEntry({
       source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
       title: productTitle, price: productPrice, image: imageUrlForLog,
-      status: 'review', targets: targetIds
+      status: 'review', targets: targetIds, message
     });
     await sendForReview(botToken, config.ownerId, reviewData);
   } else if (config.autoPublish) {
@@ -1376,7 +1376,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       addLogEntry({
         source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
         title: productTitle, price: productPrice, image: imageUrlForLog,
-        status: 'pending', targets: targetIds, scheduledDelay: delayMinutes
+        status: 'pending', targets: targetIds, scheduledDelay: delayMinutes, message
       });
       setTimeout(publishFn, delayMs);
     } else {
@@ -1386,7 +1386,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     addLogEntry({
       source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
       title: productTitle, price: productPrice, image: imageUrlForLog,
-      status: 'detected', targets: targetIds
+      status: 'detected', targets: targetIds, message
     });
   }
 }
@@ -1863,5 +1863,6 @@ module.exports = {
   extractPrice,
   sendLoginCode,
   verifyCode,
-  logoutSpy
+  logoutSpy,
+  executePublish
 };

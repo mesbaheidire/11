@@ -75,7 +75,8 @@ npm start
   - Daily publish limit — configurable max posts per day (0 = unlimited), resets at midnight
   - Manual review mode — products sent to you via bot with "Publish"/"Skip" buttons before posting (30-min expiry)
   - Owner notifications — sends you a personal Telegram message when a new product is detected
-  - Activity log with full history
+  - Activity log with full history (images, targets, message stored for republishing)
+  - **Republish buttons** — Each log entry with saved message data shows "إعادة نشر" (instant) and "نشر مؤجل" (delayed, user-specified minutes) buttons; republish targets are validated against configured target channels server-side
   - Auto-restart on server reboot
   - Authentication flow: API ID/Hash from my.telegram.org + phone verification
   - Session stored in PostgreSQL `telegram_session` table (with file fallback), config in `spy_config` table (with file fallback)
