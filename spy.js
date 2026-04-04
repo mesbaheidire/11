@@ -1249,16 +1249,10 @@ async function processPost(config, text, sourceImage, sourceName) {
       const linksDisplay = normalizeAliExpressLinks(text);
       if (linksDisplay) {
         const linkLines = linksDisplay.split(' ').filter(Boolean);
-        if (t.linkLabel) {
-          message += `${t.linkLabel}\n`;
-          linkLines.forEach(link => {
-            message += `${t.linkLabel}\n${link}\n`;
-          });
-        } else {
-          linkLines.forEach(link => {
-            message += `${link}\n`;
-          });
-        }
+        if (t.linkLabel) message += `${t.linkLabel}\n`;
+        linkLines.forEach(link => {
+          message += `${link}\n`;
+        });
       } else if (t.linkLabel) {
         message += `${t.linkLabel}\n${affLink}\n\n`;
       } else {
