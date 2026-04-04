@@ -1124,6 +1124,43 @@ ${text}`;
   }
 });
 
+app.post('/api/ai-analyze-post', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.json({ success: true, result: null });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = `حلّل منشور عروض بدقة واخرج فقط JSON:
+{
+  "productName":"اسم المنتج",
+  "price":"السعر إن وجد",
+  "coupon":"الكوبون العام إن وجد",
+  "sellerCoupon":"قسيمة البائع إن وجدت",
+  "links":["رابط1","رابط2"],
+  "notes":"وصف مختصر جداً"
+}
+القواعد:
+- استخرج الروابط الخاصة بـ AliExpress فقط.
+- اجعل links مصفوفة بدون تكرار.
+- إذا لم تجد قيمة ضع null أو [].
+- لا تكتب أي شرح خارج JSON.
+
+النص:
+${text}`;
+    const raw = await model.generateContent(prompt);
+    const output = raw.response.text();
+    const match = output.match(/\{[\s\S]*\}/);
+    if (!match) return res.json({ success: true, result: null, raw: output });
+    const parsed = JSON.parse(match[0]);
+    res.json({ success: true, result: parsed });
+  } catch (error) {
+    res.json({ success: true, result: null, error: error.message });
+  }
+});
+
 // Extract seller coupon from post text
 app.post('/api/ai-extract-seller-coupon', async (req, res) => {
   try {

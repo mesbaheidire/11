@@ -1248,16 +1248,41 @@ async function processPost(config, text, sourceImage, sourceName) {
         message += `${label}: ${extractedCoupon}\n`;
       }
 
+      let aiAnalysis = null;
+      try {
+        const r = await fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/ai-analyze-post`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const d = await r.json();
+        if (d && d.success && d.result) aiAnalysis = d.result;
+      } catch (e) {}
+
       const lines = (text || '').split('\n').map(line => line.trim()).filter(Boolean);
       const linkLines = [];
       const couponLines = [];
       const sellerCouponLines = [];
+      if (aiAnalysis && Array.isArray(aiAnalysis.links)) {
+        aiAnalysis.links.forEach(link => {
+          if (link && !linkLines.includes(link)) linkLines.push(link);
+        });
+      }
       for (const line of lines) {
-        if (/(?:s\.click\.)?aliexpress\.com/i.test(line)) linkLines.push(line.replace(/[)\].,;!?]+$/g, ''));
+        if (/(?:s\.click\.)?aliexpress\.com/i.test(line)) {
+          const cleanLine = line.replace(/[)\].,;!?]+$/g, '');
+          if (!linkLines.includes(cleanLine)) linkLines.push(cleanLine);
+        }
         const couponLine = extractCouponFromTextLine(line);
         if (couponLine && !couponLines.includes(couponLine)) couponLines.push(couponLine);
         const sellerCouponLine = extractSellerCouponFromTextLine(line);
         if (sellerCouponLine && !sellerCouponLines.includes(sellerCouponLine)) sellerCouponLines.push(sellerCouponLine);
+      }
+      if (aiAnalysis && aiAnalysis.coupon && !couponLines.includes(String(aiAnalysis.coupon).trim().toUpperCase())) {
+        couponLines.unshift(String(aiAnalysis.coupon).trim().toUpperCase());
+      }
+      if (aiAnalysis && aiAnalysis.sellerCoupon && !sellerCouponLines.includes(String(aiAnalysis.sellerCoupon).trim())) {
+        sellerCouponLines.unshift(String(aiAnalysis.sellerCoupon).trim());
       }
       if (couponLines.length === 0) {
         let extractedCouponText = null;
