@@ -432,13 +432,15 @@ function extractAliExpressLinks(text) {
     /https?:\/\/[^\s]*aliexpress\.com[^\s]*/gi,
     /https?:\/\/[^\s]*a\.aliexpress\.com[^\s]*/gi,
     /https?:\/\/[^\s]*s\.click\.aliexpress\.com[^\s]*/gi,
-    /https?:\/\/[^\s]*star\.aliexpress\.com[^\s]*/gi
+    /https?:\/\/[^\s]*star\.aliexpress\.com[^\s]*/gi,
+    /(?:^|\s)((?:www\.)?(?:[\w-]+\.)?aliexpress\.com\/[^\s]+)/gim
   ];
   const links = new Set();
   for (const pattern of patterns) {
     const matches = text.match(pattern);
     if (matches) matches.forEach(m => {
-      let clean = m.replace(/[)}\]>،,؛;]+$/, '');
+      let clean = m.trim().replace(/[)}\]>،,؛;!?]+$/, '');
+      if (!/^https?:\/\//i.test(clean)) clean = 'https://' + clean;
       links.add(clean);
     });
   }
@@ -1581,8 +1583,47 @@ async function startSpy(config) {
 
       console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
 
-      const text = msg.message || '';
-      if (!text) {
+      let text = msg.message || '';
+      
+      let entityUrls = [];
+      if (msg.entities && Array.isArray(msg.entities)) {
+        for (const ent of msg.entities) {
+          if (ent.className === 'MessageEntityTextUrl' || ent.url) {
+            const url = ent.url || '';
+            if (url && /aliexpress\.com/i.test(url)) {
+              entityUrls.push(url);
+              console.log(`🔗 رابط مخفي من entity: ${url.substring(0, 80)}...`);
+            }
+          }
+          if (ent.className === 'MessageEntityUrl') {
+            const urlText = text.substring(ent.offset, ent.offset + ent.length);
+            if (urlText && /aliexpress\.com/i.test(urlText) && !urlText.startsWith('http')) {
+              entityUrls.push('https://' + urlText);
+              console.log(`🔗 رابط بدون بروتوكول من entity: ${urlText}`);
+            }
+          }
+        }
+      }
+
+      if (msg.replyMarkup && msg.replyMarkup.rows) {
+        for (const row of msg.replyMarkup.rows) {
+          if (row.buttons) {
+            for (const btn of row.buttons) {
+              const btnUrl = btn.url || '';
+              if (btnUrl && /aliexpress\.com/i.test(btnUrl)) {
+                entityUrls.push(btnUrl);
+                console.log(`🔗 رابط من زر: ${btnUrl.substring(0, 80)}...`);
+              }
+            }
+          }
+        }
+      }
+      
+      if (entityUrls.length > 0) {
+        text = text + '\n' + entityUrls.join('\n');
+      }
+
+      if (!text.trim()) {
         console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
         return;
       }
@@ -1590,7 +1631,7 @@ async function startSpy(config) {
       const aliLinks = extractAliExpressLinks(text);
       
       if (aliLinks.length === 0) {
-        console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة`);
+        console.log(`ℹ️ لا توجد روابط AliExpress في الرسالة — النص (${text.length} حرف): ${text.substring(0, 200)}`);
         return;
       }
 
