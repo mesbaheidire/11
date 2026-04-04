@@ -317,6 +317,15 @@ function extractCouponFromPost(text) {
   return Array.from(coupons).join(' | ');
 }
 
+function extractCouponFromTextLine(line) {
+  if (!line) return null;
+  const cleaned = line.trim();
+  const match = cleaned.match(/(?:كوبون|قسيمة|coupon|code|كود|رمز|store coupon)[:\s]*([A-Z0-9]{3,20})/i);
+  if (match && match[1]) return match[1].toUpperCase();
+  const fallback = cleaned.match(/\b([A-Z]{2,8}[0-9]{1,6})\b/);
+  return fallback ? fallback[1].toUpperCase() : null;
+}
+
 function extractSellerCouponFromPost(text) {
   if (!text) return null;
   const coupons = new Set();
@@ -335,6 +344,14 @@ function extractSellerCouponFromPost(text) {
   return Array.from(coupons).join(' | ');
 }
 
+function extractSellerCouponFromTextLine(line) {
+  if (!line) return null;
+  const cleaned = line.trim();
+  const match = cleaned.match(/(?:قسيمة\s*البائع|seller\s*coupon|seller\s*code|coupon\s*code|code)[:\s]*([A-Z0-9$\/.-]{3,30})/i);
+  if (match && match[1]) return match[1].trim();
+  return null;
+}
+
 function normalizeAliExpressLinks(text) {
   if (!text) return '';
   const links = [];
@@ -349,6 +366,15 @@ function normalizeAliExpressLinks(text) {
     }
   }
   return links.join(' ');
+}
+
+function extractAliExpressLinksByLine(text) {
+  if (!text) return [];
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => /(?:s\.click\.)?aliexpress\.com/i.test(line))
+    .map(line => line.replace(/^[-•*]\s*/, '').replace(/[)\].,;!?]+$/g, ''));
 }
 
 function isPhoneProduct(title, text) {
@@ -1222,37 +1248,47 @@ async function processPost(config, text, sourceImage, sourceName) {
         message += `${label}: ${extractedCoupon}\n`;
       }
 
-      let sellerCouponText = t.sellerCoupon || '';
-      if (!sellerCouponText.trim()) {
+      const lines = (text || '').split('\n').map(line => line.trim()).filter(Boolean);
+      const linkLines = [];
+      const couponLines = [];
+      const sellerCouponLines = [];
+      for (const line of lines) {
+        if (/(?:s\.click\.)?aliexpress\.com/i.test(line)) linkLines.push(line.replace(/[)\].,;!?]+$/g, ''));
+        const couponLine = extractCouponFromTextLine(line);
+        if (couponLine && !couponLines.includes(couponLine)) couponLines.push(couponLine);
+        const sellerCouponLine = extractSellerCouponFromTextLine(line);
+        if (sellerCouponLine && !sellerCouponLines.includes(sellerCouponLine)) sellerCouponLines.push(sellerCouponLine);
+      }
+      if (couponLines.length === 0) {
+        let extractedCouponText = null;
         try {
-          const aiCoupon = await extractSellerCouponWithAI(text);
-          if (aiCoupon) {
-            console.log(`🤖🎁 قسيمة البائع المستخرجة بالذكاء الاصطناعي: ${aiCoupon}`);
-            sellerCouponText = aiCoupon;
-          }
-        } catch (e) {
-          console.log(`⚠️ فشل استخراج قسيمة البائع: ${e.message}`);
-        }
+          extractedCouponText = await extractCouponWithAI(text);
+        } catch (e) {}
+        if (!extractedCouponText) extractedCouponText = extractCouponFromPost(text);
+        if (extractedCouponText) couponLines.push(...extractedCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
       }
-      if (!sellerCouponText.trim()) {
-        const postSellerCoupon = extractSellerCouponFromPost(text);
-        if (postSellerCoupon) {
-          console.log(`📋 قسيمة البائع المستخرجة من النص: ${postSellerCoupon}`);
-          sellerCouponText = postSellerCoupon;
+      if (sellerCouponLines.length === 0) {
+        let sellerCouponText = t.sellerCoupon || '';
+        if (!sellerCouponText.trim()) {
+          try {
+            const aiCoupon = await extractSellerCouponWithAI(text);
+            if (aiCoupon) sellerCouponText = aiCoupon;
+          } catch (e) {}
         }
+        if (!sellerCouponText.trim()) sellerCouponText = extractSellerCouponFromPost(text) || '';
+        if (sellerCouponText.trim()) sellerCouponLines.push(...sellerCouponText.split(' | ').map(c => c.trim()).filter(Boolean));
       }
-      if (sellerCouponText && sellerCouponText.trim()) {
-        let couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponText.trim();
+      if (sellerCouponLines.length > 0) {
+        const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
         message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
       }
       message += '\n';
-      const linksDisplay = normalizeAliExpressLinks(text);
-      if (linksDisplay) {
-        const linkLines = linksDisplay.split(' ').filter(Boolean);
+      if (linkLines.length > 0) {
         if (t.linkLabel) message += `${t.linkLabel}\n`;
         linkLines.forEach(link => {
           message += `${link}\n`;
         });
+        message += '\n';
       } else if (t.linkLabel) {
         message += `${t.linkLabel}\n${affLink}\n\n`;
       } else {
