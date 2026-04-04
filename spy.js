@@ -317,6 +317,40 @@ function extractCouponFromPost(text) {
   return Array.from(coupons).join(' | ');
 }
 
+function extractSellerCouponFromPost(text) {
+  if (!text) return null;
+  const coupons = new Set();
+  const patterns = [
+    /(?:قسيمة\s*البائع|coupon\s*code|seller\s*coupon|seller\s*code|coupon|code|كود|رمز)[:\s]*([A-Z0-9]{3,20})/gi,
+    /\b([A-Z]{2,8}[0-9]{1,6})\b/g
+  ];
+  for (const pat of patterns) {
+    let match;
+    while ((match = pat.exec(text)) !== null) {
+      const code = (match[1] || '').trim().toUpperCase();
+      if (code.length >= 3) coupons.add(code);
+    }
+  }
+  if (coupons.size === 0) return null;
+  return Array.from(coupons).join(' | ');
+}
+
+function normalizeAliExpressLinks(text) {
+  if (!text) return '';
+  const links = [];
+  const seen = new Set();
+  const pattern = /(?:https?:\/\/)?(?:s\.click\.)?aliexpress\.com\/[^\s<>()\]]+/gi;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const clean = match[0].replace(/[)\].,;!?]+$/g, '');
+    if (!seen.has(clean)) {
+      seen.add(clean);
+      links.push(clean);
+    }
+  }
+  return links.join(' ');
+}
+
 function isPhoneProduct(title, text) {
   const combined = ((title || '') + ' ' + (text || '')).toLowerCase();
   const phoneKeywords = [
@@ -1200,12 +1234,21 @@ async function processPost(config, text, sourceImage, sourceName) {
           console.log(`⚠️ فشل استخراج قسيمة البائع: ${e.message}`);
         }
       }
+      if (!sellerCouponText.trim()) {
+        const postSellerCoupon = extractSellerCouponFromPost(text);
+        if (postSellerCoupon) {
+          console.log(`📋 قسيمة البائع المستخرجة من النص: ${postSellerCoupon}`);
+          sellerCouponText = postSellerCoupon;
+        }
+      }
       if (sellerCouponText && sellerCouponText.trim()) {
         let couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponText.trim();
         message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
       }
       message += '\n';
-      if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
+      const linksDisplay = normalizeAliExpressLinks(text);
+      if (linksDisplay) message += `${linksDisplay}\n\n`;
+      else if (t.linkLabel) message += `${t.linkLabel}\n${affLink}\n\n`;
       else message += `${affLink}\n\n`;
       if (t.footer) message += `${t.footer}\n`;
       if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
