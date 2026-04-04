@@ -1099,23 +1099,47 @@ async function processPost(config, text, sourceImage, sourceName) {
       // تحويل الرابط إلى أفليت
       let result, directResult;
       if (config.useTypedLinks) {
-        result = await portaffFunction(cookie, originalLink);
-        if (!result || !result.aff) {
-          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
-          inFlightLinks.delete(normalizeAliLink(originalLink));
-          continue;
+        try {
+          result = await portaffFunction(cookie, originalLink);
+        } catch (typedErr) {
+          console.log(`⚠️ فشل التحويل بالنوع: ${typedErr.message} — محاولة التحويل المباشر...`);
+          result = null;
         }
-        const linkType = config.linkType || 'coin';
-        affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
+        if (result && result.aff) {
+          const linkType = config.linkType || 'coin';
+          affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
+          resolvedProductId = result.productId || null;
+          if (affLink) {
+            console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
+          }
+        }
         if (!affLink) {
-          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'لا يوجد رابط أفلييت متاح' });
+          console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
+          try {
+            directResult = await directAffLink(cookie, originalLink);
+            if (directResult && directResult.affLink) {
+              affLink = directResult.affLink;
+              resolvedProductId = directResult.productId || resolvedProductId;
+              console.log(`🔗 تحويل مباشر (احتياط): ${affLink.substring(0, 60)}...`);
+            }
+          } catch (directErr) {
+            console.log(`❌ فشل التحويل المباشر أيضاً: ${directErr.message}`);
+          }
+        }
+        if (!affLink) {
+          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط (نوع + مباشر)' });
           inFlightLinks.delete(normalizeAliLink(originalLink));
           continue;
         }
-        resolvedProductId = result.productId || null;
-        console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
       } else {
-        directResult = await directAffLink(cookie, originalLink);
+        try {
+          directResult = await directAffLink(cookie, originalLink);
+        } catch (directErr) {
+          console.log(`❌ فشل التحويل المباشر: ${directErr.message}`);
+          addLogEntry({ source: sourceName, originalLink, status: 'failed', error: `فشل تحويل الرابط: ${directErr.message}` });
+          inFlightLinks.delete(normalizeAliLink(originalLink));
+          continue;
+        }
         if (!directResult || !directResult.affLink) {
           addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
           inFlightLinks.delete(normalizeAliLink(originalLink));

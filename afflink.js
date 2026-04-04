@@ -14,7 +14,9 @@ async function getFinalRedirect(url, maxRedirects = 10) {
                 https: { rejectUnauthorized: false },
                 timeout: { request: 10000 },
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5'
                 }
             });
 
@@ -36,6 +38,24 @@ async function getFinalRedirect(url, maxRedirects = 10) {
                 
                 currentUrl = nextUrl;
             } else {
+                const body = response.body || '';
+                const metaRefresh = body.match(/content=["'][^"']*url=([^"'\s>]+)/i);
+                if (metaRefresh) {
+                    currentUrl = metaRefresh[1];
+                    if (currentUrl.includes('/item/') || currentUrl.includes('productIds=')) bestUrl = currentUrl;
+                    continue;
+                }
+                const jsRedirect = body.match(/(?:window\.location|location\.href)\s*=\s*["']([^"']+)/i);
+                if (jsRedirect) {
+                    currentUrl = jsRedirect[1];
+                    if (currentUrl.includes('/item/') || currentUrl.includes('productIds=')) bestUrl = currentUrl;
+                    continue;
+                }
+                const bodyLink = body.match(/https?:\/\/[^\s"'<>]*aliexpress\.com\/item\/(\d+)\.html[^\s"'<>]*/i);
+                if (bodyLink) {
+                    bestUrl = bodyLink[0];
+                    return bestUrl;
+                }
                 return currentUrl;
             }
         } catch (err) {
@@ -57,6 +77,14 @@ async function getFinalRedirect(url, maxRedirects = 10) {
                 
                 currentUrl = nextUrl;
             } else {
+                const errBody = err.response?.body || '';
+                if (typeof errBody === 'string') {
+                    const bodyLink = errBody.match(/https?:\/\/[^\s"'<>]*aliexpress\.com\/item\/(\d+)\.html[^\s"'<>]*/i);
+                    if (bodyLink) {
+                        console.log("📎 رابط منتج مستخرج من صفحة الخطأ:", bodyLink[0].substring(0, 80));
+                        return bodyLink[0];
+                    }
+                }
                 console.error("❌ Redirect error:", err.message);
                 return bestUrl !== url ? bestUrl : currentUrl;
             }
