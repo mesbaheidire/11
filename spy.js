@@ -1294,12 +1294,15 @@ async function processPost(config, text, sourceImage, sourceName) {
   productTitle = cleanTitle(productTitle);
 
   let message = '';
-  if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n\n`;
-  if (t.prefix) message += `${t.prefix} ${productTitle}\n\n`;
-  else if (productTitle) message += `${productTitle}\n\n`;
-  if (productPrice && t.priceLabel) message += `${t.priceLabel} ${productPrice}\n`;
+  if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n`;
+  if (t.prefix) message += `${t.prefix} ${productTitle}\n`;
+  else if (productTitle) message += `${productTitle}\n`;
+  if (productPrice && t.priceLabel) {
+    const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
+    message += `${t.priceLabel} ${priceDisplay}\n`;
+  }
   if (extractedCoupon) {
-    const label = t.couponLabel || 'كوبون';
+    let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
     message += `${label}: ${extractedCoupon}\n`;
   }
 
@@ -1347,7 +1350,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (sellerCouponLines.length > 0) {
     const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-    message += `\n🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
+    message += `🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
   }
 
   message += '\n';
@@ -1355,10 +1358,9 @@ async function processPost(config, text, sourceImage, sourceName) {
   convertedLinks.forEach(cl => {
     message += `${cl.affLink}\n`;
   });
-  message += '\n';
-  if (t.footer) message += `${t.footer}\n`;
-  if (t.botLink) message += `🔗 ${t.botLink}\n\n`;
-  if (t.hashtags) message += t.hashtags;
+  if (t.footer) message += `\n${t.footer}\n`;
+  if (t.botLink) message += `🔗 ${t.botLink}\n`;
+  if (t.hashtags) message += `\n${t.hashtags}`;
 
   // === المرحلة 3: النشر ===
   const botToken = await getBotToken();
