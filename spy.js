@@ -537,6 +537,33 @@ let spyRunning = false;
 let authState = { step: 'idle', phoneCodeHash: null };
 let reviewBot = null;
 const pendingReviews = new Map();
+const editingState = new Map(); // userId -> { reviewId }
+
+const PENDING_REVIEWS_FILE = path.join(__dirname, 'spy_pending_reviews.json');
+
+function savePendingReviews() {
+  try {
+    const obj = {};
+    for (const [id, review] of pendingReviews.entries()) obj[id] = review;
+    fs.writeFileSync(PENDING_REVIEWS_FILE, JSON.stringify(obj));
+  } catch (e) {
+    console.log('⚠️ فشل حفظ المراجعات المعلقة:', e.message);
+  }
+}
+
+function loadPendingReviews() {
+  try {
+    if (fs.existsSync(PENDING_REVIEWS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PENDING_REVIEWS_FILE, 'utf8'));
+      for (const [id, review] of Object.entries(data)) pendingReviews.set(id, review);
+      if (pendingReviews.size > 0) console.log(`📋 تم استعادة ${pendingReviews.size} مراجعة معلقة من الملف`);
+    }
+  } catch (e) {
+    console.log('⚠️ فشل تحميل المراجعات المعلقة:', e.message);
+  }
+}
+
+loadPendingReviews();
 
 async function loadAuthState() {
   try {
@@ -598,6 +625,7 @@ function startReviewBot(botToken) {
       await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: `✅ تم نشر الكل (${count})`, callback_data: 'noop' }]] });
       const allReviews = Array.from(pendingReviews.entries());
       pendingReviews.clear();
+      savePendingReviews();
       for (const [rid, review] of allReviews) {
         try {
           await executePublish(review);
@@ -625,7 +653,14 @@ function startReviewBot(botToken) {
         addLogEntry({ status: 'skipped', title: review.productTitle || 'تم التخطي', source: review.sourceName });
       }
       pendingReviews.clear();
+      savePendingReviews();
       console.log(`⏭ تم تخطي الكل (${count})`);
+    });
+
+    reviewBot.action('spy_edit_cancel', async (ctx) => {
+      editingState.delete(String(ctx.from.id));
+      await ctx.answerCbQuery('تم إلغاء التعديل');
+      try { await ctx.deleteMessage(); } catch (e) {}
     });
 
     reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
@@ -642,9 +677,9 @@ function startReviewBot(botToken) {
         return;
       }
       pendingReviews.delete(reviewId);
+      savePendingReviews();
       await ctx.answerCbQuery('جاري النشر...');
       await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
-
       try {
         await executePublish(review);
         console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
@@ -660,11 +695,64 @@ function startReviewBot(botToken) {
         return;
       }
       const reviewId = ctx.match[1];
+      const review = pendingReviews.get(reviewId);
       pendingReviews.delete(reviewId);
+      savePendingReviews();
       await ctx.answerCbQuery('تم التخطي');
       await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
-      addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
+      addLogEntry({ status: 'skipped', title: (review && review.productTitle) || 'تم التخطي يدوياً', reviewId });
       console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
+    });
+
+    reviewBot.action(/^spy_edit_(.+)$/, async (ctx) => {
+      const config = await getCachedConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      const review = pendingReviews.get(reviewId);
+      if (!review) {
+        await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
+        return;
+      }
+      editingState.set(String(ctx.from.id), { reviewId });
+      await ctx.answerCbQuery('أرسل النص الجديد');
+      await ctx.reply(
+        `✏️ *وضع التعديل*\n\nأرسل النص الجديد للمنشور الآن.\n\n_النص الحالي:_\n\`\`\`\n${review.message.substring(0, 600)}${review.message.length > 600 ? '...' : ''}\n\`\`\``,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ إلغاء التعديل', callback_data: 'spy_edit_cancel' }]] }
+        }
+      );
+    });
+
+    reviewBot.on('text', async (ctx) => {
+      const userId = String(ctx.from.id);
+      const state = editingState.get(userId);
+      if (!state) return;
+
+      const { reviewId } = state;
+      const review = pendingReviews.get(reviewId);
+      if (!review) {
+        editingState.delete(userId);
+        await ctx.reply('⚠️ انتهت صلاحية هذا المنشور.');
+        return;
+      }
+
+      const newText = ctx.message.text.trim();
+      if (!newText) {
+        await ctx.reply('⚠️ النص فارغ، حاول مرة أخرى.');
+        return;
+      }
+
+      review.message = newText;
+      pendingReviews.set(reviewId, review);
+      savePendingReviews();
+      editingState.delete(userId);
+
+      await ctx.reply('✅ تم تحديث النص بنجاح! اضغط *نشر* في الرسالة الأصلية للنشر.', { parse_mode: 'Markdown' });
+      console.log(`✏️ تم تعديل المنشور: ${reviewId}`);
     });
 
     reviewBot.launch({ dropPendingUpdates: false });
@@ -679,7 +767,7 @@ function stopReviewBot() {
   if (reviewBot) {
     try { reviewBot.stop(); } catch (e) {}
     reviewBot = null;
-    pendingReviews.clear();
+    editingState.clear();
     console.log('🤖 تم إيقاف بوت المراجعة');
   }
 }
@@ -782,11 +870,15 @@ async function sendForReview(botToken, ownerId, review) {
   if (review.productPrice) msg += `💰 ${review.productPrice}\n`;
   msg += `\n📢 القنوات الهدف: ${(review.targetIds || []).join(', ')}`;
 
-  const buttons = [
-    { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
-    { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
+  const rows = [
+    [
+      { text: '✅ نشر', callback_data: `spy_approve_${reviewId}` },
+      { text: '⏭ تخطي', callback_data: `spy_skip_${reviewId}` }
+    ],
+    [
+      { text: '✏️ تعديل النص', callback_data: `spy_edit_${reviewId}` }
+    ]
   ];
-  const rows = [buttons];
   if (pendingCount > 1) {
     rows.push([
       { text: `📢 نشر الكل (${pendingCount})`, callback_data: 'spy_approve_all' },
@@ -801,9 +893,11 @@ async function sendForReview(botToken, ownerId, review) {
     } else {
       await bot.telegram.sendMessage(ownerId, msg, { reply_markup: keyboard, parse_mode: 'Markdown' });
     }
+    savePendingReviews();
   } catch (e) {
     console.log('⚠️ فشل إرسال طلب المراجعة:', e.message);
     pendingReviews.delete(reviewId);
+    savePendingReviews();
   }
 }
 
