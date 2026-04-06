@@ -581,44 +581,7 @@ function startReviewBot(botToken) {
   try {
     reviewBot = new Telegraf(botToken);
 
-    reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
-      const config = await getCachedConfig();
-      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
-        await ctx.answerCbQuery('غير مصرح لك');
-        return;
-      }
-      const reviewId = ctx.match[1];
-      const review = pendingReviews.get(reviewId);
-      if (!review) {
-        await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
-        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏰ منتهي الصلاحية', callback_data: 'noop' }]] });
-        return;
-      }
-      pendingReviews.delete(reviewId);
-      await ctx.answerCbQuery('جاري النشر...');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
-
-      try {
-        await executePublish(review);
-        console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
-      } catch (e) {
-        console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
-      }
-    });
-
-    reviewBot.action(/^spy_skip_(.+)$/, async (ctx) => {
-      const config = await getCachedConfig();
-      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
-        await ctx.answerCbQuery('غير مصرح لك');
-        return;
-      }
-      const reviewId = ctx.match[1];
-      pendingReviews.delete(reviewId);
-      await ctx.answerCbQuery('تم التخطي');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
-      addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
-      console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
-    });
+    reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
 
     reviewBot.action('spy_approve_all', async (ctx) => {
       const config = await getCachedConfig();
@@ -665,9 +628,46 @@ function startReviewBot(botToken) {
       console.log(`⏭ تم تخطي الكل (${count})`);
     });
 
-    reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
+    reviewBot.action(/^spy_approve_(.+)$/, async (ctx) => {
+      const config = await getCachedConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      const review = pendingReviews.get(reviewId);
+      if (!review) {
+        await ctx.answerCbQuery('انتهت صلاحية هذا المنتج');
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏰ منتهي الصلاحية', callback_data: 'noop' }]] });
+        return;
+      }
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('جاري النشر...');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
 
-    reviewBot.launch({ dropPendingUpdates: true });
+      try {
+        await executePublish(review);
+        console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
+      } catch (e) {
+        console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
+      }
+    });
+
+    reviewBot.action(/^spy_skip_(.+)$/, async (ctx) => {
+      const config = await getCachedConfig();
+      if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
+        await ctx.answerCbQuery('غير مصرح لك');
+        return;
+      }
+      const reviewId = ctx.match[1];
+      pendingReviews.delete(reviewId);
+      await ctx.answerCbQuery('تم التخطي');
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏭ تم التخطي', callback_data: 'noop' }]] });
+      addLogEntry({ status: 'skipped', title: 'تم التخطي يدوياً', reviewId });
+      console.log(`⏭ تم تخطي المنتج: ${reviewId}`);
+    });
+
+    reviewBot.launch({ dropPendingUpdates: false });
     console.log('🤖 بوت المراجعة يعمل');
   } catch (e) {
     console.log('⚠️ فشل تشغيل بوت المراجعة:', e.message);
