@@ -848,27 +848,6 @@ async function sendForReview(botToken, ownerId, review) {
 
   const pendingCount = pendingReviews.size;
   const bot = new Telegraf(botToken);
-  
-  let msg = `📋 *منتج جديد للمراجعة* (${pendingCount} في الانتظار)\n\n`;
-  msg += `📡 المصدر: ${review.sourceName || 'غير معروف'}\n`;
-  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `📝 *المنشور الأصلي:*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  if (review.originalText) {
-    const original = review.originalText.substring(0, 300);
-    msg += `${original}${review.originalText.length > 300 ? '...' : ''}\n`;
-  }
-  msg += `\n🔗 ${review.originalLink}\n`;
-  
-  msg += `\n━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `📢 *المنشور المعد للنشر:*\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `${review.message.substring(0, 400)}${review.message.length > 400 ? '...' : ''}\n`;
-  
-  msg += `\n💾 *معلومات:*\n`;
-  if (review.productTitle) msg += `📦 ${review.productTitle}\n`;
-  if (review.productPrice) msg += `💰 ${review.productPrice}\n`;
-  msg += `\n📢 القنوات الهدف: ${(review.targetIds || []).join(', ')}`;
 
   const rows = [
     [
@@ -887,17 +866,41 @@ async function sendForReview(botToken, ownerId, review) {
   }
   const keyboard = { inline_keyboard: rows };
 
-  try {
+  const metaLines = [
+    `📋 منتج جديد للمراجعة (${pendingCount} في الانتظار)`,
+    `📡 المصدر: ${review.sourceName || 'غير معروف'}`,
+    review.productTitle ? `📦 ${review.productTitle}` : '',
+    review.productPrice ? `💰 ${review.productPrice}` : '',
+    `📢 القنوات: ${(review.targetIds || []).join(', ')}`
+  ].filter(Boolean).join('\n');
+
+  const postPreview = review.message ? review.message.substring(0, 300) + (review.message.length > 300 ? '...' : '') : '';
+  const fullMsg = `${metaLines}\n\n──────────────\n${postPreview}`;
+
+  const sendMsg = async (caption) => {
     if (review.productImage) {
-      await bot.telegram.sendPhoto(ownerId, review.productImage, { caption: msg, reply_markup: keyboard, parse_mode: 'Markdown' });
+      const safeCaption = caption.substring(0, 950);
+      await bot.telegram.sendPhoto(ownerId, review.productImage, { caption: safeCaption, reply_markup: keyboard });
     } else {
-      await bot.telegram.sendMessage(ownerId, msg, { reply_markup: keyboard, parse_mode: 'Markdown' });
+      await bot.telegram.sendMessage(ownerId, caption.substring(0, 4000), { reply_markup: keyboard });
     }
+  };
+
+  try {
+    await sendMsg(fullMsg);
     savePendingReviews();
+    console.log(`📋 تم إرسال طلب المراجعة: ${reviewId}`);
   } catch (e) {
-    console.log('⚠️ فشل إرسال طلب المراجعة:', e.message);
-    pendingReviews.delete(reviewId);
-    savePendingReviews();
+    console.log(`⚠️ فشل إرسال طلب المراجعة (${e.message}) — محاولة بنص مختصر`);
+    try {
+      const shortMsg = `📋 منتج جديد للمراجعة (${pendingCount} في الانتظار)\n📡 ${review.sourceName || 'غير معروف'}\n📦 ${review.productTitle || ''}`;
+      await sendMsg(shortMsg);
+      savePendingReviews();
+    } catch (e2) {
+      console.log(`❌ فشل إرسال طلب المراجعة نهائياً: ${e2.message}`);
+      pendingReviews.delete(reviewId);
+      savePendingReviews();
+    }
   }
 }
 
