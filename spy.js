@@ -679,12 +679,19 @@ function startReviewBot(botToken) {
       pendingReviews.delete(reviewId);
       savePendingReviews();
       await ctx.answerCbQuery('جاري النشر...');
-      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تمت الموافقة', callback_data: 'noop' }]] });
+      await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '⏳ جاري النشر...', callback_data: 'noop' }]] });
       try {
         await executePublish(review);
         console.log(`✅ تمت الموافقة والنشر: ${reviewId}`);
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '✅ تم النشر بنجاح', callback_data: 'noop' }]] });
+        try {
+          const targets = (review.targetIds || []).join(', ');
+          await ctx.reply(`✅ تم النشر بنجاح في: ${targets}`);
+        } catch (e) {}
       } catch (e) {
         console.log(`❌ فشل النشر بعد الموافقة: ${e.message}`);
+        await ctx.editMessageReplyMarkup({ inline_keyboard: [[{ text: '❌ فشل النشر', callback_data: 'noop' }]] });
+        try { await ctx.reply(`❌ فشل النشر: ${e.message}`); } catch (e2) {}
       }
     });
 
@@ -805,11 +812,8 @@ async function executePublish(review) {
 
   const publishBot = new Telegraf(botToken);
   let publishedCount = 0;
-  let finalMessage = message;
-
-  if (message.length > 4096) {
-    finalMessage = message.substring(0, 4090) + '...';
-  }
+  const textMessage = message.length > 4096 ? message.substring(0, 4090) + '...' : message;
+  const captionMessage = message.length > 1000 ? message.substring(0, 997) + '...' : message;
 
   for (const target of targetIds) {
     try {
@@ -818,9 +822,17 @@ async function executePublish(review) {
         continue;
       }
       if (productImage) {
-        await publishBot.telegram.sendPhoto(target, productImage, { caption: finalMessage });
+        try {
+          await publishBot.telegram.sendPhoto(target, productImage, { caption: captionMessage });
+          if (message.length > 1000) {
+            await publishBot.telegram.sendMessage(target, textMessage);
+          }
+        } catch (photoErr) {
+          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — إرسال نص فقط`);
+          await publishBot.telegram.sendMessage(target, textMessage);
+        }
       } else {
-        await publishBot.telegram.sendMessage(target, finalMessage);
+        await publishBot.telegram.sendMessage(target, textMessage);
       }
       publishedCount++;
       console.log(`✅ تم النشر في ${target}`);
