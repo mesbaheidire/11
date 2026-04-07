@@ -390,9 +390,14 @@
         <div class="tab-content" id="tab-log">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <div class="title" style="font-size:14px;font-weight:700;color:#bb86fc;display:flex;align-items:center;gap:8px;"><i class="fas fa-history"></i> سجل النشاط</div>
-                <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 6px 12px; color: #bb86fc; font-family: 'Cairo'; font-size: 11px; cursor: pointer;">
-                    <i class="fas fa-sync-alt"></i> تحديث
-                </button>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="clearAllLog()" style="background: rgba(255,80,80,0.15); border: 1px solid #ff5050; border-radius: 8px; padding: 6px 12px; color: #ff5050; font-family: 'Cairo'; font-size: 11px; cursor: pointer;">
+                        <i class="fas fa-trash"></i> مسح الكل
+                    </button>
+                    <button onclick="refreshLog()" style="background: rgba(187,134,252,0.2); border: 1px solid #bb86fc; border-radius: 8px; padding: 6px 12px; color: #bb86fc; font-family: 'Cairo'; font-size: 11px; cursor: pointer;">
+                        <i class="fas fa-sync-alt"></i> تحديث
+                    </button>
+                </div>
             </div>
             <div class="log-list" id="logList">
                 <div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>
@@ -836,7 +841,7 @@
                     };
                     const time = e.timestamp ? new Date(e.timestamp).toLocaleString('ar-DZ') : '';
                     const hasRepublishData = e.message && e.targets && e.targets.length > 0;
-                    return `<div class="log-item">
+                    return `<div class="log-item" id="log-item-${e.id || idx}">
                         ${e.image ? `<img src="${esc(typeof e.image === 'string' ? e.image : '')}" class="log-img" onerror="this.style.display='none'">` : ''}
                         <div class="log-header">
                             <span class="log-source">${esc(e.source || '')}</span>
@@ -845,10 +850,11 @@
                         <div class="log-title">${esc(e.title || '')}</div>
                         ${e.price ? `<span class="log-price">${esc(e.price)}</span>` : ''}
                         <span class="log-status ${e.status || ''}">${statusMap[e.status] || e.status || ''}</span>
-                        ${hasRepublishData ? `<div class="log-actions">
-                            <button class="log-btn republish-btn" onclick="republishEntry(${idx})"><i class="fas fa-redo"></i> إعادة نشر</button>
-                            <button class="log-btn delay-btn" onclick="republishDelayed(${idx})"><i class="fas fa-clock"></i> نشر مؤجل</button>
-                        </div>` : ''}
+                        <div class="log-actions">
+                            ${hasRepublishData ? `<button class="log-btn republish-btn" onclick="republishEntry(${idx})"><i class="fas fa-redo"></i> إعادة نشر</button>` : ''}
+                            ${hasRepublishData ? `<button class="log-btn delay-btn" onclick="republishDelayed(${idx})"><i class="fas fa-clock"></i> مؤجل</button>` : ''}
+                            <button class="log-btn" onclick="deleteLogEntry('${e.id || idx}', this)" style="background:rgba(255,80,80,0.15);color:#ff5050;border:1px solid #ff5050;"><i class="fas fa-trash"></i></button>
+                        </div>
                     </div>`;
                 }).join('');
             } catch (e) {
@@ -886,6 +892,47 @@
                 const d = await r.json();
                 showToast(d.success ? (d.message || 'تمت جدولة النشر') : (d.error || 'فشل'), d.success ? 'success' : 'error');
             } catch (err) { showToast('خطأ في جدولة النشر', 'error'); }
+        }
+
+        async function deleteLogEntry(id, btn) {
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                const r = await fetch(`/api/spy/log/${id}`, { method: 'DELETE' });
+                const d = await r.json();
+                if (d.success) {
+                    const item = document.getElementById(`log-item-${id}`);
+                    if (item) item.remove();
+                    const list = document.getElementById('logList');
+                    if (list && !list.querySelector('.log-item')) {
+                        list.innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
+                    }
+                } else {
+                    showToast('فشل الحذف', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-trash"></i>';
+                }
+            } catch (e) {
+                showToast('خطأ في الحذف', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-trash"></i>';
+            }
+        }
+
+        async function clearAllLog() {
+            if (!confirm('هل تريد مسح جميع سجلات النشاط؟')) return;
+            try {
+                const r = await fetch('/api/spy/log', { method: 'DELETE' });
+                const d = await r.json();
+                if (d.success) {
+                    document.getElementById('logList').innerHTML = '<div class="empty-log"><i class="fas fa-ghost"></i><p>لا يوجد نشاط بعد</p></div>';
+                    showToast('تم مسح السجل', 'success');
+                } else {
+                    showToast('فشل المسح', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في المسح', 'error');
+            }
         }
 
         async function saveSpyCookie() {

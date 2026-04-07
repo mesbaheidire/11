@@ -159,6 +159,26 @@ async function addLogEntry(entry) {
   }
 }
 
+async function deleteLogEntry(id) {
+  try {
+    await query('DELETE FROM spy_log WHERE id = $1', [id]);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to delete log entry:', e.message);
+    return false;
+  }
+}
+
+async function clearLog() {
+  try {
+    await query('DELETE FROM spy_log', []);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to clear log:', e.message);
+    return false;
+  }
+}
+
 async function getLog(limit = 200) {
   try {
     const result = await query(
@@ -326,6 +346,8 @@ module.exports = {
   addProcessedLink,
   isLinkProcessed,
   addLogEntry,
+  deleteLogEntry,
+  clearLog,
   getLog,
   getTelegramSession,
   saveTelegramSession,

@@ -846,6 +846,28 @@ async function executePublish(review) {
   if (publishedCount > 0) {
     incrementDailyCount();
     console.log(`📊 النشر اليومي: ${getDailyCount()}`);
+    try {
+      const postData = JSON.stringify({
+        id: `spy_${Date.now()}`,
+        title: productTitle || '',
+        price: productPrice || '',
+        link: affiliateLink || originalLink || '',
+        image: logImage || '',
+        message: message || '',
+        createdAt: new Date().toISOString()
+      });
+      const options = {
+        hostname: '127.0.0.1',
+        port: parseInt(process.env.PORT) || 5000,
+        path: '/api/saved-posts',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+      };
+      const req2 = http.request(options);
+      req2.on('error', () => {});
+      req2.write(postData);
+      req2.end();
+    } catch (e) {}
   }
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,

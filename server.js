@@ -1803,6 +1803,26 @@ app.get('/api/spy/log', async (req, res) => {
   }
 });
 
+app.delete('/api/spy/log/:id', async (req, res) => {
+  try {
+    const db = require('./db');
+    await db.deleteLogEntry(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/spy/log', async (req, res) => {
+  try {
+    const db = require('./db');
+    await db.clearLog();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/spy/republish', async (req, res) => {
   try {
     const { message, image, targets, delayMinutes } = req.body;
