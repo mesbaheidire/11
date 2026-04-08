@@ -170,9 +170,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden;line-height:1.5;
 }
-.pcard-price{font-size:16px;font-weight:900;color:var(--yellow-dark)}
-.pcard-dzd{font-size:11px;font-weight:700;color:var(--green)}
-.pcard-orig{font-size:10px;color:var(--muted);text-decoration:line-through}
+.pcard-price{font-size:18px;font-weight:900;color:var(--yellow-dark)}
+.pcard-price .cur{font-size:11px;font-weight:600;color:var(--yellow2)}
+.pcard-dzd{display:none}
+.pcard-orig{font-size:11px;color:var(--muted);text-decoration:line-through}
 .pcard-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .pcard-stars{color:var(--yellow);font-size:10px}
 .pcard-orders{font-size:10px;color:var(--muted)}
@@ -262,9 +263,23 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 }
 .det-title{font-size:14px;font-weight:700;line-height:1.55;margin-bottom:12px}
 .price-row{margin-bottom:12px}
-.det-price{font-size:24px;font-weight:900;color:var(--yellow-dark)}
-.det-dzd{font-size:14px;font-weight:700;color:var(--green);margin-top:3px}
+.det-price{font-size:26px;font-weight:900;color:var(--yellow-dark)}
+.det-price .cur{font-size:14px;font-weight:600;color:var(--yellow2)}
+.det-dzd{display:none}
 .det-orig{font-size:12px;color:var(--muted);text-decoration:line-through;margin-top:2px}
+.det-coupon{margin:10px 0}
+.coupon-box{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#FFF8E1,#FFF3C4);border:1.5px dashed var(--yellow);border-radius:10px;padding:10px 14px}
+.coupon-box>i{color:var(--yellow-dark);font-size:20px}
+.coupon-info{flex:1}
+.coupon-label{font-size:10px;color:var(--muted);font-weight:600}
+.coupon-code{font-size:15px;font-weight:800;color:var(--yellow-dark);letter-spacing:1px}
+.coupon-copy{background:var(--yellow);border:none;border-radius:8px;width:34px;height:34px;color:#fff;font-size:14px;cursor:pointer}
+.coupon-copy:active{transform:scale(0.9)}
+.det-message{margin:10px 0}
+.message-box{background:#f9f9f9;border-radius:10px;padding:12px 14px;border:1px solid #eee}
+.message-label{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:6px}
+.message-label i{color:var(--yellow2);margin-left:4px}
+.message-text{font-size:13px;color:#333;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto}
 .det-stats{
   display:flex;border:1px solid var(--border);
   border-radius:12px;overflow:hidden;margin-bottom:14px;
@@ -449,6 +464,22 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       </div>
     </div>
     <div class="det-shop" id="detShop" style="display:none"><i class="fas fa-store"></i><span id="detShopName"></span></div>
+    <div class="det-coupon" id="detCoupon" style="display:none">
+      <div class="coupon-box">
+        <i class="fas fa-ticket-alt"></i>
+        <div class="coupon-info">
+          <div class="coupon-label">كوبون خصم</div>
+          <div class="coupon-code" id="detCouponCode"></div>
+        </div>
+        <button class="coupon-copy" onclick="copyCoupon()"><i class="fas fa-copy"></i></button>
+      </div>
+    </div>
+    <div class="det-message" id="detMessage" style="display:none">
+      <div class="message-box">
+        <div class="message-label"><i class="fas fa-comment-dots"></i> وصف المنتج</div>
+        <div class="message-text" id="detMessageText"></div>
+      </div>
+    </div>
     <div class="det-actions">
       <button class="btn-buy" onclick="buyNow()"><i class="fas fa-shopping-cart"></i> اشتري الآن</button>
       <button class="btn-save" onclick="saveProduct()"><i class="fas fa-bookmark"></i></button>
@@ -510,11 +541,11 @@ async function loadSaved(){
     grid.innerHTML=savedProducts.map((p,i)=>cardHTML({
       title:p.title,
       image_url:p.image,
-      price:p.price?(parseFloat(p.price.replace(/[^\d.]/g,''))/DZD||''):'',
-      currency:'DZD',
+      price:p.price?(parseFloat(p.price.replace(/[^\d.]/g,''))/DZD).toFixed(2):'',
+      currency:'USD',
       promotion_link:p.link,
       product_url:p.link,
-      _savedIdx:i,_saved:true,_dzd:p.price
+      _savedIdx:i,_saved:true
     },i,savedProducts.length)).join('');
   }catch(e){document.getElementById('savedGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)">تعذر التحميل</div>'}
 }
@@ -523,9 +554,10 @@ function cardHTML(p,i,total){
   const isNew=i<2&&total>2;
   const disc=p.discount?parseInt(p.discount)+'%':'';
   const priceVal=p.price||p.sale_price||'';
-  const dzdVal=p._dzd||(p._saved?'':(priceVal?toDZD(priceVal):''));
   const onclickData=p._saved?`openSaved(savedProducts[${p._savedIdx}])`:`openDet(curProducts[${i}])`;
   const buyOnclick=p._saved?`event.stopPropagation();buySaved(savedProducts[${p._savedIdx}])`:`event.stopPropagation();quickBuy(curProducts[${i}])`;
+  const showPrice=priceVal?`<div class="pcard-price"><span class="cur">USD</span> ${esc(priceVal)}</div>`:'';
+  const origPrice=p.original_price&&p.original_price!==priceVal?`<div class="pcard-orig">${esc(p.original_price)} USD</div>`:'';
   return`<div class="pcard" onclick="${onclickData}">
     <div class="pcard-img-wrap">
       ${p.image_url?`<img class="pcard-img" src="${esc(p.image_url)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
@@ -535,11 +567,7 @@ function cardHTML(p,i,total){
     </div>
     <div class="pcard-body">
       <div class="pcard-title">${esc(p.title||'منتج')}</div>
-      <div>
-        ${priceVal&&!p._saved?`<div class="pcard-price">${esc(priceVal)} <span style="font-size:10px;font-weight:400">${p.currency||'USD'}</span></div>`:''}
-        ${dzdVal?`<div class="pcard-dzd">${typeof dzdVal==='string'&&dzdVal.includes('دج')?esc(dzdVal):toDZD(priceVal)}</div>`:''}
-        ${p.original_price&&p.original_price!==priceVal?`<div class="pcard-orig">${esc(p.original_price)} ${p.currency||'USD'}</div>`:''}
-      </div>
+      <div>${showPrice}${origPrice}</div>
       ${p.rating||p.orders?`<div class="pcard-meta">${p.rating?`<span class="pcard-stars">${toStars(p.rating)}</span>`:''}${p.orders?`<span class="pcard-orders">${Number(p.orders).toLocaleString()} طلب</span>`:''}</div>`:''}
       <button class="pcard-buy" onclick="${buyOnclick}"><i class="fas fa-shopping-cart"></i> اشتري الآن</button>
     </div>
@@ -547,7 +575,8 @@ function cardHTML(p,i,total){
 }
 
 function openSaved(p){track('click',p?.title||'saved_product');
-  curProduct={title:p.title,image_url:p.image,price:'',currency:'',promotion_link:p.link,product_url:p.link,rating:null,orders:null,discount:null,shop_name:null,_dzdPrice:p.price};
+  const usdPrice=p.price?(parseFloat(p.price.replace(/[^\d.]/g,''))/DZD).toFixed(2):'';
+  curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:null,orders:null,discount:null,shop_name:null,_coupon:p.coupon||null,_message:p.message||p.hook||null,_saved:true};
   showDet();
 }
 function buySaved(p){openURL(p.link)}
@@ -635,19 +664,30 @@ function showDet(){
   img.src=p.image_url||'';img.style.display=p.image_url?'block':'none';
   document.getElementById('detTitle').textContent=p.title||'منتج';
   const price=p.price||p.sale_price||'';
-  document.getElementById('detPrice').textContent=price?(price+' '+(p.currency||'USD')):'';
-  document.getElementById('detDzd').textContent=p._dzdPrice||toDZD(price);
-  document.getElementById('detOrig').textContent=p.original_price&&p.original_price!==price?('الأصلي: '+p.original_price+' '+(p.currency||'USD')):'';
-  document.getElementById('dRating').textContent=p.rating?(Math.round(parseFloat(p.rating)/20*10)/10+'/5'):'—';
+  document.getElementById('detPrice').innerHTML=price?`<span class="cur">USD</span> ${esc(price)}`:'';
+  document.getElementById('detOrig').textContent=p.original_price&&p.original_price!==price?('الأصلي: '+p.original_price+' USD'):'';
+  const ratingVal=p.rating?(Math.round(parseFloat(p.rating)/20*10)/10):null;
+  document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
   document.getElementById('dOrders').textContent=p.orders?Number(p.orders).toLocaleString():'—';
   document.getElementById('dDisc').textContent=p.discount?parseInt(p.discount)+'%':'—';
   const shop=document.getElementById('detShop');
   if(p.shop_name){shop.style.display='flex';document.getElementById('detShopName').textContent=p.shop_name}else{shop.style.display='none'}
+  const couponEl=document.getElementById('detCoupon');
+  if(p._coupon){couponEl.style.display='block';document.getElementById('detCouponCode').textContent=p._coupon}else{couponEl.style.display='none'}
+  const msgEl=document.getElementById('detMessage');
+  if(p._message){msgEl.style.display='block';document.getElementById('detMessageText').textContent=p._message}else{msgEl.style.display='none'}
   document.getElementById('detOverlay').classList.add('show');
   if(tg){tg.BackButton.show();tg.BackButton.onClick(closeDet)}
 }
 function closeDet(){document.getElementById('detOverlay').classList.remove('show');if(tg)tg.BackButton.hide()}
 
+function copyCoupon(){
+  const code=document.getElementById('detCouponCode').textContent;
+  if(!code)return;
+  navigator.clipboard.writeText(code).then(()=>toast('تم نسخ الكوبون ✓','ok')).catch(()=>{
+    const t=document.createElement('textarea');t.value=code;document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);toast('تم نسخ الكوبون ✓','ok');
+  });
+}
 function openURL(url){if(!url){toast('لا يوجد رابط','err');return}if(tg)tg.openLink(url);else window.open(url,'_blank')}
 function buyNow(){openURL(curProduct?.promotion_link||curProduct?.product_url||'')}
 function quickBuy(p){track('click',p?.title||p?.id||'buy');openURL(p?.promotion_link||p?.product_url||'')}
