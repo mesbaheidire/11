@@ -1744,6 +1744,51 @@ Query: "${query}"`
 }
 
 // Store: Search products
+app.get('/api/store/hot', async (req, res) => {
+  try {
+    const result = await searchHotProducts({ limit: '10' });
+    if (!result.success) return res.json({ success: false, products: [] });
+    res.json({ success: true, products: result.products || [] });
+  } catch (e) {
+    res.json({ success: false, products: [] });
+  }
+});
+
+app.get('/api/store/deals', async (req, res) => {
+  try {
+    const result = await searchProducts({ limit: '10', maxPrice: '5', sort: 'LAST_VOLUME_DESC' });
+    if (!result.success) return res.json({ success: false, products: [] });
+    res.json({ success: true, products: result.products || [] });
+  } catch (e) {
+    res.json({ success: false, products: [] });
+  }
+});
+
+app.get('/api/store/top-discount', async (req, res) => {
+  try {
+    const result = await searchHotProducts({ limit: '10' });
+    if (!result.success) return res.json({ success: false, products: [] });
+    const sorted = (result.products || []).filter(p => p.discount).sort((a, b) => {
+      const da = parseInt(String(a.discount).replace('%','')) || 0;
+      const db = parseInt(String(b.discount).replace('%','')) || 0;
+      return db - da;
+    });
+    res.json({ success: true, products: sorted });
+  } catch (e) {
+    res.json({ success: false, products: [] });
+  }
+});
+
+app.get('/api/store/phones', async (req, res) => {
+  try {
+    const result = await searchProducts({ keywords: 'smartphone mobile phone', category: '509', limit: '10', sort: 'LAST_VOLUME_DESC' });
+    if (!result.success) return res.json({ success: false, products: [] });
+    res.json({ success: true, products: result.products || [] });
+  } catch (e) {
+    res.json({ success: false, products: [] });
+  }
+});
+
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;

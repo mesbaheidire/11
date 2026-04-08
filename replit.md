@@ -16,7 +16,7 @@ An Arabic-language web application for generating AliExpress affiliate links and
   - `collections.html` - Collections page
   - `telegram.html` - Telegram publishing page
   - `video-generator.html` - Affiliate video generator page (AI-powered)
-  - `store.html` - Telegram Mini App store (indigo/coral theme)
+  - `store.html` - Telegram Mini App store (Yassir-inspired purple theme)
   - `store-analytics.html` - Store analytics dashboard for admin
   - `saved-posts.html` - Saved posts management page
   - `manifest.json` - PWA manifest
