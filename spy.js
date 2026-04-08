@@ -610,6 +610,28 @@ function startReviewBot(botToken) {
 
     reviewBot.action('noop', (ctx) => ctx.answerCbQuery());
 
+    reviewBot.command('store', async (ctx) => {
+      try {
+        const config = await getCachedConfig();
+        const appUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || '';
+        if (!appUrl) {
+          await ctx.reply('⚠️ لم يتم تعيين رابط التطبيق. أضف APP_URL في متغيرات البيئة.');
+          return;
+        }
+        const storeUrl = appUrl.replace(/\/$/, '') + '/store';
+        await ctx.reply('🛍 *متجر AliOffers DZ*\n\nتصفح أحدث العروض والمنتجات مباشرة من هنا 👇', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '🛍 فتح المتجر', web_app: { url: storeUrl } }
+            ]]
+          }
+        });
+      } catch (e) {
+        console.log('Store command error:', e.message);
+      }
+    });
+
     reviewBot.action('spy_approve_all', async (ctx) => {
       const config = await getCachedConfig();
       if (config.ownerId && String(ctx.from.id) !== String(config.ownerId)) {
