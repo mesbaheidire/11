@@ -483,6 +483,9 @@ if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#ffffff')}catch(e){}}
 
 const DZD=137;
 let curProduct=null,curSort='orders',curCat='',curPage=1,curQ='',curProducts=[],hasMore=false,isLoading=false,imgData='',priceFltOpen=false;
+const tgUserId=tg?.initDataUnsafe?.user?.id||'anon';
+function track(type,detail){fetch('/api/store/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,detail,userId:String(tgUserId)})}).catch(()=>{});}
+track('visit','store_open');
 
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const toDZD=u=>{if(!u)return'';const n=parseFloat(u);return isNaN(n)?'':(Math.round(n*DZD)).toLocaleString('ar-DZ')+' دج'};
@@ -543,7 +546,7 @@ function cardHTML(p,i,total){
   </div>`;
 }
 
-function openSaved(p){
+function openSaved(p){track('click',p?.title||'saved_product');
   curProduct={title:p.title,image_url:p.image,price:'',currency:'',promotion_link:p.link,product_url:p.link,rating:null,orders:null,discount:null,shop_name:null,_dzdPrice:p.price};
   showDet();
 }
@@ -554,6 +557,7 @@ function goSearch(){
   const q=document.getElementById('searchInput').value.trim();
   if(!q&&!curCat){toast('اكتب كلمة للبحث','err');return}
   curQ=q;curPage=1;curProducts=[];
+  if(q)track('search',q);
   showPage('searchPage');
   fetchSearch(true);
 }
@@ -562,6 +566,7 @@ function selectCat(cat,el){
   curCat=cat;
   document.querySelectorAll('.cat-chip').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
+  if(cat)track('category',cat);
   if(curQ||cat){
     curPage=1;curProducts=[];
     showPage(cat?'searchPage':'homePage');
@@ -623,7 +628,7 @@ async function fetchSearch(reset=true){
 function loadMore(){curPage++;fetchSearch(false)}
 
 // ===== DETAIL =====
-function openDet(p){curProduct=p;showDet()}
+function openDet(p){curProduct=p;track('click',p?.title||p?.id||'product');showDet()}
 function showDet(){
   const p=curProduct;if(!p)return;
   const img=document.getElementById('detImg');
@@ -645,7 +650,7 @@ function closeDet(){document.getElementById('detOverlay').classList.remove('show
 
 function openURL(url){if(!url){toast('لا يوجد رابط','err');return}if(tg)tg.openLink(url);else window.open(url,'_blank')}
 function buyNow(){openURL(curProduct?.promotion_link||curProduct?.product_url||'')}
-function quickBuy(p){openURL(p?.promotion_link||p?.product_url||'')}
+function quickBuy(p){track('click',p?.title||p?.id||'buy');openURL(p?.promotion_link||p?.product_url||'')}
 
 async function saveProduct(){
   if(!curProduct)return;

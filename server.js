@@ -2632,6 +2632,206 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 })();
 
+// ==================== Store Analytics System ====================
+const ANALYTICS_FILE = path.join(__dirname, 'store_analytics.json');
+
+function loadAnalyticsData() {
+  try {
+    if (fs.existsSync(ANALYTICS_FILE)) {
+      return JSON.parse(fs.readFileSync(ANALYTICS_FILE, 'utf8'));
+    }
+  } catch(e) {}
+  return { events: [], searches: {}, clicks: {}, categories: {}, dailyVisits: {}, visitors: {} };
+}
+
+let analyticsSavePending = false;
+function saveAnalyticsData(data) {
+  if (analyticsSavePending) return;
+  analyticsSavePending = true;
+  setTimeout(() => {
+    try {
+      const trimmed = { ...data };
+      if (trimmed.events && trimmed.events.length > 5000) trimmed.events = trimmed.events.slice(-5000);
+      const searchKeys = Object.keys(trimmed.searches || {});
+      if (searchKeys.length > 500) {
+        const sorted = searchKeys.sort((a, b) => trimmed.searches[b] - trimmed.searches[a]).slice(0, 500);
+        trimmed.searches = Object.fromEntries(sorted.map(k => [k, trimmed.searches[k]]));
+      }
+      const clickKeys = Object.keys(trimmed.clicks || {});
+      if (clickKeys.length > 500) {
+        const sorted = clickKeys.sort((a, b) => (trimmed.clicks[b]?.count || 0) - (trimmed.clicks[a]?.count || 0)).slice(0, 500);
+        trimmed.clicks = Object.fromEntries(sorted.map(k => [k, trimmed.clicks[k]]));
+      }
+      const catKeys = Object.keys(trimmed.categories || {});
+      if (catKeys.length > 100) {
+        const sorted = catKeys.sort((a, b) => trimmed.categories[b] - trimmed.categories[a]).slice(0, 100);
+        trimmed.categories = Object.fromEntries(sorted.map(k => [k, trimmed.categories[k]]));
+      }
+      fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(trimmed));
+    } catch(e) {}
+    analyticsSavePending = false;
+  }, 3000);
+}
+
+let analyticsCache = null;
+function getAnalytics() {
+  if (!analyticsCache) analyticsCache = loadAnalyticsData();
+  return analyticsCache;
+}
+
+const VALID_EVENT_TYPES = ['visit', 'search', 'click', 'category'];
+const MAX_DETAIL_LENGTH = 200;
+
+function trackEvent(type, detail, userId) {
+  if (!VALID_EVENT_TYPES.includes(type)) return;
+  const safeDetail = detail ? String(detail).slice(0, MAX_DETAIL_LENGTH) : '';
+  const safeUserId = userId && userId !== 'anon' ? String(userId).slice(0, 50) : null;
+
+  const analytics = getAnalytics();
+  const now = new Date();
+  const dateKey = now.toISOString().split('T')[0];
+  const hour = now.getHours();
+
+  analytics.events.push({ type, detail: safeDetail, userId: safeUserId || 'anon', timestamp: now.toISOString(), hour, date: dateKey });
+
+  if (type === 'visit') {
+    analytics.dailyVisits[dateKey] = (analytics.dailyVisits[dateKey] || 0) + 1;
+    if (safeUserId) analytics.visitors[safeUserId] = (analytics.visitors[safeUserId] || 0) + 1;
+  }
+  if (type === 'search' && safeDetail) {
+    const q = safeDetail.toLowerCase().trim();
+    analytics.searches[q] = (analytics.searches[q] || 0) + 1;
+  }
+  if (type === 'click' && safeDetail) {
+    analytics.clicks[safeDetail] = (analytics.clicks[safeDetail] || { count: 0, name: safeDetail });
+    analytics.clicks[safeDetail].count++;
+  }
+  if (type === 'category' && safeDetail) {
+    analytics.categories[safeDetail] = (analytics.categories[safeDetail] || 0) + 1;
+  }
+
+  saveAnalyticsData(analytics);
+}
+
+const trackRateLimit = {};
+app.post('/api/store/track', (req, res) => {
+  try {
+    const { type, detail, userId } = req.body;
+    if (!type || !VALID_EVENT_TYPES.includes(type)) return res.json({ success: false });
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    if (trackRateLimit[ip] && now - trackRateLimit[ip].last < 200 && trackRateLimit[ip].count > 50) {
+      return res.json({ success: false });
+    }
+    if (!trackRateLimit[ip]) trackRateLimit[ip] = { count: 0, last: now };
+    trackRateLimit[ip].count++;
+    trackRateLimit[ip].last = now;
+    trackEvent(type, detail, userId);
+    res.json({ success: true });
+  } catch(e) {
+    res.json({ success: false });
+  }
+});
+setInterval(() => { Object.keys(trackRateLimit).forEach(k => { if (Date.now() - trackRateLimit[k].last > 60000) delete trackRateLimit[k]; }); }, 60000);
+
+app.get('/api/store/analytics', (req, res) => {
+  try {
+    const { period } = req.query;
+    const analytics = getAnalytics();
+    const now = new Date();
+
+    let startDate;
+    if (period === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === 'week') {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (period === 'month') {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else {
+      startDate = new Date(0);
+    }
+
+    const filtered = analytics.events.filter(e => new Date(e.timestamp) >= startDate);
+
+    const visits = filtered.filter(e => e.type === 'visit');
+    const searches = filtered.filter(e => e.type === 'search');
+    const clicks = filtered.filter(e => e.type === 'click');
+
+    const uniqueVisitorIds = new Set(visits.map(v => v.userId).filter(id => id && id !== 'anon'));
+
+    const searchCounts = {};
+    searches.forEach(s => {
+      const q = (s.detail || '').toLowerCase().trim();
+      if (q) searchCounts[q] = (searchCounts[q] || 0) + 1;
+    });
+    const topSearches = Object.entries(searchCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const clickCounts = {};
+    clicks.forEach(c => {
+      const name = c.detail || 'unknown';
+      clickCounts[name] = (clickCounts[name] || 0) + 1;
+    });
+    const topProducts = Object.entries(clickCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const catFiltered = filtered.filter(e => e.type === 'category');
+    const catCounts = {};
+    catFiltered.forEach(c => {
+      const name = c.detail || '';
+      if (name) catCounts[name] = (catCounts[name] || 0) + 1;
+    });
+    const topCategories = Object.entries(catCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const hourCounts = {};
+    filtered.forEach(e => {
+      const h = e.hour;
+      hourCounts[h] = (hourCounts[h] || 0) + 1;
+    });
+    const hourlyActivity = Object.entries(hourCounts)
+      .map(([hour, count]) => ({ hour: parseInt(hour), count }))
+      .sort((a, b) => a.hour - b.hour);
+
+    const savedPosts = loadSavedPosts();
+
+    const totalVisits = visits.length;
+    const totalSearches = searches.length;
+    const totalClicks = clicks.length;
+
+    res.json({
+      success: true,
+      stats: {
+        totalVisits,
+        totalSearches,
+        totalClicks,
+        totalProducts: savedPosts.length,
+        uniqueVisitors: uniqueVisitorIds.size,
+        avgSearchesPerVisit: totalVisits > 0 ? (totalSearches / totalVisits).toFixed(1) : '0',
+        clickRate: totalVisits > 0 ? ((totalClicks / totalVisits) * 100).toFixed(1) : '0',
+        topSearches,
+        topProducts,
+        topCategories,
+        hourlyActivity,
+        recentActivity: filtered.slice(-15).reverse()
+      }
+    });
+  } catch(e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.get('/store-analytics', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'store-analytics.html'));
+});
+// ==================== End Analytics ====================
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on port ${PORT}`);

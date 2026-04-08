@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>إحصائيات المتجر - AliOffers DZ</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --bg: #0a0a1a;
+      --card: #12122a;
+      --card2: #1a1a3a;
+      --border: #2a2a4a;
+      --text: #e8e8f0;
+      --muted: #8888aa;
+      --orange: #FF6B35;
+      --orange2: #FF8C5A;
+      --yellow: #FFC107;
+      --green: #4CAF50;
+      --blue: #2196F3;
+      --red: #F44336;
+      --purple: #9C27B0;
+      --pink: #E91E63;
+    }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    .header {
+      background: linear-gradient(135deg, #1a0a2e 0%, #16213e 50%, #0f3460 100%);
+      padding: 20px;
+      text-align: center;
+      border-bottom: 2px solid var(--orange);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-size: 20px; color: var(--orange); margin-bottom: 4px; }
+    .header p { font-size: 12px; color: var(--muted); }
+    .header .back-btn {
+      position: absolute; right: 15px; top: 50%; transform: translateY(-50%);
+      color: var(--orange); text-decoration: none; font-size: 20px;
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      border-radius: 10px; background: rgba(255,107,53,0.1);
+    }
+    .header .refresh-btn {
+      position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+      color: var(--yellow); background: rgba(255,193,7,0.1); border: none;
+      font-size: 18px; width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+    }
+    .refresh-btn.spinning i { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .container { padding: 15px; max-width: 600px; margin: 0 auto; }
+
+    .time-filter {
+      display: flex; gap: 8px; margin-bottom: 15px; overflow-x: auto;
+      padding-bottom: 5px;
+    }
+    .time-filter button {
+      flex-shrink: 0; padding: 8px 16px; border-radius: 20px;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--muted); font-size: 13px; cursor: pointer;
+      transition: all 0.3s;
+    }
+    .time-filter button.active {
+      background: var(--orange); color: #fff; border-color: var(--orange);
+    }
+
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;
+    }
+    .stat-card {
+      background: var(--card); border-radius: 14px; padding: 16px;
+      border: 1px solid var(--border); position: relative; overflow: hidden;
+    }
+    .stat-card .icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; margin-bottom: 10px;
+    }
+    .stat-card .value { font-size: 26px; font-weight: 700; margin-bottom: 2px; }
+    .stat-card .label { font-size: 12px; color: var(--muted); }
+    .stat-card .trend {
+      position: absolute; top: 12px; left: 12px;
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    }
+    .trend.up { background: rgba(76,175,80,0.15); color: var(--green); }
+    .trend.down { background: rgba(244,67,54,0.15); color: var(--red); }
+
+    .section { margin-bottom: 20px; }
+    .section-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title i { color: var(--orange); }
+
+    .chart-card {
+      background: var(--card); border-radius: 14px; padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .bar-chart { display: flex; flex-direction: column; gap: 8px; }
+    .bar-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .bar-label { font-size: 12px; color: var(--muted); width: 50px; text-align: left; flex-shrink: 0; }
+    .bar-track { flex: 1; height: 24px; background: var(--card2); border-radius: 6px; overflow: hidden; position: relative; }
+    .bar-fill {
+      height: 100%; border-radius: 6px; transition: width 0.8s ease;
+      display: flex; align-items: center; justify-content: flex-end; padding: 0 8px;
+      font-size: 11px; font-weight: 600; color: #fff; min-width: 30px;
+    }
+
+    .list-card {
+      background: var(--card); border-radius: 14px; border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .list-item {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item .rank {
+      width: 28px; height: 28px; border-radius: 8px; display: flex;
+      align-items: center; justify-content: center; font-weight: 700;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .rank.gold { background: linear-gradient(135deg, #FFD700, #FFA000); color: #000; }
+    .rank.silver { background: linear-gradient(135deg, #C0C0C0, #9E9E9E); color: #000; }
+    .rank.bronze { background: linear-gradient(135deg, #CD7F32, #A0522D); color: #fff; }
+    .rank.normal { background: var(--card2); color: var(--muted); }
+    .list-item .info { flex: 1; min-width: 0; }
+    .list-item .info .name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item .info .sub { font-size: 11px; color: var(--muted); }
+    .list-item .count { font-size: 14px; font-weight: 700; color: var(--orange); flex-shrink: 0; }
+
+    .empty-state {
+      text-align: center; padding: 30px; color: var(--muted);
+    }
+    .empty-state i { font-size: 30px; opacity: 0.3; margin-bottom: 8px; display: block; }
+
+    .activity-timeline {
+      background: var(--card); border-radius: 14px; padding: 16px;
+      border: 1px solid var(--border);
+    }
+    .timeline-item {
+      display: flex; align-items: flex-start; gap: 12px; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-dot {
+      width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0;
+    }
+    .timeline-item .time { font-size: 11px; color: var(--muted); }
+    .timeline-item .desc { font-size: 13px; }
+
+    .loading { text-align: center; padding: 40px; color: var(--muted); }
+    .loading i { font-size: 24px; animation: spin 1s linear infinite; margin-bottom: 10px; display: block; }
+
+    .summary-row {
+      display: flex; gap: 8px; margin-bottom: 15px;
+    }
+    .summary-pill {
+      flex: 1; background: var(--card); border-radius: 12px; padding: 12px 10px;
+      text-align: center; border: 1px solid var(--border);
+    }
+    .summary-pill .val { font-size: 18px; font-weight: 700; }
+    .summary-pill .lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/index.html" class="back-btn"><i class="fas fa-arrow-right"></i></a>
+    <button class="refresh-btn" onclick="loadAnalytics()"><i class="fas fa-sync-alt"></i></button>
+    <h1><i class="fas fa-chart-line"></i> إحصائيات المتجر</h1>
+    <p>لوحة تحكم AliOffers DZ</p>
+  </div>
+
+  <div class="container">
+    <div class="time-filter">
+      <button class="active" data-period="today" onclick="setPeriod('today',this)">اليوم</button>
+      <button data-period="week" onclick="setPeriod('week',this)">هذا الأسبوع</button>
+      <button data-period="month" onclick="setPeriod('month',this)">هذا الشهر</button>
+      <button data-period="all" onclick="setPeriod('all',this)">الكل</button>
+    </div>
+
+    <div id="mainContent">
+      <div class="loading"><i class="fas fa-spinner"></i>جاري التحميل...</div>
+    </div>
+  </div>
+
+  <script>
+    let currentPeriod = 'today';
+    let analyticsData = null;
+
+    function setPeriod(period, btn) {
+      currentPeriod = period;
+      document.querySelectorAll('.time-filter button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadAnalytics();
+    }
+
+    async function loadAnalytics() {
+      const refreshBtn = document.querySelector('.refresh-btn');
+      refreshBtn.classList.add('spinning');
+      try {
+        const r = await fetch(`/api/store/analytics?period=${currentPeriod}`);
+        analyticsData = await r.json();
+        if (analyticsData.success) renderAnalytics(analyticsData);
+        else document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>';
+      } catch(e) {
+        document.getElementById('mainContent').innerHTML = '<div class="empty-state"><i class="fas fa-wifi"></i><p>خطأ في الاتصال</p></div>';
+      }
+      refreshBtn.classList.remove('spinning');
+    }
+
+    function renderAnalytics(data) {
+      const s = data.stats;
+      const html = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="icon" style="background:rgba(33,150,243,0.15);color:var(--blue)"><i class="fas fa-eye"></i></div>
+            <div class="value">${formatNum(s.totalVisits)}</div>
+            <div class="label">زيارات المتجر</div>
+          </div>
+          <div class="stat-card">
+            <div class="icon" style="background:rgba(255,193,7,0.15);color:var(--yellow)"><i class="fas fa-search"></i></div>
+            <div class="value">${formatNum(s.totalSearches)}</div>
+            <div class="label">عمليات البحث</div>
+          </div>
+          <div class="stat-card">
+            <div class="icon" style="background:rgba(76,175,80,0.15);color:var(--green)"><i class="fas fa-mouse-pointer"></i></div>
+            <div class="value">${formatNum(s.totalClicks)}</div>
+            <div class="label">نقرات المنتجات</div>
+          </div>
+          <div class="stat-card">
+            <div class="icon" style="background:rgba(156,39,176,0.15);color:var(--purple)"><i class="fas fa-box-open"></i></div>
+            <div class="value">${formatNum(s.totalProducts)}</div>
+            <div class="label">منتجات محفوظة</div>
+          </div>
+        </div>
+
+        <div class="summary-row">
+          <div class="summary-pill">
+            <div class="val" style="color:var(--orange)">${formatNum(s.uniqueVisitors)}</div>
+            <div class="lbl">زوار فريدين</div>
+          </div>
+          <div class="summary-pill">
+            <div class="val" style="color:var(--blue)">${s.avgSearchesPerVisit}</div>
+            <div class="lbl">بحث/زيارة</div>
+          </div>
+          <div class="summary-pill">
+            <div class="val" style="color:var(--green)">${s.clickRate}%</div>
+            <div class="lbl">معدل النقر</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title"><i class="fas fa-chart-bar"></i> النشاط حسب الساعة</div>
+          <div class="chart-card">
+            <div class="bar-chart">${renderHourlyChart(s.hourlyActivity || [])}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title"><i class="fas fa-fire"></i> أكثر الكلمات بحثاً</div>
+          ${renderTopList(s.topSearches, 'search')}
+        </div>
+
+        <div class="section">
+          <div class="section-title"><i class="fas fa-star"></i> أكثر المنتجات نقراً</div>
+          ${renderTopList(s.topProducts, 'product')}
+        </div>
+
+        <div class="section">
+          <div class="section-title"><i class="fas fa-tags"></i> التصنيفات الأكثر استخداماً</div>
+          ${renderTopList(s.topCategories, 'category')}
+        </div>
+
+        <div class="section">
+          <div class="section-title"><i class="fas fa-clock"></i> آخر النشاطات</div>
+          ${renderTimeline(s.recentActivity || [])}
+        </div>
+      `;
+      document.getElementById('mainContent').innerHTML = html;
+    }
+
+    function renderHourlyChart(hourly) {
+      if (!hourly.length) return '<div class="empty-state"><i class="fas fa-chart-bar"></i><p>لا توجد بيانات</p></div>';
+      const max = Math.max(...hourly.map(h => h.count), 1);
+      const colors = ['var(--blue)', 'var(--green)', 'var(--yellow)', 'var(--orange)', 'var(--purple)', 'var(--pink)'];
+      return hourly.map((h, i) => `
+        <div class="bar-row">
+          <div class="bar-label">${h.hour}:00</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${Math.max((h.count/max)*100, 5)}%;background:${colors[i%colors.length]}">${h.count}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderTopList(items, type) {
+      if (!items || !items.length) return '<div class="list-card"><div class="empty-state"><i class="fas fa-inbox"></i><p>لا توجد بيانات بعد</p></div></div>';
+      return `<div class="list-card">${items.slice(0,10).map((item, i) => {
+        const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'normal';
+        const icon = type==='search'?'fa-search':type==='product'?'fa-shopping-bag':'fa-tag';
+        return `<div class="list-item">
+          <div class="rank ${rankClass}">${i+1}</div>
+          <div class="info">
+            <div class="name">${esc(item.name)}</div>
+            <div class="sub"><i class="fas ${icon}"></i> ${type==='search'?'بحث':type==='product'?'منتج':'تصنيف'}</div>
+          </div>
+          <div class="count">${formatNum(item.count)}</div>
+        </div>`;
+      }).join('')}</div>`;
+    }
+
+    function renderTimeline(activities) {
+      if (!activities.length) return '<div class="activity-timeline"><div class="empty-state"><i class="fas fa-clock"></i><p>لا توجد نشاطات</p></div></div>';
+      const typeColors = { visit: 'var(--blue)', search: 'var(--yellow)', click: 'var(--green)', save: 'var(--purple)' };
+      const typeNames = { visit: 'زيارة', search: 'بحث', click: 'نقر', save: 'حفظ' };
+      return `<div class="activity-timeline">${activities.slice(0,15).map(a => `
+        <div class="timeline-item">
+          <div class="timeline-dot" style="background:${typeColors[a.type]||'var(--muted)'}"></div>
+          <div style="flex:1">
+            <div class="desc">${typeNames[a.type]||a.type}: <strong>${esc(a.detail||'')}</strong></div>
+            <div class="time">${timeAgo(a.timestamp)}</div>
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function formatNum(n) {
+      if (!n) return '0';
+      if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+      return n.toString();
+    }
+
+    function timeAgo(ts) {
+      if (!ts) return '';
+      const diff = Date.now() - new Date(ts).getTime();
+      const mins = Math.floor(diff/60000);
+      if (mins < 1) return 'الآن';
+      if (mins < 60) return `منذ ${mins} دقيقة`;
+      const hours = Math.floor(mins/60);
+      if (hours < 24) return `منذ ${hours} ساعة`;
+      const days = Math.floor(hours/24);
+      return `منذ ${days} يوم`;
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    loadAnalytics();
+  </script>
+</body>
+</html>
