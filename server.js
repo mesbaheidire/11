@@ -1593,21 +1593,152 @@ app.get('/api/categories', (req, res) => {
   res.json({ success: true, categories });
 });
 
-// Store: Translate Arabic query to English for AliExpress
-async function translateSearchQuery(query) {
-  if (!query) return query;
+// Store: Known brand/keyword expansions with category IDs
+const searchExpansions = {
+  'poco': { keywords: 'POCO smartphone mobile phone', categoryId: '509' },
+  'xiaomi': { keywords: 'Xiaomi smartphone mobile phone', categoryId: '509' },
+  'redmi': { keywords: 'Redmi smartphone mobile phone', categoryId: '509' },
+  'samsung': { keywords: 'Samsung smartphone mobile phone', categoryId: '509' },
+  'iphone': { keywords: 'iPhone Apple smartphone', categoryId: '509' },
+  'apple': { keywords: 'Apple iPhone smartphone', categoryId: '509' },
+  'realme': { keywords: 'Realme smartphone mobile phone', categoryId: '509' },
+  'oppo': { keywords: 'OPPO smartphone mobile phone', categoryId: '509' },
+  'vivo': { keywords: 'Vivo smartphone mobile phone', categoryId: '509' },
+  'huawei': { keywords: 'Huawei smartphone mobile phone', categoryId: '509' },
+  'honor': { keywords: 'Honor smartphone mobile phone', categoryId: '509' },
+  'oneplus': { keywords: 'OnePlus smartphone mobile phone', categoryId: '509' },
+  'nothing': { keywords: 'Nothing Phone smartphone', categoryId: '509' },
+  'infinix': { keywords: 'Infinix smartphone mobile phone', categoryId: '509' },
+  'tecno': { keywords: 'Tecno smartphone mobile phone', categoryId: '509' },
+  'airpods': { keywords: 'Apple AirPods wireless earbuds', categoryId: '44' },
+  'jbl': { keywords: 'JBL speaker headphones audio', categoryId: '44' },
+  'anker': { keywords: 'Anker charger power bank', categoryId: '44' },
+};
+const arabicExpansions = {
+  'هاتف': { keywords: 'smartphone mobile phone', categoryId: '509' },
+  'جوال': { keywords: 'smartphone mobile phone', categoryId: '509' },
+  'موبايل': { keywords: 'smartphone mobile phone', categoryId: '509' },
+  'بوكو': { keywords: 'POCO smartphone mobile phone', categoryId: '509' },
+  'شاومي': { keywords: 'Xiaomi smartphone mobile phone', categoryId: '509' },
+  'سامسونج': { keywords: 'Samsung smartphone mobile phone', categoryId: '509' },
+  'ايفون': { keywords: 'iPhone Apple smartphone', categoryId: '509' },
+  'هواوي': { keywords: 'Huawei smartphone mobile phone', categoryId: '509' },
+  'ريدمي': { keywords: 'Redmi smartphone mobile phone', categoryId: '509' },
+  'سماعات': { keywords: 'headphones earbuds earphones', categoryId: '44' },
+  'سماعة': { keywords: 'headphones earbuds', categoryId: '44' },
+  'شاحن': { keywords: 'charger fast charging', categoryId: '44' },
+  'كابل': { keywords: 'cable USB type C', categoryId: '44' },
+  'ساعة ذكية': { keywords: 'smartwatch smart watch', categoryId: '44' },
+  'ساعة': { keywords: 'smartwatch watch', categoryId: '44' },
+  'حافظة': { keywords: 'phone case cover', categoryId: '509' },
+  'كفر': { keywords: 'phone case cover', categoryId: '509' },
+  'جراب': { keywords: 'phone case cover', categoryId: '509' },
+  'لابتوب': { keywords: 'laptop notebook computer', categoryId: '7' },
+  'كمبيوتر': { keywords: 'computer PC desktop', categoryId: '7' },
+  'تابلت': { keywords: 'tablet pad', categoryId: '7' },
+  'طابعة': { keywords: 'printer', categoryId: '7' },
+  'كاميرا': { keywords: 'camera', categoryId: '44' },
+  'ماوس': { keywords: 'mouse wireless', categoryId: '7' },
+  'لوحة مفاتيح': { keywords: 'keyboard', categoryId: '7' },
+  'حذاء': { keywords: 'shoes sneakers', categoryId: '322' },
+  'أحذية': { keywords: 'shoes sneakers', categoryId: '322' },
+  'ملابس': { keywords: 'clothes clothing', categoryId: '3' },
+  'قميص': { keywords: 'shirt t-shirt', categoryId: '3' },
+  'بنطلون': { keywords: 'pants trousers', categoryId: '3' },
+  'فستان': { keywords: 'dress women', categoryId: '3' },
+  'حقيبة': { keywords: 'bag backpack', categoryId: '3' },
+  'نظارات': { keywords: 'glasses sunglasses', categoryId: '3' },
+  'خاتم': { keywords: 'ring jewelry', categoryId: '36' },
+  'سلسلة': { keywords: 'necklace chain jewelry', categoryId: '36' },
+  'اكسسوارات': { keywords: 'accessories', categoryId: null },
+  'مكنسة': { keywords: 'vacuum cleaner', categoryId: '15' },
+  'خلاط': { keywords: 'blender mixer', categoryId: '15' },
+  'مكواة': { keywords: 'iron steamer', categoryId: '15' },
+  'ثلاجة': { keywords: 'refrigerator mini fridge', categoryId: '15' },
+  'مروحة': { keywords: 'fan cooling', categoryId: '15' },
+  'مصباح': { keywords: 'lamp LED light', categoryId: '15' },
+};
+
+// Local fallback: expand query without AI — returns { keywords, categoryId }
+function localQueryExpansion(query) {
+  const lower = query.toLowerCase().trim();
+  if (searchExpansions[lower]) return searchExpansions[lower];
   const hasArabic = /[\u0600-\u06FF]/.test(query);
-  if (!hasArabic) return query;
+  if (hasArabic) {
+    const sortedKeys = Object.keys(arabicExpansions).sort((a, b) => b.length - a.length);
+    for (const ar of sortedKeys) {
+      if (query.includes(ar)) {
+        const remaining = query.replace(ar, '').trim();
+        const exp = arabicExpansions[ar];
+        return { keywords: exp.keywords + (remaining ? ' ' + remaining : ''), categoryId: exp.categoryId };
+      }
+    }
+    const words = query.split(/\s+/);
+    let combined = '', catId = null;
+    for (const w of words) {
+      const exp = arabicExpansions[w] || searchExpansions[w.toLowerCase()];
+      if (exp) { combined += (combined ? ' ' : '') + exp.keywords; if (!catId) catId = exp.categoryId; }
+      else combined += (combined ? ' ' : '') + w;
+    }
+    if (combined !== query) return { keywords: combined, categoryId: catId };
+  }
+  return { keywords: query, categoryId: null };
+}
+
+// Store: Optimize search query for AliExpress API using AI
+async function optimizeSearchQuery(query) {
+  if (!query) return { keywords: query, categoryId: null };
+  const aiCategoryMap = {
+    'phones': '509', 'smartphones': '509', 'mobile': '509', 'cellphone': '509',
+    'electronics': '44', 'audio': '44', 'headphones': '44', 'earbuds': '44',
+    'computers': '7', 'laptops': '7', 'tablets': '7',
+    'fashion': '3', 'clothing': '3', 'shoes': '322',
+    'home': '15', 'kitchen': '15', 'appliances': '15',
+    'beauty': '66', 'jewelry': '36', 'kids': '1501', 'toys': '1501', 'sports': '18',
+  };
   try {
-    const translated = await runGeminiWithRotation(
-      `Translate this product search query from Arabic to English for AliExpress search. Return ONLY the English keywords, nothing else. Keep brand names as-is.\nQuery: "${query}"`
+    const model = getGeminiModel();
+    if (!model) {
+      const expanded = localQueryExpansion(query);
+      if (expanded.keywords !== query) console.log(`🔤 توسيع محلي: "${query}" → "${expanded.keywords}" [cat:${expanded.categoryId}]`);
+      return expanded;
+    }
+    const optimized = await runGeminiWithRotation(
+      `You are an AliExpress product search optimizer. Given a user search query, return a JSON object with optimized English keywords and product category.
+
+Rules:
+- If Arabic, translate to English
+- If it's a brand name (Poco, Xiaomi, Samsung etc), add "smartphone mobile phone"
+- Expand vague queries with specific product keywords
+- Keep brand names as-is
+- category must be one of: phones, electronics, computers, fashion, shoes, home, beauty, jewelry, kids, sports
+- Maximum 5-6 keywords
+
+Return ONLY valid JSON like: {"keywords":"POCO smartphone mobile phone","category":"phones"}
+
+Query: "${query}"`
     );
-    const clean = translated.replace(/["\n]/g, '').trim();
-    console.log(`🔤 ترجمة البحث: "${query}" → "${clean}"`);
-    return clean || query;
+    try {
+      const jsonMatch = optimized.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        const kw = parsed.keywords || query;
+        const cat = aiCategoryMap[parsed.category] || null;
+        console.log(`🔤 تحسين AI: "${query}" → "${kw}" [cat:${cat}]`);
+        return { keywords: kw, categoryId: cat };
+      }
+    } catch (parseErr) {}
+    const clean = optimized.replace(/["\n{}\[\]]/g, '').trim();
+    if (clean.length > 1) {
+      console.log(`🔤 تحسين البحث: "${query}" → "${clean}"`);
+      return { keywords: clean, categoryId: null };
+    }
+    return { keywords: query, categoryId: null };
   } catch (e) {
-    console.log('Translation failed, using original:', e.message);
-    return query;
+    console.log('AI optimization failed, trying local expansion:', e.message);
+    const expanded = localQueryExpansion(query);
+    if (expanded.keywords !== query) console.log(`🔤 توسيع محلي: "${query}" → "${expanded.keywords}" [cat:${expanded.categoryId}]`);
+    return expanded;
   }
 }
 
@@ -1615,19 +1746,23 @@ async function translateSearchQuery(query) {
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;
-    const translatedQ = q ? await translateSearchQuery(q) : '';
+    const optimized = q ? await optimizeSearchQuery(q) : { keywords: '', categoryId: null };
     const options = {
-      keywords: translatedQ,
+      keywords: optimized.keywords,
       page: page || '1',
       limit: '20',
       sort: sort === 'price_asc' ? 'SALE_PRICE_ASC' : sort === 'price_desc' ? 'SALE_PRICE_DESC' : sort === 'orders' ? 'LAST_VOLUME_DESC' : 'LAST_VOLUME_DESC'
     };
-    if (category && algerianCategories[category]) options.category = algerianCategories[category].id;
+    if (category && algerianCategories[category]) {
+      options.category = algerianCategories[category].id;
+    } else if (optimized.categoryId) {
+      options.category = optimized.categoryId;
+    }
     if (minPrice) options.minPrice = minPrice;
     if (maxPrice) options.maxPrice = maxPrice;
-    const result = translatedQ ? await searchProducts(options) : await searchHotProducts(options);
+    const result = optimized.keywords ? await searchProducts(options) : await searchHotProducts(options);
     if (!result.success) return res.json({ success: false, error: result.error, products: [] });
-    res.json({ success: true, products: result.products || [], total: result.total || 0, translatedQuery: translatedQ !== q ? translatedQ : undefined });
+    res.json({ success: true, products: result.products || [], total: result.total || 0, translatedQuery: optimized.keywords !== q ? optimized.keywords : undefined });
   } catch (e) {
     res.json({ success: false, error: e.message, products: [] });
   }
