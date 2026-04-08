@@ -1593,6 +1593,58 @@ app.get('/api/categories', (req, res) => {
   res.json({ success: true, categories });
 });
 
+// Store: Search products
+app.get('/api/store/search', async (req, res) => {
+  try {
+    const { q, category, minPrice, maxPrice, sort, page } = req.query;
+    const options = {
+      keywords: q || '',
+      page: page || '1',
+      limit: '20',
+      sort: sort === 'price_asc' ? 'SALE_PRICE_ASC' : sort === 'price_desc' ? 'SALE_PRICE_DESC' : sort === 'orders' ? 'LAST_VOLUME_DESC' : 'LAST_VOLUME_DESC'
+    };
+    if (category && algerianCategories[category]) options.category = algerianCategories[category].id;
+    if (minPrice) options.minPrice = minPrice;
+    if (maxPrice) options.maxPrice = maxPrice;
+    const result = q ? await searchProducts(options) : await searchHotProducts(options);
+    if (!result.success) return res.json({ success: false, error: result.error, products: [] });
+    res.json({ success: true, products: result.products || [], total: result.total || 0 });
+  } catch (e) {
+    res.json({ success: false, error: e.message, products: [] });
+  }
+});
+
+// Store: Image search (Gemini extracts keywords → search)
+app.post('/api/store/image-search', async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    if (!imageData) return res.json({ success: false, error: 'لم يتم إرسال صورة' });
+    const model = getGeminiModel();
+    if (!model) return res.json({ success: false, error: 'الذكاء الاصطناعي غير متاح' });
+    const base64 = imageData.replace(/^data:image\/\w+;base64,/, '');
+    const prompt = `Look at this product image and extract 3-5 English search keywords suitable for AliExpress search. Return ONLY the keywords as a comma-separated list, nothing else. Example: "wireless earbuds, bluetooth headphones, sports earphones"`;
+    let keywords = '';
+    try {
+      const result = await model.generateContent([
+        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+        prompt
+      ]);
+      keywords = result.response.text().trim().replace(/\n/g, ' ');
+    } catch (e) {
+      return res.json({ success: false, error: 'فشل تحليل الصورة' });
+    }
+    const searchResult = await searchProducts({ keywords, limit: '20' });
+    res.json({
+      success: true,
+      keywords,
+      products: searchResult.success ? (searchResult.products || []) : [],
+      total: searchResult.total || 0
+    });
+  } catch (e) {
+    res.json({ success: false, error: e.message, products: [] });
+  }
+});
+
 // Saved Posts System
 const SAVED_POSTS_FILE = path.join(__dirname, 'saved_posts.json');
 
