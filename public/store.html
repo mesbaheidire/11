@@ -603,7 +603,10 @@ async function fetchSearch(reset=true){
     hasMore=prods.length===20&&curProducts.length<(data.total||0);
     const info=document.getElementById('searchInfo');
     if(curQ){
-      info.innerHTML=`<i class="fas fa-search"></i> نتائج البحث عن "<strong>${esc(curQ)}</strong>" — ${data.total||prods.length} منتج`;
+      let infoText=`<i class="fas fa-search"></i> نتائج البحث عن "<strong>${esc(curQ)}</strong>"`;
+      if(data.translatedQuery) infoText+=` → <strong style="color:var(--yellow-dark)">${esc(data.translatedQuery)}</strong>`;
+      infoText+=` — ${data.total||prods.length} منتج`;
+      info.innerHTML=infoText;
       info.classList.add('show');
     }else{info.classList.remove('show')}
     if(!curProducts.length){

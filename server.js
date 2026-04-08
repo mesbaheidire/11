@@ -1593,12 +1593,31 @@ app.get('/api/categories', (req, res) => {
   res.json({ success: true, categories });
 });
 
+// Store: Translate Arabic query to English for AliExpress
+async function translateSearchQuery(query) {
+  if (!query) return query;
+  const hasArabic = /[\u0600-\u06FF]/.test(query);
+  if (!hasArabic) return query;
+  try {
+    const translated = await runGeminiWithRotation(
+      `Translate this product search query from Arabic to English for AliExpress search. Return ONLY the English keywords, nothing else. Keep brand names as-is.\nQuery: "${query}"`
+    );
+    const clean = translated.replace(/["\n]/g, '').trim();
+    console.log(`🔤 ترجمة البحث: "${query}" → "${clean}"`);
+    return clean || query;
+  } catch (e) {
+    console.log('Translation failed, using original:', e.message);
+    return query;
+  }
+}
+
 // Store: Search products
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;
+    const translatedQ = q ? await translateSearchQuery(q) : '';
     const options = {
-      keywords: q || '',
+      keywords: translatedQ,
       page: page || '1',
       limit: '20',
       sort: sort === 'price_asc' ? 'SALE_PRICE_ASC' : sort === 'price_desc' ? 'SALE_PRICE_DESC' : sort === 'orders' ? 'LAST_VOLUME_DESC' : 'LAST_VOLUME_DESC'
@@ -1606,9 +1625,9 @@ app.get('/api/store/search', async (req, res) => {
     if (category && algerianCategories[category]) options.category = algerianCategories[category].id;
     if (minPrice) options.minPrice = minPrice;
     if (maxPrice) options.maxPrice = maxPrice;
-    const result = q ? await searchProducts(options) : await searchHotProducts(options);
+    const result = translatedQ ? await searchProducts(options) : await searchHotProducts(options);
     if (!result.success) return res.json({ success: false, error: result.error, products: [] });
-    res.json({ success: true, products: result.products || [], total: result.total || 0 });
+    res.json({ success: true, products: result.products || [], total: result.total || 0, translatedQuery: translatedQ !== q ? translatedQ : undefined });
   } catch (e) {
     res.json({ success: false, error: e.message, products: [] });
   }
