@@ -57,6 +57,12 @@ npm start
 - **Saved Posts History** - Auto-save published posts for easy republishing
   - View all saved posts with thumbnails
   - One-click republish to Telegram
+- **Package Tracking** - Track AliExpress shipments using Cainiao API (free, no API key needed)
+  - Enter tracking number to see shipping timeline with status updates
+  - Automatic status detection: in transit, delivered, pickup, alert
+  - Search history saved in localStorage (last 20 entries)
+  - Fallback link to 17track.net for additional details
+  - Rate-limited server endpoint `/api/track/:trackingNumber`
   - Edit saved posts before republishing
   - Posts stored in `saved_posts.json` (gitignored)
 - **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels

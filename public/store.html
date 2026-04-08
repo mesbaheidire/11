@@ -347,6 +347,105 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   font-size:13px;cursor:pointer;margin-top:8px;
 }
 
+/* ===== TRACKING PAGE ===== */
+.track-page{padding:14px}
+.track-hero{
+  background:linear-gradient(135deg,#E3F2FD,#BBDEFB);
+  border-radius:var(--radius);padding:24px 18px;text-align:center;margin-bottom:18px;
+}
+.track-hero i{font-size:42px;color:#1565C0;margin-bottom:8px}
+.track-hero h2{font-size:16px;font-weight:900;color:#1565C0;margin-bottom:4px}
+.track-hero p{font-size:12px;color:#5C8BC4}
+.track-input-wrap{
+  display:flex;gap:8px;margin-bottom:16px;
+}
+.track-input{
+  flex:1;border:2px solid var(--yellow);border-radius:12px;
+  padding:12px 14px;font-family:'Cairo',sans-serif;font-size:14px;
+  outline:none;background:var(--yellow-pale);direction:ltr;text-align:center;
+  letter-spacing:1px;
+}
+.track-input::placeholder{color:#BDBDBD;letter-spacing:0;font-size:12px}
+.track-input:focus{border-color:var(--yellow2);box-shadow:0 0 0 3px rgba(255,193,7,.15)}
+.track-btn{
+  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+  border:none;border-radius:12px;padding:12px 20px;
+  color:#fff;font-family:'Cairo',sans-serif;font-size:14px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+.track-btn:active{opacity:.85}
+.track-btn:disabled{opacity:.5}
+.track-result{display:none}
+.track-result.show{display:block}
+.track-status-card{
+  background:#fff;border-radius:var(--radius);
+  border:1px solid var(--border);padding:16px;margin-bottom:14px;
+}
+.track-carrier{
+  display:flex;align-items:center;gap:10px;margin-bottom:14px;
+  padding-bottom:12px;border-bottom:1px solid var(--border);
+}
+.track-carrier-icon{
+  width:40px;height:40px;border-radius:10px;
+  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;
+}
+.track-carrier-info{flex:1}
+.track-carrier-name{font-size:13px;font-weight:700}
+.track-carrier-num{font-size:11px;color:var(--muted);direction:ltr;letter-spacing:.5px}
+.track-status-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;
+}
+.track-status-badge.transit{background:#E3F2FD;color:#1565C0}
+.track-status-badge.delivered{background:#E8F5E9;color:#2E7D32}
+.track-status-badge.pickup{background:#FFF3E0;color:#E65100}
+.track-status-badge.alert{background:#FFEBEE;color:#C62828}
+.track-timeline{position:relative;padding:0}
+.track-step{
+  display:flex;gap:12px;position:relative;padding-bottom:18px;
+}
+.track-step:last-child{padding-bottom:0}
+.track-step::before{
+  content:'';position:absolute;right:14px;top:26px;
+  width:2px;height:calc(100% - 22px);background:#E0E0E0;
+}
+.track-step:last-child::before{display:none}
+.track-dot{
+  width:30px;height:30px;border-radius:50%;
+  border:2px solid #E0E0E0;background:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:#BDBDBD;flex-shrink:0;z-index:1;
+}
+.track-step.active .track-dot{
+  border-color:var(--yellow);background:var(--yellow);color:#fff;
+}
+.track-step-content{flex:1;min-width:0}
+.track-step-desc{font-size:12px;font-weight:600;color:var(--text);line-height:1.5}
+.track-step-time{font-size:10px;color:var(--muted);margin-top:2px;direction:ltr;text-align:right}
+.track-step-loc{font-size:10px;color:var(--yellow-dark);margin-top:1px}
+.track-history{margin-top:6px}
+.track-history-title{
+  font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;
+  display:flex;align-items:center;gap:6px;
+}
+.track-empty{
+  text-align:center;padding:30px 20px;color:var(--muted);
+}
+.track-empty i{font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:#1565C0}
+.track-saved-list{margin-top:14px}
+.track-saved-item{
+  background:#fff;border-radius:10px;border:1px solid var(--border);
+  padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;
+  cursor:pointer;transition:background .15s;
+}
+.track-saved-item:active{background:var(--yellow-pale)}
+.track-saved-item .tsi-num{flex:1;font-size:13px;font-weight:600;direction:ltr;letter-spacing:.5px}
+.track-saved-item .tsi-date{font-size:10px;color:var(--muted)}
+.track-saved-item .tsi-del{
+  background:none;border:none;color:var(--red);font-size:14px;cursor:pointer;padding:4px;
+}
+
 /* ===== TOAST ===== */
 .toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
@@ -383,6 +482,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="cat-chip" onclick="selectCat('beauty',this)">💄 جمال</div>
     <div class="cat-chip" onclick="selectCat('kids',this)">🧸 أطفال</div>
     <div class="cat-chip" onclick="selectCat('sports',this)">⚽ رياضة</div>
+    <div class="cat-chip" onclick="openTrackPage()" style="border-color:#1565C0;color:#1565C0">📦 تتبع طردي</div>
   </div>
 </div>
 
@@ -433,6 +533,26 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div id="searchGrid" class="grid"></div>
   </div>
   <button class="load-more" id="loadMoreBtn" onclick="loadMore()"><i class="fas fa-plus"></i> تحميل المزيد</button>
+</div>
+
+<!-- TRACKING PAGE -->
+<div class="page" id="trackPage">
+  <div class="track-page">
+    <div class="track-hero">
+      <i class="fas fa-shipping-fast"></i>
+      <h2>تتبع طردك من AliExpress</h2>
+      <p>أدخل رقم التتبع لمعرفة مكان طردك الآن</p>
+    </div>
+    <div class="track-input-wrap">
+      <input class="track-input" id="trackInput" type="text" placeholder="رقم التتبع... مثال: LP00123456789CN" onkeydown="if(event.key==='Enter')trackPackage()">
+      <button class="track-btn" id="trackBtn" onclick="trackPackage()"><i class="fas fa-search"></i> تتبع</button>
+    </div>
+    <div class="track-result" id="trackResult"></div>
+    <div id="trackSavedSection">
+      <div class="track-history-title"><i class="fas fa-history" style="color:var(--yellow2)"></i> عمليات التتبع السابقة</div>
+      <div id="trackSavedList" class="track-saved-list"></div>
+    </div>
+  </div>
 </div>
 
 <!-- DETAIL MODAL -->
@@ -735,6 +855,111 @@ async function doImgSearch(){
     document.getElementById('loadMoreBtn').classList.remove('show');
   }catch(e){toast('خطأ في البحث','err')}
   btn.disabled=false;btn.innerHTML='<i class="fas fa-search"></i> ابحث بهذه الصورة';
+}
+
+// ===== TRACKING =====
+function openTrackPage(){
+  document.querySelectorAll('.cat-chip').forEach(c=>c.classList.remove('active'));
+  showPage('trackPage');
+  renderSavedTracks();
+}
+
+function getTrackHistory(){
+  try{return JSON.parse(localStorage.getItem('trackHistory')||'[]')}catch(e){return[]}
+}
+function saveTrackHistory(list){
+  localStorage.setItem('trackHistory',JSON.stringify(list.slice(0,20)));
+}
+function addToTrackHistory(num){
+  let h=getTrackHistory();
+  h=h.filter(t=>t.num!==num);
+  h.unshift({num,date:new Date().toLocaleDateString('ar-DZ')});
+  saveTrackHistory(h);
+  renderSavedTracks();
+}
+function renderSavedTracks(){
+  const h=getTrackHistory();
+  const el=document.getElementById('trackSavedList');
+  if(!h.length){el.innerHTML='<div class="track-empty"><i class="fas fa-box-open"></i><p>لا توجد عمليات تتبع سابقة</p></div>';return}
+  el.innerHTML='';
+  h.forEach(t=>{
+    const div=document.createElement('div');div.className='track-saved-item';
+    div.innerHTML=`<i class="fas fa-box" style="color:var(--yellow2)"></i><span class="tsi-num">${esc(t.num)}</span><span class="tsi-date">${esc(t.date)}</span><button class="tsi-del"><i class="fas fa-trash-alt"></i></button>`;
+    div.addEventListener('click',()=>{document.getElementById('trackInput').value=t.num;trackPackage()});
+    div.querySelector('.tsi-del').addEventListener('click',e=>{e.stopPropagation();let hh=getTrackHistory().filter(x=>x.num!==t.num);saveTrackHistory(hh);renderSavedTracks()});
+    el.appendChild(div);
+  });
+}
+
+async function trackPackage(){
+  const num=document.getElementById('trackInput').value.trim();
+  if(!num){toast('أدخل رقم التتبع','err');return}
+  const btn=document.getElementById('trackBtn');
+  const res=document.getElementById('trackResult');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> جاري التتبع...';
+  res.innerHTML='';res.classList.add('show');
+  try{
+    const r=await fetch('/api/track/'+encodeURIComponent(num));
+    const data=await r.json();
+    if(!data.success){
+      res.innerHTML=`<div class="track-status-card"><div class="track-empty"><i class="fas fa-exclamation-circle"></i><p>${esc(data.error||'لم يتم العثور على معلومات')}</p><p style="font-size:11px;margin-top:8px;color:var(--muted)">تأكد من رقم التتبع أو حاول لاحقاً</p><a href="https://t.17track.net/ar#nums=${encodeURIComponent(num)}" target="_blank" style="display:inline-block;margin-top:12px;padding:8px 18px;background:#1565C0;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none"><i class="fas fa-external-link-alt"></i> جرب على 17track</a></div></div>`;
+    }else{
+      addToTrackHistory(num);
+      res.innerHTML=renderTrackResult(data,num);
+    }
+  }catch(e){
+    res.innerHTML=`<div class="track-status-card"><div class="track-empty"><i class="fas fa-wifi"></i><p>تعذر الاتصال</p><a href="https://t.17track.net/ar#nums=${encodeURIComponent(num)}" target="_blank" style="display:inline-block;margin-top:12px;padding:8px 18px;background:#1565C0;color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none"><i class="fas fa-external-link-alt"></i> تتبع على 17track</a></div></div>`;
+  }
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-search"></i> تتبع';
+}
+
+function renderTrackResult(data,num){
+  const st=data.status||'transit';
+  const statusMap={
+    'transit':{label:'في الطريق',cls:'transit',icon:'fa-shipping-fast'},
+    'delivered':{label:'تم التسليم',cls:'delivered',icon:'fa-check-circle'},
+    'pickup':{label:'تم الاستلام من البائع',cls:'pickup',icon:'fa-box'},
+    'alert':{label:'يوجد مشكلة',cls:'alert',icon:'fa-exclamation-triangle'},
+    'expired':{label:'منتهي الصلاحية',cls:'alert',icon:'fa-clock'},
+    'notfound':{label:'لم يُعثر عليه',cls:'alert',icon:'fa-question-circle'}
+  };
+  const s=statusMap[st]||statusMap.transit;
+  const events=data.events||[];
+  let html=`<div class="track-status-card">
+    <div class="track-carrier">
+      <div class="track-carrier-icon"><i class="fas fa-truck"></i></div>
+      <div class="track-carrier-info">
+        <div class="track-carrier-name">${esc(data.carrier||'شركة الشحن')}</div>
+        <div class="track-carrier-num">${esc(num)}</div>
+      </div>
+      <span class="track-status-badge ${s.cls}"><i class="fas ${s.icon}"></i> ${s.label}</span>
+    </div>`;
+  if(data.origin||data.destination){
+    html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">`;
+    if(data.origin)html+=`<span>🇨🇳 ${esc(data.origin)}</span>`;
+    if(data.origin&&data.destination)html+=`<i class="fas fa-arrow-left" style="font-size:10px;color:var(--yellow2)"></i>`;
+    if(data.destination)html+=`<span>🇩🇿 ${esc(data.destination)}</span>`;
+    html+=`</div>`;
+  }
+  if(events.length){
+    html+=`<div class="track-timeline">`;
+    events.forEach((ev,i)=>{
+      html+=`<div class="track-step ${i===0?'active':''}">
+        <div class="track-dot"><i class="fas ${i===0?'fa-map-marker-alt':'fa-circle'}" style="font-size:${i===0?'12px':'6px'}"></i></div>
+        <div class="track-step-content">
+          <div class="track-step-desc">${esc(ev.description)}</div>
+          ${ev.time?`<div class="track-step-time">${esc(ev.time)}</div>`:''}
+          ${ev.location?`<div class="track-step-loc"><i class="fas fa-map-pin" style="font-size:9px"></i> ${esc(ev.location)}</div>`:''}
+        </div>
+      </div>`;
+    });
+    html+=`</div>`;
+  }else{
+    html+=`<div class="track-empty"><p>لا توجد تحديثات بعد</p></div>`;
+  }
+  html+=`</div>`;
+  html+=`<a href="https://t.17track.net/ar#nums=${encodeURIComponent(num)}" target="_blank" style="display:block;text-align:center;padding:10px;background:#fff;border:1.5px solid #1565C0;border-radius:10px;color:#1565C0;font-size:12px;font-weight:700;text-decoration:none"><i class="fas fa-external-link-alt"></i> عرض تفاصيل أكثر على 17track</a>`;
+  return html;
 }
 
 loadSaved();
