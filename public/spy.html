@@ -911,7 +911,7 @@
                 } else {
                     statusEl.style.background = '#3d1a1a';
                     statusEl.style.color = '#ff6b6b';
-                    statusEl.textContent = '❌ فشل التحقق: ' + (d.error || 'خطأ غير معروف');
+                    statusEl.textContent = '❌ فشل التحقق: التوكن الحالي لا يملك الصلاحيات المطلوبة. تحتاج pages_manage_posts و pages_read_engagement أو Facebook Page Access مفعّل للتطبيق.';
                 }
             } catch (e) {
                 statusEl.style.background = '#3d1a1a';
@@ -951,7 +951,7 @@
                 } else {
                     statusEl.style.background = '#3d1a1a';
                     statusEl.style.color = '#ff6b6b';
-                    statusEl.textContent = '❌ فشل النشر: ' + (d.error || 'خطأ غير معروف');
+                    statusEl.textContent = '❌ فشل النشر: التوكن الحالي لا يملك صلاحية النشر على الصفحة. فعّل pages_manage_posts و pages_read_engagement من Facebook Developer واستخدم Page Access Token صالح.';
                 }
             } catch (e) {
                 statusEl.style.background = '#3d1a1a';
