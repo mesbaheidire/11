@@ -548,15 +548,26 @@ async function loadSaved(){
       grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted)"><i class="fas fa-box-open" style="font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:var(--pri)"></i><p>لا توجد منتجات محفوظة بعد</p><p style="font-size:11px;margin-top:4px">ابدأ بنشر منتجات من بوت التجسس</p></div>';
       return;
     }
-    grid.innerHTML=savedProducts.map((p,i)=>cardHTML({
-      title:p.title,
-      image_url:p.image,
-      price:p.price?(parseFloat(p.price.replace(/[^\d.]/g,''))/DZD).toFixed(2):'',
-      currency:'USD',
-      promotion_link:p.link,
-      product_url:p.link,
-      _savedIdx:i,_saved:true
-    },i,savedProducts.length)).join('');
+    grid.innerHTML=savedProducts.map((p,i)=>{
+      const rawPrice=p.price||'';
+      const isDZD=/دج|DZD/i.test(rawPrice);
+      let displayPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
+      if(isDZD&&displayPrice){displayPrice=(parseFloat(displayPrice)/DZD).toFixed(2)}
+      return cardHTML({
+        title:p.title,
+        image_url:p.image,
+        price:displayPrice,
+        _rawPrice:rawPrice,
+        currency:'USD',
+        promotion_link:p.link,
+        product_url:p.link,
+        rating:p.rating||null,
+        orders:p.orders||null,
+        discount:p.discount||null,
+        _savedIdx:i,_saved:true
+      },i,savedProducts.length);
+    }).join('');
+    enrichSavedProducts();
   }catch(e){document.getElementById('savedGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)">تعذر التحميل</div>'}
 }
 
@@ -584,9 +595,74 @@ function cardHTML(p,i,total){
   </div>`;
 }
 
+function extractProductId(link){
+  if(!link)return null;
+  const m=link.match(/\/(\d{8,15})\b/)||link.match(/productId[=:](\d+)/i)||link.match(/item\/(\d+)/);
+  return m?m[1]:null;
+}
+
+async function enrichSavedProducts(){
+  const ids=[];
+  savedProducts.forEach((p,i)=>{
+    if(!p._enriched){
+      const pid=extractProductId(p.link);
+      if(pid)ids.push({idx:i,pid});
+    }
+  });
+  if(!ids.length)return;
+  const batchIds=ids.slice(0,10).map(x=>x.pid).join(',');
+  try{
+    const r=await fetch('/api/store/product-info?ids='+encodeURIComponent(batchIds));
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d.success||!d.products)return;
+    const map={};
+    d.products.forEach(p=>{map[p.id]=p});
+    let changed=false;
+    ids.slice(0,10).forEach(({idx,pid})=>{
+      const info=map[pid];
+      if(info){
+        savedProducts[idx].rating=info.rating;
+        savedProducts[idx].orders=info.orders;
+        savedProducts[idx].discount=info.discount;
+        savedProducts[idx].apiPrice=info.price;
+        savedProducts[idx]._enriched=true;
+        changed=true;
+      }
+    });
+    if(changed){
+      const grid=document.getElementById('savedGrid');
+      grid.innerHTML=savedProducts.map((p,i)=>{
+        const rawPrice=p.price||'';
+        const isDZD=/دج|DZD/i.test(rawPrice);
+        let displayPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
+        if(isDZD&&displayPrice){displayPrice=(parseFloat(displayPrice)/DZD).toFixed(2)}
+        if(p.apiPrice&&(!displayPrice||displayPrice==='0'||displayPrice==='NaN'))displayPrice=p.apiPrice;
+        return cardHTML({
+          title:p.title,
+          image_url:p.image,
+          price:displayPrice,
+          _rawPrice:rawPrice,
+          currency:'USD',
+          promotion_link:p.link,
+          product_url:p.link,
+          rating:p.rating||null,
+          orders:p.orders||null,
+          discount:p.discount||null,
+          _savedIdx:i,_saved:true
+        },i,savedProducts.length);
+      }).join('');
+    }
+  }catch(e){}
+}
+
 function openSaved(p){track('click',p?.title||'saved_product');
-  const usdPrice=p.price?(parseFloat(p.price.replace(/[^\d.]/g,''))/DZD).toFixed(2):'';
-  curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:null,orders:null,discount:null,shop_name:null,_coupon:p.coupon||null,_message:p.message||p.hook||null,_saved:true};
+  const rawPrice=p.price||'';
+  const isDZD=/دج|DZD/i.test(rawPrice);
+  let usdPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
+  if(isDZD&&usdPrice){usdPrice=(parseFloat(usdPrice)/DZD).toFixed(2)}
+  if(p.apiPrice&&(!usdPrice||usdPrice==='0'||usdPrice==='NaN'))usdPrice=p.apiPrice;
+  curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:p.rating||null,orders:p.orders||null,discount:p.discount||null,shop_name:null,_coupon:p.coupon||null,_message:p.message||p.hook||null,_saved:true};
   showDet();
 }
 function buySaved(p){openURL(p.link)}

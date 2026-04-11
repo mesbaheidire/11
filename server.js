@@ -1744,6 +1744,35 @@ Query: "${query}"`
 }
 
 // Store: Search products
+app.get('/api/store/product-info', async (req, res) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) return res.json({ success: false, products: [] });
+    const idList = ids.split(',').filter(id => /^\d+$/.test(id.trim())).slice(0, 10);
+    if (!idList.length) return res.json({ success: false, products: [] });
+    const results = [];
+    for (const pid of idList) {
+      try {
+        const info = await getProductDetails(pid);
+        if (info) {
+          results.push({
+            id: pid,
+            price: info.sale_price || info.price || null,
+            original_price: info.original_price || null,
+            rating: info.rating || null,
+            orders: info.orders || null,
+            discount: info.discount || null,
+            shop_name: info.shop_name || null
+          });
+        }
+      } catch (e) {}
+    }
+    res.json({ success: true, products: results });
+  } catch (e) {
+    res.json({ success: false, products: [] });
+  }
+});
+
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;
