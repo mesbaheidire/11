@@ -897,10 +897,11 @@
             statusEl.style.color = '#88c0ff';
             statusEl.textContent = '⏳ جاري التحقق...';
             try {
+                const safePageId = encodeURIComponent(pageId);
                 const r = await fetch('/api/facebook/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId })
+                    body: JSON.stringify({ pageAccessToken: token, pageId: safePageId })
                 });
                 const d = await r.json();
                 if (d.success) {
@@ -935,10 +936,11 @@
             statusEl.style.color = '#88c0ff';
             statusEl.textContent = '⏳ جاري النشر التجريبي...';
             try {
+                const safePageId = encodeURIComponent(pageId);
                 const r = await fetch('/api/facebook/test-post', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId })
+                    body: JSON.stringify({ pageAccessToken: token, pageId: safePageId })
                 });
                 const d = await r.json();
                 if (d.success) {
