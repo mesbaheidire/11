@@ -1903,6 +1903,38 @@ app.post('/api/facebook/test-post', async (req, res) => {
   }
 });
 
+app.post('/api/publish-facebook', async (req, res) => {
+  try {
+    const { title, price, link, coupon, image, message: customMessage, settings } = req.body;
+    const spyCfg = await loadSpyConfigCached();
+    const fbToken = spyCfg.facebookPageToken;
+    const fbPageId = spyCfg.facebookPageId;
+    if (!fbToken || !fbPageId) {
+      return res.json({ success: false, error: 'إعدادات فيسبوك غير مكتملة — أضف Page Token و Page ID من إعدادات التجسس' });
+    }
+    let fbMessage = customMessage;
+    if (!fbMessage) {
+      const s = settings || {};
+      fbMessage = '';
+      if (s.prefix || title) fbMessage += (s.prefix ? s.prefix + ' ' : '') + (title || '') + '\n\n';
+      if (price) fbMessage += (s.salePrice || '💰 السعر:') + ' ' + price + '\n\n';
+      if (link) fbMessage += (s.linkText || '🛒 رابط الشراء:') + '\n' + link + '\n\n';
+      if (coupon) fbMessage += (s.couponText || '🎁 كوبون:') + ' ' + coupon + '\n\n';
+      if (s.footer) fbMessage += s.footer + '\n';
+      if (s.hashtags) fbMessage += '\n' + s.hashtags;
+      fbMessage = fbMessage.trim();
+    }
+    let imageUrl = image;
+    if (imageUrl && imageUrl.startsWith('data:image')) {
+      imageUrl = null;
+    }
+    const result = await postToFacebookPage(fbToken, fbPageId, fbMessage, imageUrl, link);
+    res.json({ success: true, postId: result.postId, message: 'تم النشر على فيسبوك بنجاح!' });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // ========== Spy API ==========
 
 app.get('/api/spy/status', async (req, res) => {

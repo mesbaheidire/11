@@ -135,9 +135,14 @@
             <textarea id="messagePreview" style="width: 100%; min-height: 200px; background: transparent; border: none; color: #fff; font-family: inherit; font-size: 13px; line-height: 1.8; direction: rtl; resize: vertical; padding: 0; overflow: hidden;" spellcheck="false"></textarea>
         </div>
         
-        <button class="publish-btn" id="publishBtn">
-            <i class="fab fa-telegram"></i> نشر في القناة
-        </button>
+        <div style="display:flex;gap:8px;">
+            <button class="publish-btn" id="publishBtn" style="flex:1">
+                <i class="fab fa-telegram"></i> نشر في القناة
+            </button>
+            <button class="publish-btn" id="publishFbBtn" style="flex:1;background:linear-gradient(135deg,#1877F2,#0d65d9)">
+                <i class="fab fa-facebook"></i> نشر على فيسبوك
+            </button>
+        </div>
 
         <button class="publish-btn" id="scheduleBtn" style="background: linear-gradient(135deg, #FF9800, #F57C00); margin-top: 10px; display: none;">
             <i class="fas fa-clock"></i> جدولة النشر
@@ -528,6 +533,44 @@
             } finally {
                 publishBtn.disabled = false;
                 publishBtn.innerHTML = '<i class="fab fa-telegram"></i> نشر في القناة';
+            }
+        };
+
+        document.getElementById('publishFbBtn').onclick = async () => {
+            if (!productTitle.value || !purchaseLink.value) {
+                showToast('الرجاء إدخال اسم المنتج ورابط الشراء', 'error');
+                return;
+            }
+            const fbBtn = document.getElementById('publishFbBtn');
+            fbBtn.disabled = true;
+            fbBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+            try {
+                const imageToSend = isFramed && framedImageData.value ? framedImageData.value : (productImage.value || null);
+                const res = await fetch('/api/publish-facebook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: productTitle.value,
+                        price: salePrice.value,
+                        link: purchaseLink.value,
+                        coupon: couponCode.value || null,
+                        image: imageToSend,
+                        message: messagePreview.value,
+                        settings: settings
+                    })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast('تم النشر على فيسبوك! ✅', 'success');
+                    saveCurrentPost();
+                } else {
+                    showToast(result.error || 'فشل النشر على فيسبوك', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                fbBtn.disabled = false;
+                fbBtn.innerHTML = '<i class="fab fa-facebook"></i> نشر على فيسبوك';
             }
         };
 

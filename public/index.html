@@ -281,7 +281,10 @@
                     <p class="settings-hint">يمكنك تعديل النص هنا قبل نسخه أو نشره.</p>
                 </div>
 
-                <button class="publish-btn" id="publishBtn" disabled><i class="fab fa-telegram"></i> نشر المنشور الآن</button>
+                <div style="display:flex;gap:8px;">
+                    <button class="publish-btn" id="publishBtn" disabled style="flex:1"><i class="fab fa-telegram"></i> نشر على تليغرام</button>
+                    <button class="publish-btn" id="publishFbBtn" disabled onclick="publishToFacebook()" style="flex:1;background:linear-gradient(135deg,#1877F2,#0d65d9)"><i class="fab fa-facebook"></i> نشر على فيسبوك</button>
+                </div>
             </div>
         </div>
     </div>
@@ -696,7 +699,7 @@
 
         function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.add('show'); }
         function showToast(msg) { toast.textContent = msg; toast.className = 'toast show'; setTimeout(() => toast.className = 'toast', 2500); }
-        linkSelect.onchange = () => { publishBtn.disabled = !linkSelect.value; };
+        linkSelect.onchange = () => { publishBtn.disabled = !linkSelect.value; document.getElementById('publishFbBtn').disabled = !linkSelect.value; };
 
         publishBtn.onclick = async () => {
             const link = linkSelect.value;
@@ -720,6 +723,32 @@
             } catch (e) { showToast('خطأ'); }
             finally { publishBtn.disabled = false; }
         };
+
+        async function publishToFacebook() {
+            const link = linkSelect.value;
+            const fbBtn = document.getElementById('publishFbBtn');
+            fbBtn.disabled = true;
+            fbBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري النشر...';
+            try {
+                const customMsg = document.getElementById('aiPreview').value.trim();
+                const res = await fetch('/api/publish-facebook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: currentProductData.title,
+                        price: currentProductData.price,
+                        link: link,
+                        coupon: couponInput.value.trim() || null,
+                        image: currentProductData.image,
+                        message: customMsg || null,
+                        settings: settings
+                    })
+                });
+                const result = await res.json();
+                showToast(result.success ? 'تم النشر على فيسبوك! ✅' : (result.error || 'فشل النشر'));
+            } catch (e) { showToast('خطأ في النشر على فيسبوك'); }
+            finally { fbBtn.disabled = false; fbBtn.innerHTML = '<i class="fab fa-facebook"></i> نشر على فيسبوك'; }
+        }
         
         // Frame upload handler - save to localStorage for persistence
         document.getElementById('frameUpload').addEventListener('change', async (e) => {
