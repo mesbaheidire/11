@@ -58,7 +58,7 @@ npm start
   - View all saved posts with thumbnails
   - One-click republish to Telegram
   - Edit saved posts before republishing
-  - Posts stored in `saved_posts.json` (gitignored)
+  - Posts stored in Neon PostgreSQL `saved_posts` table (persistent)
 - **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
   - Uses GramJS (Telegram MTProto) Userbot mode — monitors any public channel you're subscribed to without admin access
   - Auto-detect AliExpress links from source channel posts
@@ -95,6 +95,7 @@ The app uses multiple fallback methods to extract product title and image:
 ## Environment Variables
 ### Required for Render/Production Deployment:
 - `DATABASE_URL` - PostgreSQL connection string (auto-set by Render)
+- `NEON_DATABASE_URL` - Neon PostgreSQL connection string (takes priority over DATABASE_URL)
 - `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - Database credentials
 
 ### Optional (can be set as environment variables):
@@ -116,10 +117,18 @@ The app uses PostgreSQL with the following key tables:
 - `saved_posts` - User's saved posts
 - `app_storage` - General key-value storage for Render compatibility
 
+## Database / Storage
+- **Neon PostgreSQL** - Primary persistent storage (free tier, always-on)
+- `db.js` connects via `NEON_DATABASE_URL` (priority) or `DATABASE_URL`
+- `initDatabase()` auto-creates all tables on startup
+- Saved posts, spy config, credentials, sessions all stored in Neon DB
+- No more file-based storage for saved posts (was `saved_posts.json`)
+- SSL enabled for Neon (`rejectUnauthorized: false`)
+
 ## Render Deployment Notes
 The app is **fully compatible with Render** and uses:
-1. **PostgreSQL** - For persistent data (survives restarts)
-2. **JSON fallback** - Local files as backup (for development)
-3. **Environment variables** - For critical data on Render
+1. **Neon PostgreSQL** - For persistent data (survives restarts, free forever)
+2. **Environment variables** - Set `DATABASE_URL` on Render to Neon connection string
+3. Tables are auto-created on first startup
 
-All data is automatically synced across storage methods for reliability.
+Set `DATABASE_URL` in Render Environment to your Neon connection string.

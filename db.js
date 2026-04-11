@@ -1,18 +1,114 @@
 const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
+const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
 
-pool.on('error', (err) => {
-  console.error('❌ Unexpected error on idle client', err);
-});
+const pool = dbUrl ? new Pool({
+  connectionString: dbUrl,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+}) : null;
+
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('❌ Unexpected error on idle client', err);
+  });
+}
+
+async function initDatabase() {
+  if (!pool) {
+    console.log('⚠️ لا يوجد رابط قاعدة بيانات - التخزين سيكون مؤقتاً');
+    return false;
+  }
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS spy_config (
+        id SERIAL PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS spy_auth_state (
+        id SERIAL PRIMARY KEY,
+        step TEXT,
+        phone_code_hash TEXT,
+        phone_number TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS spy_processed_links (
+        id SERIAL PRIMARY KEY,
+        link TEXT UNIQUE NOT NULL,
+        time BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS spy_log (
+        id SERIAL PRIMARY KEY,
+        source TEXT,
+        original_link TEXT,
+        affiliate_link TEXT,
+        title TEXT,
+        price TEXT,
+        status TEXT,
+        error TEXT,
+        timestamp TIMESTAMP DEFAULT NOW(),
+        data JSONB
+      );
+      CREATE TABLE IF NOT EXISTS telegram_session (
+        id SERIAL PRIMARY KEY,
+        session_key TEXT UNIQUE NOT NULL,
+        session_data TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS gemini_keys (
+        id SERIAL PRIMARY KEY,
+        key_index INTEGER,
+        api_key TEXT
+      );
+      CREATE TABLE IF NOT EXISTS saved_posts (
+        id SERIAL PRIMARY KEY,
+        post_id TEXT UNIQUE,
+        channel_id TEXT,
+        title TEXT,
+        price TEXT,
+        link TEXT,
+        affiliate_link TEXT,
+        image_url TEXT,
+        coupon TEXT,
+        message TEXT,
+        hook TEXT,
+        saved_at TIMESTAMP DEFAULT NOW(),
+        data JSONB
+      );
+      CREATE TABLE IF NOT EXISTS app_storage (
+        id SERIAL PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='post_id') THEN
+          ALTER TABLE saved_posts ADD COLUMN post_id TEXT UNIQUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='message') THEN
+          ALTER TABLE saved_posts ADD COLUMN message TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='hook') THEN
+          ALTER TABLE saved_posts ADD COLUMN hook TEXT;
+        END IF;
+      END $$;
+    `);
+    console.log('✅ تم إنشاء/التحقق من جداول قاعدة البيانات بنجاح');
+    return true;
+  } catch (e) {
+    console.error('❌ فشل إنشاء الجداول:', e.message);
+    return false;
+  }
+}
 
 async function query(text, params) {
+  if (!pool) throw new Error('No database connection');
   const start = Date.now();
   try {
     const result = await pool.query(text, params);
@@ -268,17 +364,22 @@ async function getGeminiKeys() {
 
 async function addSavedPost(post) {
   try {
+    const postId = post.id || post.post_id || Date.now().toString();
     await query(
-      `INSERT INTO saved_posts (channel_id, title, price, link, affiliate_link, image_url, coupon, saved_at, data) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)`,
+      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, data) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)
+       ON CONFLICT (post_id) DO NOTHING`,
       [
-        post.channelId || post.channel_id,
+        postId,
+        post.channelId || post.channel_id || null,
         post.title,
         post.price,
         post.link,
-        post.affiliateLink || post.affiliate_link,
-        post.imageUrl || post.image_url,
-        post.coupon,
+        post.affiliateLink || post.affiliate_link || null,
+        post.image || post.imageUrl || post.image_url || null,
+        post.coupon || null,
+        post.message || null,
+        post.hook || null,
         JSON.stringify(post)
       ]
     );
@@ -296,19 +397,39 @@ async function getSavedPosts(limit = 100) {
       [limit]
     );
     return result.rows.map(row => ({
-      id: row.id,
-      channelId: row.channel_id,
+      id: row.post_id || String(row.id),
       title: row.title,
       price: row.price,
       link: row.link,
-      affiliateLink: row.affiliate_link,
-      imageUrl: row.image_url,
+      image: row.image_url,
       coupon: row.coupon,
-      savedAt: row.saved_at,
+      message: row.message,
+      hook: row.hook,
+      createdAt: row.saved_at,
     }));
   } catch (e) {
     console.log('⚠️ Failed to load saved posts:', e.message);
     return [];
+  }
+}
+
+async function deleteSavedPost(postId) {
+  try {
+    await query('DELETE FROM saved_posts WHERE post_id = $1', [postId]);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to delete saved post:', e.message);
+    return false;
+  }
+}
+
+async function clearSavedPosts() {
+  try {
+    await query('DELETE FROM saved_posts');
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to clear saved posts:', e.message);
+    return false;
   }
 }
 
@@ -337,6 +458,7 @@ async function getAppStorage(key) {
 }
 
 module.exports = {
+  initDatabase,
   query,
   getConfig,
   saveConfig,
@@ -355,6 +477,8 @@ module.exports = {
   getGeminiKeys,
   addSavedPost,
   getSavedPosts,
+  deleteSavedPost,
+  clearSavedPosts,
   setAppStorage,
   getAppStorage,
 };

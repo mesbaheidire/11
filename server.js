@@ -11,6 +11,7 @@ const sharp = require('sharp');
 const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const db = require('./db');
 
 const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish } = require('./spy');
 
@@ -1830,89 +1831,42 @@ app.post('/api/store/image-search', async (req, res) => {
 });
 
 // Saved Posts System
-const SAVED_POSTS_FILE = path.join(__dirname, 'saved_posts.json');
-
-function loadSavedPosts() {
+app.get('/api/saved-posts', async (req, res) => {
   try {
-    if (fs.existsSync(SAVED_POSTS_FILE)) {
-      return JSON.parse(fs.readFileSync(SAVED_POSTS_FILE, 'utf8'));
-    }
+    const posts = await db.getSavedPosts();
+    res.json({ success: true, posts });
   } catch (e) {
-    console.log('Error loading saved posts:', e.message);
+    console.log('⚠️ Failed to load saved posts:', e.message);
+    res.status(500).json({ success: false, posts: [], error: 'Database error' });
   }
-  return [];
-}
-
-function savePosts(posts) {
-  try {
-    fs.writeFileSync(SAVED_POSTS_FILE, JSON.stringify(posts, null, 2));
-    return true;
-  } catch (e) {
-    console.log('Error saving posts:', e.message);
-    return false;
-  }
-}
-
-// Get all saved posts
-app.get('/api/saved-posts', (req, res) => {
-  const posts = loadSavedPosts();
-  res.json({ success: true, posts });
 });
 
-// Save a new post
-app.post('/api/saved-posts', (req, res) => {
+app.post('/api/saved-posts', async (req, res) => {
   try {
     const { id, title, price, link, coupon, image, message, hook, createdAt } = req.body;
-    const posts = loadSavedPosts();
-    
-    // Use provided ID or generate new one
-    const postId = id || Date.now().toString();
-    
-    // Check if post with same ID already exists (avoid duplicates)
-    if (posts.some(p => p.id === postId)) {
-      return res.json({ success: true, message: 'Post already exists' });
-    }
-    
-    const newPost = {
-      id: postId,
-      title,
-      price,
-      link,
-      coupon,
-      image,
-      message,
-      hook,
-      createdAt: createdAt || new Date().toISOString()
-    };
-    
-    posts.unshift(newPost);
-    
-    // Keep only last 50 posts
-    if (posts.length > 50) posts.pop();
-    
-    savePosts(posts);
-    res.json({ success: true, post: newPost });
+    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook };
+    const ok = await db.addSavedPost(post);
+    if (!ok) return res.status(500).json({ success: false, error: 'Failed to save' });
+    res.json({ success: true, post });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Delete a saved post
-app.delete('/api/saved-posts/:id', (req, res) => {
+app.delete('/api/saved-posts/:id', async (req, res) => {
   try {
-    let posts = loadSavedPosts();
-    posts = posts.filter(p => p.id !== req.params.id);
-    savePosts(posts);
+    const ok = await db.deleteSavedPost(req.params.id);
+    if (!ok) return res.status(500).json({ success: false, error: 'Failed to delete' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Clear all saved posts
-app.delete('/api/saved-posts', (req, res) => {
+app.delete('/api/saved-posts', async (req, res) => {
   try {
-    savePosts([]);
+    const ok = await db.clearSavedPosts();
+    if (!ok) return res.status(500).json({ success: false, error: 'Failed to clear' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -2764,7 +2718,7 @@ app.post('/api/store/track', (req, res) => {
 });
 setInterval(() => { Object.keys(trackRateLimit).forEach(k => { if (Date.now() - trackRateLimit[k].last > 60000) delete trackRateLimit[k]; }); }, 60000);
 
-app.get('/api/store/analytics', (req, res) => {
+app.get('/api/store/analytics', async (req, res) => {
   try {
     const { period } = req.query;
     const analytics = getAnalytics();
@@ -2829,7 +2783,7 @@ app.get('/api/store/analytics', (req, res) => {
       .map(([hour, count]) => ({ hour: parseInt(hour), count }))
       .sort((a, b) => a.hour - b.hour);
 
-    const savedPosts = loadSavedPosts();
+    const savedPosts = await db.getSavedPosts();
 
     const totalVisits = visits.length;
     const totalSearches = searches.length;
@@ -2863,6 +2817,15 @@ app.get('/store-analytics', (req, res) => {
 // ==================== End Analytics ====================
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+
+async function startServer() {
+  await db.initDatabase();
+  spyConfigCache = null;
+  spyConfigCacheTime = 0;
+  try { await loadSpyConfigCached(); } catch(e) {}
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running on port ${PORT}`);
+  });
+}
+
+startServer();
