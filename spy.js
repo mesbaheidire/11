@@ -4,6 +4,7 @@ const path = require('path');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
 const http = require('http');
 const db = require('./db');
+const { postToFacebookPage } = require('./facebook');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
@@ -868,6 +869,23 @@ async function executePublish(review) {
   if (publishedCount > 0) {
     incrementDailyCount();
     console.log(`📊 النشر اليومي: ${getDailyCount()}`);
+
+    if (config.facebookEnabled && config.facebookPageToken && config.facebookPageId) {
+      try {
+        const fbMessage = message.replace(/<[^>]*>/g, '');
+        const fbResult = await postToFacebookPage(
+          config.facebookPageToken,
+          config.facebookPageId,
+          fbMessage,
+          logImage,
+          affiliateLink || originalLink
+        );
+        console.log(`✅ تم النشر على فيسبوك (Post ID: ${fbResult.postId})`);
+      } catch (fbErr) {
+        console.log(`⚠️ فشل النشر على فيسبوك: ${fbErr.message}`);
+      }
+    }
+
     try {
       const postData = JSON.stringify({
         id: `spy_${Date.now()}`,

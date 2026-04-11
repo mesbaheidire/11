@@ -86,6 +86,13 @@ npm start
   - All async functions properly awaited (getBotToken, getCookie, loadConfig, saveConfig, loadAuthState, saveAuthState)
   - Config caching with `getCachedConfig()` for performance in synchronous contexts
 
+- **Facebook Page Auto-Posting** - Automatically publish products to your Facebook Page
+  - Requires Facebook Page Access Token and Page ID
+  - Posts with image + text + affiliate link
+  - Verify token and test post from spy settings UI
+  - Integrated with spy module — publishes to Facebook after Telegram
+  - Settings stored in spy config (database)
+
 ## Product Metadata Extraction
 The app uses multiple fallback methods to extract product title and image:
 1. **AliExpress API** - First attempt using internal API

@@ -12,6 +12,7 @@ const https = require('https');
 const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const db = require('./db');
+const { postToFacebookPage, verifyPageToken } = require('./facebook');
 
 const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish } = require('./spy');
 
@@ -1873,6 +1874,35 @@ app.delete('/api/saved-posts', async (req, res) => {
   }
 });
 
+// ========== Facebook API ==========
+
+app.post('/api/facebook/verify', async (req, res) => {
+  try {
+    const { pageAccessToken, pageId } = req.body;
+    if (!pageAccessToken || !pageId) {
+      return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
+    }
+    const result = await verifyPageToken(pageAccessToken, pageId);
+    res.json({ success: result.valid, pageName: result.pageName, error: result.error });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/facebook/test-post', async (req, res) => {
+  try {
+    const { pageAccessToken, pageId, message } = req.body;
+    if (!pageAccessToken || !pageId) {
+      return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
+    }
+    const testMsg = message || '✅ هذا منشور تجريبي من AliOffers DZ — تم ربط الصفحة بنجاح!';
+    const result = await postToFacebookPage(pageAccessToken, pageId, testMsg, null, null);
+    res.json({ success: true, postId: result.postId });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // ========== Spy API ==========
 
 app.get('/api/spy/status', async (req, res) => {
@@ -1887,7 +1917,12 @@ app.get('/api/spy/status', async (req, res) => {
 app.get('/api/spy/config', async (req, res) => {
   try {
     const config = await loadSpyConfig();
-    res.json({ config });
+    const safeConfig = { ...config };
+    if (safeConfig.facebookPageToken) {
+      const t = safeConfig.facebookPageToken;
+      safeConfig.facebookPageToken = t.length > 8 ? t.substring(0, 4) + '****' + t.substring(t.length - 4) : '****';
+    }
+    res.json({ config: safeConfig });
   } catch (e) {
     res.json({ config: {} });
   }
@@ -1918,6 +1953,9 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
+    if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
+    if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
+    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && incoming.facebookPageToken !== '****') config.facebookPageToken = incoming.facebookPageToken;
     if (incoming.cook !== undefined && incoming.cook !== '' && incoming.cook !== '****') config.cook = incoming.cook;
     if (incoming.botToken !== undefined && incoming.botToken !== '' && incoming.botToken !== '****') config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
@@ -1952,6 +1990,9 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
+    if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
+    if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
+    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && incoming.facebookPageToken !== '****') config.facebookPageToken = incoming.facebookPageToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;

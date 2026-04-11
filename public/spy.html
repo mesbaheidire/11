@@ -262,6 +262,45 @@
 
             <div class="collapse-section">
                 <div class="collapse-header" onclick="toggleCollapse(this)">
+                    <span class="title"><i class="fab fa-facebook"></i> النشر على فيسبوك</span>
+                    <i class="fas fa-chevron-down arrow"></i>
+                </div>
+                <div class="collapse-body">
+                    <div class="toggle-row">
+                        <label>تفعيل النشر على فيسبوك</label>
+                        <label class="switch"><input type="checkbox" id="facebookEnabled"><span class="slider"></span></label>
+                    </div>
+                    <div id="fbSettings" style="display:none;margin-top:10px;">
+                        <div class="form-group">
+                            <label style="font-size:12px;color:#aaa;margin-bottom:4px;display:block;">Page ID (معرف الصفحة)</label>
+                            <input type="text" id="facebookPageId" placeholder="مثال: 123456789012345" style="width:100%;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:13px;">
+                        </div>
+                        <div class="form-group" style="margin-top:8px;">
+                            <label style="font-size:12px;color:#aaa;margin-bottom:4px;display:block;">Page Access Token</label>
+                            <input type="password" id="facebookPageToken" placeholder="الصق توكن الصفحة هنا" style="width:100%;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:13px;">
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:10px;">
+                            <button onclick="verifyFacebook()" style="flex:1;background:#1877F2;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;"><i class="fas fa-check-circle"></i> تحقق</button>
+                            <button onclick="testFacebookPost()" style="flex:1;background:#42b72a;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;"><i class="fas fa-paper-plane"></i> نشر تجريبي</button>
+                        </div>
+                        <div id="fbStatus" style="margin-top:8px;font-size:12px;padding:8px;border-radius:8px;display:none;"></div>
+                        <div style="margin-top:10px;padding:10px;background:#1a1a2e;border-radius:8px;border:1px solid #333;">
+                            <p style="font-size:11px;color:#aaa;margin:0 0 6px 0;"><i class="fas fa-info-circle" style="color:#1877F2;"></i> كيف تحصل على التوكن:</p>
+                            <ol style="font-size:11px;color:#888;margin:0;padding-right:20px;line-height:1.8;">
+                                <li>ادخل على <a href="https://developers.facebook.com" target="_blank" style="color:#1877F2;">developers.facebook.com</a></li>
+                                <li>أنشئ تطبيق جديد (نوع Business)</li>
+                                <li>أضف منتج "Facebook Login for Business"</li>
+                                <li>من Graph API Explorer اختر صفحتك</li>
+                                <li>اطلب صلاحيات: <code style="background:#2d2d3d;padding:2px 4px;border-radius:3px;">pages_manage_posts</code> و <code style="background:#2d2d3d;padding:2px 4px;border-radius:3px;">pages_read_engagement</code></li>
+                                <li>أنشئ Page Access Token طويل المدى</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="collapse-section">
+                <div class="collapse-header" onclick="toggleCollapse(this)">
                     <span class="title"><i class="fas fa-sliders-h"></i> خيارات النشر</span>
                     <i class="fas fa-chevron-down arrow"></i>
                 </div>
@@ -384,6 +423,9 @@
             dailyLimit: 0,
             useTypedLinks: false,
             linkType: 'coin',
+            facebookEnabled: false,
+            facebookPageId: '',
+            facebookPageToken: '',
             messageTemplate: {
                 fixedCoupons: '',
                 couponFilter: '',
@@ -517,6 +559,9 @@
             config.manualReview = document.getElementById('manualReview').checked;
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
+            config.facebookEnabled = document.getElementById('facebookEnabled').checked;
+            config.facebookPageId = document.getElementById('facebookPageId').value.trim();
+            config.facebookPageToken = document.getElementById('facebookPageToken').value.trim();
             const mainSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
             config.messageTemplate = {
                 headerText: '',
@@ -551,6 +596,10 @@
             document.getElementById('useTypedLinks').checked = !!config.useTypedLinks;
             document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'grid' : 'none';
             selectLinkType(config.linkType || 'coin');
+            document.getElementById('facebookEnabled').checked = !!config.facebookEnabled;
+            document.getElementById('facebookPageId').value = config.facebookPageId || '';
+            document.getElementById('facebookPageToken').value = config.facebookPageToken || '';
+            document.getElementById('fbSettings').style.display = config.facebookEnabled ? 'block' : 'none';
             renderChannels('source');
             renderChannels('target');
             const t = config.messageTemplate || {};
@@ -648,6 +697,9 @@
                     config.dailyLimit = c.dailyLimit || 0;
                     config.useTypedLinks = !!c.useTypedLinks;
                     config.linkType = c.linkType || 'coin';
+                    config.facebookEnabled = !!c.facebookEnabled;
+                    config.facebookPageId = c.facebookPageId || '';
+                    config.facebookPageToken = c.facebookPageToken || '';
                     config.messageTemplate = c.messageTemplate || config.messageTemplate;
                 }
                 populateUI();
@@ -822,6 +874,87 @@
                 showToast(d.success ? 'تم حفظ التوكن' : 'فشل الحفظ', d.success ? 'success' : 'error');
             } catch (e) {
                 showToast('خطأ في الحفظ', 'error');
+            }
+        }
+
+        document.getElementById('facebookEnabled').addEventListener('change', function() {
+            document.getElementById('fbSettings').style.display = this.checked ? 'block' : 'none';
+        });
+
+        async function verifyFacebook() {
+            const token = document.getElementById('facebookPageToken').value.trim();
+            const pageId = document.getElementById('facebookPageId').value.trim();
+            const statusEl = document.getElementById('fbStatus');
+            if (!token || !pageId) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = '#3d1a1a';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ أدخل Page ID و Access Token أولاً';
+                return;
+            }
+            statusEl.style.display = 'block';
+            statusEl.style.background = '#1a2a3d';
+            statusEl.style.color = '#88c0ff';
+            statusEl.textContent = '⏳ جاري التحقق...';
+            try {
+                const r = await fetch('/api/facebook/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pageAccessToken: token, pageId })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    statusEl.style.background = '#1a3d1a';
+                    statusEl.style.color = '#6bff6b';
+                    statusEl.textContent = '✅ تم التحقق — الصفحة: ' + (d.pageName || pageId);
+                } else {
+                    statusEl.style.background = '#3d1a1a';
+                    statusEl.style.color = '#ff6b6b';
+                    statusEl.textContent = '❌ فشل التحقق: ' + (d.error || 'خطأ غير معروف');
+                }
+            } catch (e) {
+                statusEl.style.background = '#3d1a1a';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ خطأ في الاتصال';
+            }
+        }
+
+        async function testFacebookPost() {
+            const token = document.getElementById('facebookPageToken').value.trim();
+            const pageId = document.getElementById('facebookPageId').value.trim();
+            const statusEl = document.getElementById('fbStatus');
+            if (!token || !pageId) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = '#3d1a1a';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ أدخل Page ID و Access Token أولاً';
+                return;
+            }
+            statusEl.style.display = 'block';
+            statusEl.style.background = '#1a2a3d';
+            statusEl.style.color = '#88c0ff';
+            statusEl.textContent = '⏳ جاري النشر التجريبي...';
+            try {
+                const r = await fetch('/api/facebook/test-post', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pageAccessToken: token, pageId })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    statusEl.style.background = '#1a3d1a';
+                    statusEl.style.color = '#6bff6b';
+                    statusEl.textContent = '✅ تم النشر بنجاح! تحقق من صفحتك على فيسبوك';
+                    showToast('تم النشر التجريبي على فيسبوك!', 'success');
+                } else {
+                    statusEl.style.background = '#3d1a1a';
+                    statusEl.style.color = '#ff6b6b';
+                    statusEl.textContent = '❌ فشل النشر: ' + (d.error || 'خطأ غير معروف');
+                }
+            } catch (e) {
+                statusEl.style.background = '#3d1a1a';
+                statusEl.style.color = '#ff6b6b';
+                statusEl.textContent = '❌ خطأ في الاتصال';
             }
         }
 
