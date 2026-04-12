@@ -18,11 +18,11 @@ async function postToFacebookPage(pageAccessToken, pageId, message, imageUrl, li
 
 function postTextToPage(token, pageId, message, link) {
   return new Promise((resolve, reject) => {
-    const params = new URLSearchParams();
-    if (message) params.append('message', message);
-    if (link) params.append('link', link);
-    params.append('access_token', token);
-    const postData = params.toString();
+    const postData = new URLSearchParams({
+      message: message || '',
+      ...(link ? { link } : {}),
+      access_token: token
+    }).toString();
 
     const options = {
       hostname: FB_GRAPH_URL,
@@ -41,12 +41,12 @@ function postTextToPage(token, pageId, message, link) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) {
-            reject(new Error(parsed.error.message || 'Facebook API error'));
+            reject(new Error(parsed.error.message || parsed.error.error_user_msg || 'Facebook API error'));
           } else {
             resolve({ success: true, postId: parsed.id });
           }
         } catch (e) {
-          reject(new Error('Invalid Facebook API response'));
+          reject(new Error(`Invalid Facebook API response: ${data.slice(0, 200)}`));
         }
       });
     });
@@ -59,11 +59,11 @@ function postTextToPage(token, pageId, message, link) {
 
 function postPhotoToPage(token, pageId, message, imageUrl) {
   return new Promise((resolve, reject) => {
-    const params = new URLSearchParams();
-    if (message) params.append('message', message);
-    params.append('url', imageUrl);
-    params.append('access_token', token);
-    const postData = params.toString();
+    const postData = new URLSearchParams({
+      ...(message ? { message } : {}),
+      url: imageUrl,
+      access_token: token
+    }).toString();
 
     const options = {
       hostname: FB_GRAPH_URL,
@@ -82,12 +82,12 @@ function postPhotoToPage(token, pageId, message, imageUrl) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) {
-            reject(new Error(parsed.error.message || 'Facebook API error'));
+            reject(new Error(parsed.error.message || parsed.error.error_user_msg || 'Facebook API error'));
           } else {
             resolve({ success: true, postId: parsed.post_id || parsed.id });
           }
         } catch (e) {
-          reject(new Error('Invalid Facebook API response'));
+          reject(new Error(`Invalid Facebook API response: ${data.slice(0, 200)}`));
         }
       });
     });
