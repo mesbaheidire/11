@@ -18,20 +18,18 @@ async function postToFacebookPage(pageAccessToken, pageId, message, imageUrl, li
 
 function postTextToPage(token, pageId, message, link) {
   return new Promise((resolve, reject) => {
-    const postData = new URLSearchParams({
-      message: message || '',
-      ...(link ? { link } : {}),
-      access_token: token,
-      published: 'true',
-      feed_targeting: JSON.stringify({ countries: ['DZ'] })
-    }).toString();
+    const postData = JSON.stringify({
+      message: message,
+      link: link || undefined,
+      access_token: token
+    });
 
     const options = {
       hostname: FB_GRAPH_URL,
       path: `/${FB_API_VERSION}/${pageId}/feed`,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
     };
@@ -43,12 +41,12 @@ function postTextToPage(token, pageId, message, link) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) {
-            reject(new Error(parsed.error.message || parsed.error.error_user_msg || 'Facebook API error'));
+            reject(new Error(parsed.error.message || 'Facebook API error'));
           } else {
             resolve({ success: true, postId: parsed.id });
           }
         } catch (e) {
-          reject(new Error(`Invalid Facebook API response: ${data.slice(0, 200)}`));
+          reject(new Error('Invalid Facebook API response'));
         }
       });
     });
@@ -61,20 +59,18 @@ function postTextToPage(token, pageId, message, link) {
 
 function postPhotoToPage(token, pageId, message, imageUrl) {
   return new Promise((resolve, reject) => {
-    const postData = new URLSearchParams({
-      ...(message ? { message } : {}),
+    const postData = JSON.stringify({
+      message: message,
       url: imageUrl,
-      access_token: token,
-      published: 'true',
-      feed_targeting: JSON.stringify({ countries: ['DZ'] })
-    }).toString();
+      access_token: token
+    });
 
     const options = {
       hostname: FB_GRAPH_URL,
       path: `/${FB_API_VERSION}/${pageId}/photos`,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData)
       }
     };
@@ -86,12 +82,12 @@ function postPhotoToPage(token, pageId, message, imageUrl) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) {
-            reject(new Error(parsed.error.message || parsed.error.error_user_msg || 'Facebook API error'));
+            reject(new Error(parsed.error.message || 'Facebook API error'));
           } else {
             resolve({ success: true, postId: parsed.post_id || parsed.id });
           }
         } catch (e) {
-          reject(new Error(`Invalid Facebook API response: ${data.slice(0, 200)}`));
+          reject(new Error('Invalid Facebook API response'));
         }
       });
     });
