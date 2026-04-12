@@ -1021,7 +1021,8 @@ async function extractCouponWithAI(text) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(parsed.success && parsed.coupon ? parsed.coupon : null);
+          const c = parsed.success && parsed.coupon ? parsed.coupon : null;
+          resolve(c && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(c).trim()) ? c : null);
         } catch { resolve(null); }
       });
     });
@@ -1472,7 +1473,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
     message += `${t.priceLabel} ${priceDisplay}\n`;
   }
-  if (extractedCoupon) {
+  if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
     let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
     message += `${label}: ${extractedCoupon}\n`;
   }

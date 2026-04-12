@@ -654,7 +654,7 @@ app.post('/api/publish-telegram', async (req, res) => {
     
     let message = `${s.prefix} ${title}\n\n`;
     message += `${s.salePrice} ${price}\n\n${s.linkText}\n${link}\n\n`;
-    if (coupon) message += `${s.couponText} ${coupon}\n\n`;
+    if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) message += `${s.couponText} ${coupon}\n\n`;
     message += `${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;
     
     // Use custom message if provided
@@ -986,7 +986,7 @@ ${text}`;
 
       if (extracted) {
         extracted = stripAIFormatting(String(extracted));
-        if (extracted.length < 3 || extracted.length > 100) {
+        if (extracted.length < 3 || extracted.length > 100 || /^(null|undefined|none|coupon:?\s*null)$/i.test(extracted.trim())) {
           return res.json({ success: true, coupon: null, method: 'ai_invalid' });
         }
       }
@@ -1919,7 +1919,7 @@ app.post('/api/publish-facebook', async (req, res) => {
       if (s.prefix || title) fbMessage += (s.prefix ? s.prefix + ' ' : '') + (title || '') + '\n\n';
       if (price) fbMessage += (s.salePrice || '💰 السعر:') + ' ' + price + '\n\n';
       if (link) fbMessage += (s.linkText || '🛒 رابط الشراء:') + '\n' + link + '\n\n';
-      if (coupon) fbMessage += (s.couponText || '🎁 كوبون:') + ' ' + coupon + '\n\n';
+      if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) fbMessage += (s.couponText || '🎁 كوبون:') + ' ' + coupon + '\n\n';
       if (s.footer) fbMessage += s.footer + '\n';
       if (s.hashtags) fbMessage += '\n' + s.hashtags;
       fbMessage = fbMessage.trim();
