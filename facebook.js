@@ -21,7 +21,8 @@ function postTextToPage(token, pageId, message, link) {
     const postData = new URLSearchParams({
       message: message || '',
       ...(link ? { link } : {}),
-      access_token: token
+      access_token: token,
+      published: 'true'
     }).toString();
 
     const options = {
@@ -62,7 +63,8 @@ function postPhotoToPage(token, pageId, message, imageUrl) {
     const postData = new URLSearchParams({
       ...(message ? { message } : {}),
       url: imageUrl,
-      access_token: token
+      access_token: token,
+      published: 'true'
     }).toString();
 
     const options = {
