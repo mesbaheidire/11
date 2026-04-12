@@ -1899,7 +1899,7 @@ app.post('/api/facebook/test-post', async (req, res) => {
     const result = await postToFacebookPage(pageAccessToken, pageId, testMsg, null, null);
     res.json({ success: true, postId: result.postId });
   } catch (e) {
-    res.json({ success: false, error: e.message });
+    res.json({ success: false, error: e.message, details: e.stack });
   }
 });
 
@@ -1931,7 +1931,7 @@ app.post('/api/publish-facebook', async (req, res) => {
     const result = await postToFacebookPage(fbToken, fbPageId, fbMessage, imageUrl, link);
     res.json({ success: true, postId: result.postId, message: 'تم النشر على فيسبوك بنجاح!' });
   } catch (e) {
-    res.json({ success: false, error: e.message });
+    res.json({ success: false, error: e.message, details: e.stack });
   }
 });
 
