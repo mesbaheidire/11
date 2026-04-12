@@ -36,10 +36,11 @@
         .post-price { font-size: 14px; color: #4CAF50; font-weight: 700; margin-bottom: 5px; }
         .post-date { font-size: 12px; color: #888; }
         
-        .post-actions { display: grid; grid-template-columns: 1fr 1fr 50px; gap: 10px; padding: 0 15px 15px; }
+        .post-actions { display: grid; grid-template-columns: 1fr 1fr 1fr 50px; gap: 8px; padding: 0 15px 15px; }
         .action-btn { border: none; border-radius: 10px; color: #fff; padding: 12px; font-family: 'Cairo'; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
         .action-btn:active { transform: scale(0.95); }
         .republish-btn { background: linear-gradient(135deg, #0088cc, #0077b5); }
+        .fb-btn { background: linear-gradient(135deg, #1877F2, #0d65d9); }
         .edit-btn { background: linear-gradient(135deg, #FF9800, #F57C00); }
         .delete-btn { background: #ff4444; }
         
@@ -160,7 +161,10 @@
                     </div>
                     <div class="post-actions">
                         <button class="action-btn republish-btn" onclick="republishPost('${p.id}', this)">
-                            <i class="fab fa-telegram"></i> إعادة النشر
+                            <i class="fab fa-telegram"></i> تليغرام
+                        </button>
+                        <button class="action-btn fb-btn" onclick="republishToFacebook('${p.id}', this)">
+                            <i class="fab fa-facebook"></i> فيسبوك
                         </button>
                         <button class="action-btn edit-btn" onclick="editPost('${p.id}')">
                             <i class="fas fa-edit"></i> تعديل
@@ -214,6 +218,42 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fab fa-telegram"></i> إعادة النشر';
+            }
+        }
+
+        async function republishToFacebook(id, btn) {
+            const post = savedPosts.find(p => p.id === id);
+            if (!post) { showToast('لم يتم العثور على المنشور', 'error'); return; }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const res = await fetch('/api/publish-facebook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: post.title,
+                        price: post.price,
+                        link: post.link,
+                        coupon: post.coupon || null,
+                        image: post.image,
+                        message: post.message || null,
+                        settings: settings
+                    })
+                });
+
+                const result = await res.json();
+                if (result.success) {
+                    showToast('تم النشر على فيسبوك! ✅', 'success');
+                } else {
+                    showToast(result.error || 'فشل النشر على فيسبوك', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fab fa-facebook"></i> فيسبوك';
             }
         }
 
