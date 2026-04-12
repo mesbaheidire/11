@@ -561,7 +561,10 @@
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
             config.facebookEnabled = document.getElementById('facebookEnabled').checked;
             config.facebookPageId = document.getElementById('facebookPageId').value.trim();
-            config.facebookPageToken = document.getElementById('facebookPageToken').value.trim();
+            const fbTokenVal = document.getElementById('facebookPageToken').value.trim();
+            if (fbTokenVal && !fbTokenVal.includes('****')) {
+                config.facebookPageToken = fbTokenVal;
+            }
             const mainSettings = JSON.parse(localStorage.getItem('appSettings') || '{}');
             config.messageTemplate = {
                 headerText: '',
@@ -598,7 +601,13 @@
             selectLinkType(config.linkType || 'coin');
             document.getElementById('facebookEnabled').checked = !!config.facebookEnabled;
             document.getElementById('facebookPageId').value = config.facebookPageId || '';
-            document.getElementById('facebookPageToken').value = config.facebookPageToken || '';
+            const fbTokenField = document.getElementById('facebookPageToken');
+            if (config.facebookPageToken && !config.facebookPageToken.includes('****')) {
+                fbTokenField.value = config.facebookPageToken;
+            } else if (config.facebookPageToken && config.facebookPageToken.includes('****')) {
+                fbTokenField.value = '';
+                fbTokenField.placeholder = '●●●● توكن محفوظ — أدخل توكن جديد للتحديث';
+            }
             document.getElementById('fbSettings').style.display = config.facebookEnabled ? 'block' : 'none';
             renderChannels('source');
             renderChannels('target');
@@ -699,7 +708,9 @@
                     config.linkType = c.linkType || 'coin';
                     config.facebookEnabled = !!c.facebookEnabled;
                     config.facebookPageId = c.facebookPageId || '';
-                    config.facebookPageToken = c.facebookPageToken || '';
+                    if (c.facebookPageToken && !c.facebookPageToken.includes('****')) {
+                        config.facebookPageToken = c.facebookPageToken;
+                    }
                     config.messageTemplate = c.messageTemplate || config.messageTemplate;
                 }
                 populateUI();
@@ -897,11 +908,10 @@
             statusEl.style.color = '#88c0ff';
             statusEl.textContent = '⏳ جاري التحقق...';
             try {
-                const safePageId = encodeURIComponent(pageId);
                 const r = await fetch('/api/facebook/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId: safePageId })
+                    body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
                 });
                 const d = await r.json();
                 if (d.success) {
@@ -936,11 +946,10 @@
             statusEl.style.color = '#88c0ff';
             statusEl.textContent = '⏳ جاري النشر التجريبي...';
             try {
-                const safePageId = encodeURIComponent(pageId);
                 const r = await fetch('/api/facebook/test-post', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId: safePageId })
+                    body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
                 });
                 const d = await r.json();
                 if (d.success) {

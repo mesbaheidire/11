@@ -1987,11 +1987,11 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
     if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
-    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && incoming.facebookPageToken !== '****') config.facebookPageToken = incoming.facebookPageToken;
-    if (incoming.cook !== undefined && incoming.cook !== '' && incoming.cook !== '****') config.cook = incoming.cook;
-    if (incoming.botToken !== undefined && incoming.botToken !== '' && incoming.botToken !== '****') config.botToken = incoming.botToken;
+    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && !incoming.facebookPageToken.includes('****')) config.facebookPageToken = incoming.facebookPageToken;
+    if (incoming.cook !== undefined && incoming.cook !== '' && !incoming.cook.includes('****')) config.cook = incoming.cook;
+    if (incoming.botToken !== undefined && incoming.botToken !== '' && !incoming.botToken.includes('****')) config.botToken = incoming.botToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
-    if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
+    if (incoming.apiHash && !incoming.apiHash.includes('****') && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
     await saveSpyConfig(config);
     invalidateSpyCache();
@@ -2024,7 +2024,7 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
     if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
-    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && incoming.facebookPageToken !== '****') config.facebookPageToken = incoming.facebookPageToken;
+    if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && !incoming.facebookPageToken.includes('****')) config.facebookPageToken = incoming.facebookPageToken;
     if (incoming.apiId && incoming.apiId !== '') config.apiId = incoming.apiId;
     if (incoming.apiHash && incoming.apiHash !== '****' && incoming.apiHash !== '') config.apiHash = incoming.apiHash;
     if (incoming.phoneNumber && !incoming.phoneNumber.includes('****')) config.phoneNumber = incoming.phoneNumber;
