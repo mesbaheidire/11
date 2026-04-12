@@ -2911,7 +2911,7 @@ app.post('/api/store/cleanup-settings', async (req, res) => {
   }
 });
 
-app.post('/api/store/cleanup-now', async (req, res) => {
+app.post('/api/store/auto-cleanup', async (req, res) => {
   try {
     const { hours } = req.body;
     const validHours = [24, 48, 72];

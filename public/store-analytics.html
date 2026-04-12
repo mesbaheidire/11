@@ -523,7 +523,7 @@
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...';
       try {
-        const r = await fetch('/api/store/cleanup-now', {
+        const r = await fetch('/api/store/auto-cleanup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hours: cleanupInterval })
