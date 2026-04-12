@@ -22,7 +22,8 @@ function postTextToPage(token, pageId, message, link) {
       message: message || '',
       ...(link ? { link } : {}),
       access_token: token,
-      published: 'true'
+      published: 'true',
+      feed_targeting: JSON.stringify({ countries: ['DZ'] })
     }).toString();
 
     const options = {
@@ -64,7 +65,8 @@ function postPhotoToPage(token, pageId, message, imageUrl) {
       ...(message ? { message } : {}),
       url: imageUrl,
       access_token: token,
-      published: 'true'
+      published: 'true',
+      feed_targeting: JSON.stringify({ countries: ['DZ'] })
     }).toString();
 
     const options = {
