@@ -713,7 +713,7 @@
                     config.linkType = c.linkType || 'coin';
                     config.facebookEnabled = !!c.facebookEnabled;
                     config.facebookPageId = c.facebookPageId || '';
-                    if (c.facebookPageToken && !c.facebookPageToken.includes('****')) {
+                    if (c.facebookPageToken) {
                         config.facebookPageToken = c.facebookPageToken;
                     }
                     config.messageTemplate = c.messageTemplate || config.messageTemplate;
