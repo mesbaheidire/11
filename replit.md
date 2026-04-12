@@ -25,6 +25,13 @@ An Arabic-language web application for generating AliExpress affiliate links and
 ## Tech Stack
 - **Backend**: Node.js with Express
 - **Frontend**: Vanilla HTML/CSS/JavaScript (PWA)
+- **Design System**: `public/modern-theme.css` — shared CSS design tokens and utility classes
+  - CSS variables: `--bg-primary`, `--accent-orange`, `--accent-purple`, `--accent-blue`, etc.
+  - Reusable classes: `.m-card`, `.m-btn-*`, `.m-input`, `.m-toast`, `.m-glass-nav`
+  - Glass morphism, gradient buttons with light overlay, curved headers with `::after` pseudo-element
+  - Focus-visible accessibility styles, smooth transitions, responsive breakpoints
+  - Imported by all dark-themed pages (index, telegram, spy, discover, saved-posts, collections, video-generator)
+  - `store.html` and `store-analytics.html` use their own independent theme systems
 - **Dependencies**: axios, cheerio, cors, express, sharp, telegraf
 
 ## Running the App
