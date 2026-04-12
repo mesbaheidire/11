@@ -154,6 +154,88 @@
     .loading { text-align: center; padding: 40px; color: var(--muted); }
     .loading i { font-size: 24px; animation: spin 1s linear infinite; margin-bottom: 10px; display: block; }
 
+    .cleanup-card {
+      background: var(--card); border-radius: 14px; padding: 16px;
+      border: 1px solid var(--border); margin-bottom: 15px;
+    }
+    .cleanup-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+    }
+    .cleanup-header .title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 600;
+    }
+    .cleanup-header .title i { color: var(--red); }
+    .cleanup-toggle {
+      position: relative; width: 44px; height: 24px; cursor: pointer;
+    }
+    .cleanup-toggle input { display: none; }
+    .cleanup-toggle .slider {
+      position: absolute; inset: 0; background: var(--card2);
+      border-radius: 12px; transition: 0.3s; border: 1px solid var(--border);
+    }
+    .cleanup-toggle .slider::before {
+      content: ''; position: absolute; width: 18px; height: 18px;
+      left: 2px; bottom: 2px; background: var(--muted);
+      border-radius: 50%; transition: 0.3s;
+    }
+    .cleanup-toggle input:checked + .slider { background: var(--green); border-color: var(--green); }
+    .cleanup-toggle input:checked + .slider::before { transform: translateX(20px); background: #fff; }
+
+    .cleanup-intervals {
+      display: flex; gap: 8px; margin-bottom: 14px;
+    }
+    .cleanup-intervals button {
+      flex: 1; padding: 10px 8px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--card2);
+      color: var(--muted); font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.3s; text-align: center;
+    }
+    .cleanup-intervals button.active {
+      background: var(--orange); color: #fff; border-color: var(--orange);
+    }
+    .cleanup-intervals button .sub {
+      display: block; font-size: 10px; opacity: 0.7; margin-top: 2px;
+    }
+
+    .cleanup-info {
+      background: var(--card2); border-radius: 10px; padding: 12px;
+      margin-bottom: 12px; font-size: 13px; color: var(--muted);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .cleanup-info .count {
+      font-size: 22px; font-weight: 700; color: var(--red); min-width: 40px; text-align: center;
+    }
+
+    .cleanup-actions {
+      display: flex; gap: 8px;
+    }
+    .cleanup-actions button {
+      flex: 1; padding: 10px; border-radius: 10px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .cleanup-actions .btn-delete {
+      background: linear-gradient(135deg, var(--red), #C62828);
+      color: #fff;
+    }
+    .cleanup-actions .btn-delete:hover { opacity: 0.9; transform: translateY(-1px); }
+    .cleanup-actions .btn-delete:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .cleanup-actions .btn-save {
+      background: linear-gradient(135deg, var(--green), #2E7D32);
+      color: #fff;
+    }
+    .cleanup-actions .btn-save:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .cleanup-toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      padding: 10px 24px; border-radius: 10px; font-size: 13px;
+      z-index: 9999; transition: transform 0.3s ease; pointer-events: none;
+    }
+    .cleanup-toast.show { transform: translateX(-50%) translateY(0); }
+    .cleanup-toast.success { background: var(--green); color: #fff; }
+    .cleanup-toast.error { background: var(--red); color: #fff; }
+
     .summary-row {
       display: flex; gap: 8px; margin-bottom: 15px;
     }
@@ -181,10 +263,35 @@
       <button data-period="all" onclick="setPeriod('all',this)">الكل</button>
     </div>
 
+    <div class="cleanup-card" id="cleanupSection">
+      <div class="cleanup-header">
+        <div class="title"><i class="fas fa-broom"></i> حذف المنشورات القديمة</div>
+        <label class="cleanup-toggle">
+          <input type="checkbox" id="cleanupEnabled" onchange="toggleCleanup()">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="cleanup-intervals" id="cleanupIntervals">
+        <button data-hours="24" onclick="selectInterval(24, this)">24 ساعة<span class="sub">يوم واحد</span></button>
+        <button data-hours="48" onclick="selectInterval(48, this)">48 ساعة<span class="sub">يومين</span></button>
+        <button class="active" data-hours="72" onclick="selectInterval(72, this)">3 أيام<span class="sub">72 ساعة</span></button>
+      </div>
+      <div class="cleanup-info" id="cleanupInfo">
+        <div class="count" id="cleanupCount">-</div>
+        <div>منشور سيتم حذفه من أصل <strong id="cleanupTotal">0</strong> منشور</div>
+      </div>
+      <div class="cleanup-actions">
+        <button class="btn-save" onclick="saveCleanupSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+        <button class="btn-delete" id="cleanupNowBtn" onclick="cleanupNow()"><i class="fas fa-trash-alt"></i> حذف الآن</button>
+      </div>
+    </div>
+
     <div id="mainContent">
       <div class="loading"><i class="fas fa-spinner"></i>جاري التحميل...</div>
     </div>
   </div>
+
+  <div class="cleanup-toast" id="cleanupToast"></div>
 
   <script>
     let currentPeriod = 'today';
@@ -353,7 +460,98 @@
       return d.innerHTML;
     }
 
+    let cleanupInterval = 72;
+
+    async function loadCleanupSettings() {
+      try {
+        const r = await fetch('/api/store/cleanup-settings');
+        const d = await r.json();
+        if (d.success && d.settings) {
+          document.getElementById('cleanupEnabled').checked = d.settings.enabled;
+          cleanupInterval = d.settings.interval || 72;
+          document.querySelectorAll('.cleanup-intervals button').forEach(b => {
+            b.classList.toggle('active', parseInt(b.dataset.hours) === cleanupInterval);
+          });
+        }
+      } catch (e) {}
+      updateCleanupPreview();
+    }
+
+    function selectInterval(hours, btn) {
+      cleanupInterval = hours;
+      document.querySelectorAll('.cleanup-intervals button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateCleanupPreview();
+    }
+
+    function toggleCleanup() {
+      updateCleanupPreview();
+    }
+
+    async function updateCleanupPreview() {
+      try {
+        const r = await fetch(`/api/store/cleanup-preview?hours=${cleanupInterval}`);
+        const d = await r.json();
+        document.getElementById('cleanupCount').textContent = d.toDelete || 0;
+        document.getElementById('cleanupTotal').textContent = d.total || 0;
+        const btn = document.getElementById('cleanupNowBtn');
+        btn.disabled = !d.toDelete;
+      } catch (e) {}
+    }
+
+    async function saveCleanupSettings() {
+      try {
+        const enabled = document.getElementById('cleanupEnabled').checked;
+        const r = await fetch('/api/store/cleanup-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled, interval: cleanupInterval })
+        });
+        const d = await r.json();
+        if (d.success) showCleanupToast('تم حفظ إعدادات الحذف التلقائي', 'success');
+        else showCleanupToast('فشل الحفظ', 'error');
+      } catch (e) {
+        showCleanupToast('خطأ في الاتصال', 'error');
+      }
+    }
+
+    async function cleanupNow() {
+      const count = document.getElementById('cleanupCount').textContent;
+      if (count === '0' || count === '-') return;
+      if (!confirm(`سيتم حذف ${count} منشور قديم نهائياً. هل أنت متأكد؟`)) return;
+      const btn = document.getElementById('cleanupNowBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحذف...';
+      try {
+        const r = await fetch('/api/store/cleanup-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hours: cleanupInterval })
+        });
+        const d = await r.json();
+        if (d.success) {
+          showCleanupToast(`تم حذف ${d.deleted} منشور بنجاح`, 'success');
+          updateCleanupPreview();
+          loadAnalytics();
+        } else {
+          showCleanupToast('فشل الحذف: ' + (d.error || ''), 'error');
+        }
+      } catch (e) {
+        showCleanupToast('خطأ في الاتصال', 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-trash-alt"></i> حذف الآن';
+    }
+
+    function showCleanupToast(msg, type) {
+      const t = document.getElementById('cleanupToast');
+      t.textContent = msg;
+      t.className = 'cleanup-toast ' + type + ' show';
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
     loadAnalytics();
+    loadCleanupSettings();
   </script>
 </body>
 </html>

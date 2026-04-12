@@ -2887,6 +2887,92 @@ app.get('/api/store/analytics', async (req, res) => {
 app.get('/store-analytics', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'store-analytics.html'));
 });
+
+app.get('/api/store/cleanup-settings', async (req, res) => {
+  try {
+    const raw = await db.getAppStorage('store_cleanup_settings');
+    const settings = raw ? JSON.parse(raw) : { enabled: false, interval: 72 };
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.json({ success: true, settings: { enabled: false, interval: 72 } });
+  }
+});
+
+app.post('/api/store/cleanup-settings', async (req, res) => {
+  try {
+    const { enabled, interval } = req.body;
+    const validIntervals = [24, 48, 72];
+    const cleanInterval = validIntervals.includes(interval) ? interval : 72;
+    const settings = { enabled: !!enabled, interval: cleanInterval };
+    await db.setAppStorage('store_cleanup_settings', JSON.stringify(settings));
+    res.json({ success: true, settings });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/store/cleanup-now', async (req, res) => {
+  try {
+    const { hours } = req.body;
+    const validHours = [24, 48, 72];
+    const h = validHours.includes(hours) ? hours : 72;
+    const countResult = await db.query(
+      "SELECT COUNT(*) as cnt FROM saved_posts WHERE saved_at < NOW() - make_interval(hours => $1)",
+      [h]
+    );
+    const count = parseInt(countResult.rows[0].cnt);
+    await db.query(
+      "DELETE FROM saved_posts WHERE saved_at < NOW() - make_interval(hours => $1)",
+      [h]
+    );
+    console.log(`🧹 Cleanup: deleted ${count} posts older than ${h}h`);
+    res.json({ success: true, deleted: count });
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/store/cleanup-preview', async (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 72;
+    const validHours = [24, 48, 72];
+    const h = validHours.includes(hours) ? hours : 72;
+    const result = await db.query(
+      "SELECT COUNT(*) as cnt FROM saved_posts WHERE saved_at < NOW() - make_interval(hours => $1)",
+      [h]
+    );
+    const total = await db.query("SELECT COUNT(*) as cnt FROM saved_posts");
+    res.json({
+      success: true,
+      toDelete: parseInt(result.rows[0].cnt),
+      total: parseInt(total.rows[0].cnt)
+    });
+  } catch (e) {
+    res.json({ success: false, toDelete: 0, total: 0 });
+  }
+});
+
+async function runAutoCleanup() {
+  try {
+    const raw = await db.getAppStorage('store_cleanup_settings');
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    if (!settings.enabled || !settings.interval) return;
+    const h = settings.interval;
+    const result = await db.query(
+      "DELETE FROM saved_posts WHERE saved_at < NOW() - make_interval(hours => $1)",
+      [h]
+    );
+    if (result.rowCount > 0) {
+      console.log(`🧹 Auto-cleanup: deleted ${result.rowCount} posts older than ${h}h`);
+    }
+  } catch (e) {
+    console.log('⚠️ Auto-cleanup error:', e.message);
+  }
+}
+
+setInterval(runAutoCleanup, 60 * 60 * 1000);
+
 // ==================== End Analytics ====================
 
 const PORT = process.env.PORT || 5000;
@@ -2896,6 +2982,7 @@ async function startServer() {
   spyConfigCache = null;
   spyConfigCacheTime = 0;
   try { await loadSpyConfigCached(); } catch(e) {}
+  setTimeout(runAutoCleanup, 10000);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
   });
