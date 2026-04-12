@@ -99,6 +99,11 @@ async function initDatabase() {
         END IF;
       END $$;
     `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_spy_processed_links_time ON spy_processed_links(time DESC);
+      CREATE INDEX IF NOT EXISTS idx_spy_log_timestamp ON spy_log(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_saved_posts_saved_at ON saved_posts(saved_at DESC);
+    `);
     console.log('✅ تم إنشاء/التحقق من جداول قاعدة البيانات بنجاح');
     return true;
   } catch (e) {
@@ -335,18 +340,18 @@ async function saveTelegramSession(sessionData, key = 'default') {
 
 async function saveGeminiKeys(keys) {
   try {
-    // Clear old keys
+    await query('BEGIN');
     await query('DELETE FROM gemini_keys');
-    
-    // Add new keys
     for (let i = 0; i < keys.length; i++) {
       await query(
         'INSERT INTO gemini_keys (key_index, api_key) VALUES ($1, $2)',
         [i, keys[i]]
       );
     }
+    await query('COMMIT');
     return true;
   } catch (e) {
+    try { await query('ROLLBACK'); } catch (re) {}
     console.log('⚠️ Failed to save gemini keys:', e.message);
     return false;
   }
@@ -481,4 +486,5 @@ module.exports = {
   clearSavedPosts,
   setAppStorage,
   getAppStorage,
+  closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
 };

@@ -25,11 +25,11 @@ class RenderSafeStorage {
     // Try to load from database
     try {
       const result = await db.query(
-        'SELECT data FROM app_storage WHERE key = $1',
+        'SELECT value FROM app_storage WHERE key = $1',
         [this.name]
       );
       if (result.rows.length > 0) {
-        this.memoryCache = JSON.parse(result.rows[0].data);
+        this.memoryCache = JSON.parse(result.rows[0].value);
         console.log(`✅ Loaded ${this.name} from database`);
         return this.memoryCache;
       }
@@ -65,8 +65,8 @@ class RenderSafeStorage {
     // Save to database
     try {
       await db.query(
-        `INSERT INTO app_storage (key, data, updated_at) VALUES ($1, $2, NOW())
-         ON CONFLICT (key) DO UPDATE SET data = $2, updated_at = NOW()`,
+        `INSERT INTO app_storage (key, value, updated_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
         [this.name, JSON.stringify(data)]
       );
       console.log(`✅ Saved ${this.name} to database`);

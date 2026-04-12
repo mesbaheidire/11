@@ -87,10 +87,12 @@ npm start
   - Config caching with `getCachedConfig()` for performance in synchronous contexts
 
 - **Facebook Page Auto-Posting** - Automatically publish products to your Facebook Page
-  - Requires Facebook Page Access Token and Page ID
+  - Requires Facebook Page Access Token and Page ID (permissions: pages_manage_posts, pages_read_engagement)
   - Posts with image + text + affiliate link
   - Verify token and test post from spy settings UI
   - Integrated with spy module — publishes to Facebook after Telegram
+  - **Manual Facebook publish** from index.html, telegram.html, and saved-posts.html
+  - Token masking in API responses; masked tokens never overwrite stored tokens
   - Settings stored in spy config (database)
 
 ## Product Metadata Extraction

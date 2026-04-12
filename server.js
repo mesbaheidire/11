@@ -2902,3 +2902,11 @@ async function startServer() {
 }
 
 startServer();
+
+['SIGTERM', 'SIGINT'].forEach(sig => {
+  process.on(sig, async () => {
+    console.log(`\n🛑 ${sig} received — shutting down gracefully...`);
+    try { await db.closePool(); } catch (e) {}
+    process.exit(0);
+  });
+});
