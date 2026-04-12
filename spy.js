@@ -219,8 +219,8 @@ function getDefaultConfig() {
       couponFilter: '',
       sellerCoupon: '',
       sellerCouponCode: '',
-      footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz',
-      botLink: '@AliOffersDZ_bot',
+      footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz',
+      botLink: '@AffiliDz_bot',
       hashtags: '#Aliexpress #تخفيضات'
     }
   };
@@ -620,7 +620,7 @@ function startReviewBot(botToken) {
           return;
         }
         const storeUrl = appUrl.replace(/\/$/, '') + '/store';
-        await ctx.reply('🛍 *متجر AliOffers DZ*\n\nتصفح أحدث العروض والمنتجات مباشرة من هنا 👇', {
+        await ctx.reply('🛍 *متجر AffiliDz*\n\nتصفح أحدث العروض والمنتجات مباشرة من هنا 👇', {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [[

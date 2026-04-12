@@ -170,12 +170,12 @@
             salePrice: '✅السعر بعد التخفيض:',
             linkText: '📌رابط الشراء :',
             couponText: '🎁كوبون:',
-            footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
-            botLink: '@AliOffersDZ_bot',
+            footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
+            botLink: '@AffiliDz_bot',
             hashtags: '#Aliexpress #Offers',
             telegramToken: '',
             channelId: '',
-            channelId2: '@AliOffers_Dz'
+            channelId2: '@AffiliDz'
         };
         let settings = JSON.parse(localStorage.getItem('appSettings')) || { ...defaultSettings };
         
@@ -396,7 +396,7 @@
                 const credentials = {
                     telegramToken: settings.telegramToken || '',
                     channelId: settings.channelId || '',
-                    channelId2: settings.channelId2 || '@AliOffers_Dz',
+                    channelId2: settings.channelId2 || '@AffiliDz',
                     channelChoice: channelSelect.value || 'both'
                 };
                 

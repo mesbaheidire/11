@@ -1,7 +1,7 @@
-# AliExpress Affiliate Links Generator
+# AffiliDz — منصة أتمتة الأفلييت
 
 ## Overview
-An Arabic-language web application for generating AliExpress affiliate links and publishing product offers to Telegram channels. The app is a PWA (Progressive Web App) that can be installed on mobile devices.
+**AffiliDz** is an Arabic-language affiliate marketing automation platform for Telegram channel owners targeting the Algerian/DZD market. Features include affiliate link generation, competitor monitoring (spy), AI content generation, image watermarking, automated Telegram + Facebook publishing, and a Telegram Mini App store. The app is a PWA (Progressive Web App) that can be installed on mobile devices.
 
 ## Project Structure
 - `server.js` - Main Express server entry point

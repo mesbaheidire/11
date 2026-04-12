@@ -174,12 +174,12 @@
             salePrice: '✅السعر بعد التخفيض:',
             linkText: '📌رابط الشراء :',
             couponText: '🎁كوبون:',
-            footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
-            botLink: '@AliOffersDZ_bot',
+            footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
+            botLink: '@AffiliDz_bot',
             hashtags: '#Aliexpress',
             telegramToken: '',
             channelId: '',
-            channelId2: '@AliOffers_Dz'
+            channelId2: '@AffiliDz'
         };
 
         let settings = JSON.parse(localStorage.getItem('appSettings')) || { ...defaultSettings };
@@ -312,7 +312,7 @@
                 badges += `<span class="channel-badge">${settings.channelId || 'القناة 1'}</span>`;
             }
             if (choice === '2' || choice === 'both') {
-                badges += `<span class="channel-badge">${settings.channelId2 || '@AliOffers_Dz'}</span>`;
+                badges += `<span class="channel-badge">${settings.channelId2 || '@AffiliDz'}</span>`;
             }
             channelBadges.innerHTML = badges;
         }
@@ -503,7 +503,7 @@
                 const credentials = {
                     telegramToken: settings.telegramToken || '',
                     channelId: settings.channelId || '',
-                    channelId2: settings.channelId2 || '@AliOffers_Dz',
+                    channelId2: settings.channelId2 || '@AffiliDz',
                     channelChoice: channelSelect.value
                 };
 
@@ -618,7 +618,7 @@
                 const credentials = {
                     telegramToken: settings.telegramToken || '',
                     channelId: settings.channelId || '',
-                    channelId2: settings.channelId2 || '@AliOffers_Dz',
+                    channelId2: settings.channelId2 || '@AffiliDz',
                     channelChoice: channelSelect.value
                 };
 

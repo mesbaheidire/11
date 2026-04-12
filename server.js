@@ -624,7 +624,7 @@ app.post('/api/publish-telegram', async (req, res) => {
     }
     const botToken = credentials?.telegramToken || await getSharedBotToken();
     let channelId1 = credentials?.channelId || process.env.TELEGRAM_CHANNEL_ID;
-    let channelId2 = credentials?.channelId2 || '@AliOffers_Dz';
+    let channelId2 = credentials?.channelId2 || '@AffiliDz';
     const channelChoice = credentials?.channelChoice || '1';
     
     if (!botToken) return res.status(500).json({ success: false, error: 'الرجاء إدخال توكن البوت في الإعدادات' });
@@ -647,8 +647,8 @@ app.post('/api/publish-telegram', async (req, res) => {
       salePrice: '✅السعر بعد التخفيض:',
       linkText: '📌رابط الشراء :',
       couponText: '🎁كوبون:',
-      footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AliOffersDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
-      botLink: '@AliOffersDZ_bot',
+      footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
+      botLink: '@AffiliDz_bot',
       hashtags: '#Aliexpress'
     };
     
@@ -1895,7 +1895,7 @@ app.post('/api/facebook/test-post', async (req, res) => {
     if (!pageAccessToken || !pageId) {
       return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
     }
-    const testMsg = message || '✅ هذا منشور تجريبي من AliOffers DZ — تم ربط الصفحة بنجاح!';
+    const testMsg = message || '✅ هذا منشور تجريبي من AffiliDz — تم ربط الصفحة بنجاح!';
     const result = await postToFacebookPage(pageAccessToken, pageId, testMsg, null, null);
     res.json({ success: true, postId: result.postId });
   } catch (e) {
