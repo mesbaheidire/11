@@ -2958,7 +2958,8 @@ async function runAutoCleanup() {
     if (!raw) return;
     const settings = JSON.parse(raw);
     if (!settings.enabled || !settings.interval) return;
-    const h = settings.interval;
+    const validIntervals = [24, 48, 72];
+    const h = validIntervals.includes(settings.interval) ? settings.interval : 72;
     const result = await db.query(
       "DELETE FROM saved_posts WHERE saved_at < NOW() - make_interval(hours => $1)",
       [h]
