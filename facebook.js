@@ -18,18 +18,18 @@ async function postToFacebookPage(pageAccessToken, pageId, message, imageUrl, li
 
 function postTextToPage(token, pageId, message, link) {
   return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      message: message,
-      link: link || undefined,
-      access_token: token
-    });
+    const params = new URLSearchParams();
+    if (message) params.append('message', message);
+    if (link) params.append('link', link);
+    params.append('access_token', token);
+    const postData = params.toString();
 
     const options = {
       hostname: FB_GRAPH_URL,
       path: `/${FB_API_VERSION}/${pageId}/feed`,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(postData)
       }
     };
@@ -59,18 +59,18 @@ function postTextToPage(token, pageId, message, link) {
 
 function postPhotoToPage(token, pageId, message, imageUrl) {
   return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      message: message,
-      url: imageUrl,
-      access_token: token
-    });
+    const params = new URLSearchParams();
+    if (message) params.append('message', message);
+    params.append('url', imageUrl);
+    params.append('access_token', token);
+    const postData = params.toString();
 
     const options = {
       hostname: FB_GRAPH_URL,
       path: `/${FB_API_VERSION}/${pageId}/photos`,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(postData)
       }
     };
