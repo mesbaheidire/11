@@ -6,6 +6,8 @@ const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
 
+const https = require('https');
+
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
@@ -360,6 +362,81 @@ function extractSellerCouponFromTextLine(line) {
   const match = cleaned.match(/(?:قسيمة\s*البائع|seller\s*coupon|seller\s*code|coupon\s*code|code)[:\s]*([A-Z0-9$\/.-]{3,30})/i);
   if (match && match[1]) return match[1].trim();
   return null;
+}
+
+function isSafeUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.')) return false;
+    return true;
+  } catch { return false; }
+}
+
+function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
+  return new Promise((resolve) => {
+    if (!isSafeUrl(url)) return resolve(null);
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: timeoutMs }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && maxRedirects > 0) {
+        downloadImageAsBuffer(res.headers.location, timeoutMs, maxRedirects - 1).then(resolve);
+        return;
+      }
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      const contentType = res.headers['content-type'] || '';
+      if (!contentType.includes('image')) { res.resume(); return resolve(null); }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        resolve(buf.length > 1000 ? buf : null);
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
+}
+
+function extractOgImageFromHtml(html) {
+  if (!html) return null;
+  const ogMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+  if (ogMatch && ogMatch[1]) return ogMatch[1];
+  const imgMatch = html.match(/<img[^>]*class=["'][^"']*(?:product|main|gallery)[^"']*["'][^>]*src=["']([^"']+)["']/i);
+  return imgMatch ? imgMatch[1] : null;
+}
+
+function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
+  return new Promise((resolve) => {
+    if (!isSafeUrl(url)) return resolve(null);
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html'
+      },
+      timeout: timeoutMs
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && maxRedirects > 0) {
+        fetchOgImage(res.headers.location, timeoutMs, maxRedirects - 1).then(resolve);
+        return;
+      }
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => {
+        body += c;
+        if (body.length > 100000) { res.destroy(); const img = extractOgImageFromHtml(body); resolve(img); }
+      });
+      res.on('end', () => resolve(extractOgImageFromHtml(body)));
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
 }
 
 function normalizeAliExpressLinks(text) {
@@ -1372,13 +1449,48 @@ async function processPost(config, text, sourceImage, sourceName) {
   console.log(`✅ تم تحويل ${convertedLinks.length} رابط من أصل ${aliLinks.length} — بناء منشور واحد`);
 
   // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
-  let productImage = firstProductImage;
-  if (!productImage && sourceImage) {
-    productImage = { source: sourceImage };
-    console.log(`🖼 جميع طرق API فشلت — استخدام صورة المنشور الأصلي كاحتياط أخير`);
+  let productImage = null;
+
+  if (firstProductImage && typeof firstProductImage === 'string') {
+    console.log(`🖼 محاولة تحميل صورة المنتج: ${firstProductImage.substring(0, 80)}...`);
+    const imgBuffer = await downloadImageAsBuffer(firstProductImage);
+    if (imgBuffer) {
+      productImage = { source: imgBuffer };
+      console.log(`✅ تم تحميل صورة المنتج (${Math.round(imgBuffer.length/1024)}KB)`);
+    } else {
+      productImage = firstProductImage;
+      console.log(`⚠️ فشل تحميل الصورة كملف — إرسال URL مباشر`);
+    }
   }
 
-  const imageUrlForLog = typeof productImage === 'string' ? productImage : null;
+  if (!productImage) {
+    const firstAffLink = convertedLinks[0]?.affLink;
+    if (firstAffLink) {
+      console.log(`🖼 محاولة استخراج og:image من رابط الأفلييت...`);
+      try {
+        const ogImg = await fetchOgImage(firstAffLink);
+        if (ogImg) {
+          console.log(`🖼 وجد og:image: ${ogImg.substring(0, 80)}...`);
+          const ogBuffer = await downloadImageAsBuffer(ogImg);
+          if (ogBuffer) {
+            productImage = { source: ogBuffer };
+            console.log(`✅ تم تحميل صورة og:image (${Math.round(ogBuffer.length/1024)}KB)`);
+          } else {
+            productImage = ogImg;
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
+      }
+    }
+  }
+
+  if (!productImage && sourceImage) {
+    productImage = { source: sourceImage };
+    console.log(`🖼 استخدام صورة المنشور الأصلي كاحتياط أخير`);
+  }
+
+  const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
   if (!productTitle) {
@@ -1858,6 +1970,17 @@ async function startSpy(config) {
           }
         } catch (imgErr) {
           console.log(`⚠️ فشل تحميل صورة المنشور: ${imgErr.message}`);
+        }
+      }
+      if (!sourceImage && msg.media && msg.media.webpage && msg.media.webpage.photo) {
+        try {
+          const buffer = await spyClient.downloadMedia(msg.media.webpage.photo, {});
+          if (buffer && buffer.length > 0) {
+            sourceImage = buffer;
+            console.log(`🖼 صورة مستخرجة من معاينة الويب (${Math.round(buffer.length/1024)}KB)`);
+          }
+        } catch (wpErr) {
+          console.log(`⚠️ فشل تحميل صورة المعاينة: ${wpErr.message}`);
         }
       }
 
