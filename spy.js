@@ -1454,47 +1454,57 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
   let productImage = null;
+  let resolvedImageUrl = null; // رابط الصورة المستخدم (للسجل والمحفوظات)
 
   if (firstProductImage && typeof firstProductImage === 'string') {
     console.log(`🖼 محاولة تحميل صورة المنتج: ${firstProductImage.substring(0, 80)}...`);
     const imgBuffer = await downloadImageAsBuffer(firstProductImage);
     if (imgBuffer) {
       productImage = { source: imgBuffer };
+      resolvedImageUrl = firstProductImage;
       console.log(`✅ تم تحميل صورة المنتج (${Math.round(imgBuffer.length/1024)}KB)`);
     } else {
       productImage = firstProductImage;
+      resolvedImageUrl = firstProductImage;
       console.log(`⚠️ فشل تحميل الصورة كملف — إرسال URL مباشر`);
     }
   }
 
   if (!productImage) {
     const firstAffLink = convertedLinks[0]?.affLink;
-    if (firstAffLink) {
-      console.log(`🖼 محاولة استخراج og:image من رابط الأفلييت...`);
+    const firstOrigLink = convertedLinks[0]?.originalLink;
+    // جرّب og:image من رابط الأفلييت أولاً، ثم الرابط الأصلي
+    const linksToTry = [firstAffLink, firstOrigLink].filter(Boolean);
+    for (const tryLink of linksToTry) {
+      console.log(`🖼 محاولة استخراج og:image من: ${tryLink.substring(0, 80)}...`);
       try {
-        const ogImg = await fetchOgImage(firstAffLink);
+        const ogImg = await fetchOgImage(tryLink);
         if (ogImg) {
           console.log(`🖼 وجد og:image: ${ogImg.substring(0, 80)}...`);
           const ogBuffer = await downloadImageAsBuffer(ogImg);
           if (ogBuffer) {
             productImage = { source: ogBuffer };
+            resolvedImageUrl = ogImg;
             console.log(`✅ تم تحميل صورة og:image (${Math.round(ogBuffer.length/1024)}KB)`);
           } else {
             productImage = ogImg;
+            resolvedImageUrl = ogImg;
           }
+          break;
         }
       } catch (e) {
-        console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
+        console.log(`⚠️ فشل استخراج og:image من ${tryLink.substring(0, 50)}: ${e.message}`);
       }
     }
   }
 
   if (!productImage && sourceImage) {
     productImage = { source: sourceImage };
+    resolvedImageUrl = firstProductImage || null;
     console.log(`🖼 استخدام صورة المنشور الأصلي كاحتياط أخير`);
   }
 
-  const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
+  const imageUrlForLog = resolvedImageUrl || (typeof productImage === 'string' ? productImage : null);
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
   if (!productTitle) {
