@@ -1391,6 +1391,14 @@ async function processPost(config, text, sourceImage, sourceName) {
               affLink = directResult.affLink;
               resolvedProductId = directResult.productId || resolvedProductId;
               console.log(`🔗 تحويل مباشر (احتياط): ${affLink.substring(0, 60)}...`);
+              // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
+              if (!firstProductId && resolvedProductId && directResult.previews) {
+                firstProductId = resolvedProductId;
+                firstApiTitle = directResult.previews.title || '';
+                firstProductImage = directResult.previews.image_url || '';
+                firstProductPrice = priceFromPost || directResult.previews.price || '';
+                if (firstProductImage) console.log(`🖼 صورة من directAffLink (احتياط) [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
+              }
             }
           } catch (directErr) {
             console.log(`❌ فشل التحويل المباشر أيضاً: ${directErr.message}`);
@@ -1403,6 +1411,14 @@ async function processPost(config, text, sourceImage, sourceName) {
             affLink = directResult.affLink;
             resolvedProductId = directResult.productId || null;
             console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
+            // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
+            if (!firstProductId && resolvedProductId && directResult.previews) {
+              firstProductId = resolvedProductId;
+              firstApiTitle = directResult.previews.title || '';
+              firstProductImage = directResult.previews.image_url || '';
+              firstProductPrice = priceFromPost || directResult.previews.price || '';
+              if (firstProductImage) console.log(`🖼 صورة من directAffLink [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
+            }
           }
         } catch (directErr) {
           console.log(`❌ فشل التحويل المباشر: ${directErr.message}`);
@@ -1433,16 +1449,16 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
-      // جلب بيانات المنتج إذا لم تُجلب بعد (عند استخدام directAffLink)
+      // احتياط: جلب بيانات المنتج إذا لم تُجلب بعد من portaffFunction أو directAffLink
       if (!firstProductId && resolvedProductId) {
         firstProductId = resolvedProductId;
         const preview = await fetchLinkPreview(resolvedProductId);
         if (preview) {
-          console.log(`✅ بيانات المنتج (الطريقة: ${preview.method})`);
+          console.log(`✅ بيانات المنتج احتياط (الطريقة: ${preview.method})`);
           firstApiTitle = preview.title || '';
           firstProductImage = preview.image_url || '';
           firstProductPrice = priceFromPost || preview.price || '';
-          if (firstProductImage) console.log(`🖼 صورة من fetchLinkPreview: ${firstProductImage.substring(0, 80)}...`);
+          if (firstProductImage) console.log(`🖼 صورة من fetchLinkPreview احتياط: ${firstProductImage.substring(0, 80)}...`);
         }
       }
     } catch (linkErr) {
