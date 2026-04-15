@@ -1374,6 +1374,14 @@ async function processPost(config, text, sourceImage, sourceName) {
           affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
           resolvedProductId = result.productId || null;
           if (affLink) console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
+          // استخدام بيانات المعاينة مباشرة من portaffFunction (نفس آلية الصفحة الرئيسية)
+          if (!firstProductId && resolvedProductId && result.previews) {
+            firstProductId = resolvedProductId;
+            firstApiTitle = result.previews.title || '';
+            firstProductImage = result.previews.image_url || '';
+            firstProductPrice = priceFromPost || result.previews.price || '';
+            if (firstProductImage) console.log(`🖼 صورة من portaffFunction: ${firstProductImage.substring(0, 80)}...`);
+          }
         }
         if (!affLink) {
           console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
@@ -1425,6 +1433,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
+      // جلب بيانات المنتج إذا لم تُجلب بعد (عند استخدام directAffLink)
       if (!firstProductId && resolvedProductId) {
         firstProductId = resolvedProductId;
         const preview = await fetchLinkPreview(resolvedProductId);
@@ -1433,6 +1442,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           firstApiTitle = preview.title || '';
           firstProductImage = preview.image_url || '';
           firstProductPrice = priceFromPost || preview.price || '';
+          if (firstProductImage) console.log(`🖼 صورة من fetchLinkPreview: ${firstProductImage.substring(0, 80)}...`);
         }
       }
     } catch (linkErr) {
