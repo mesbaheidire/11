@@ -40,8 +40,21 @@ async function loadSpyConfigCached() {
 
 async function loadSharedCredentials() {
   let credentials = {};
-  
-  // Try database first
+
+  // Try environment variables FIRST (Render / hosting platform)
+  if (process.env.TELEGRAM_BOT_TOKEN) credentials.botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (process.env.cook) credentials.cook = process.env.cook;
+  if (process.env.ALIEXPRESS_APP_KEY) credentials.aliexpressAppKey = process.env.ALIEXPRESS_APP_KEY;
+  if (process.env.ALIEXPRESS_APP_SECRET) credentials.aliexpressAppSecret = process.env.ALIEXPRESS_APP_SECRET;
+  if (process.env.ALIEXPRESS_TRACK_ID) credentials.aliexpressTrackId = process.env.ALIEXPRESS_TRACK_ID;
+  if (process.env.GEMINI_API_KEY) credentials.geminiApiKey = process.env.GEMINI_API_KEY;
+  if (process.env.TELEGRAM_CHANNEL_ID) credentials.telegramChannelId = process.env.TELEGRAM_CHANNEL_ID;
+  if (Object.keys(credentials).length > 0) {
+    console.log('✅ تم تحميل بيانات حساسة من متغيرات البيئة (Render)');
+    return credentials;
+  }
+
+  // Fallback: Try database
   try {
     const botTokenDb = await db.getAppStorage('TELEGRAM_BOT_TOKEN');
     const cookieDb = await db.getAppStorage('ALIEXPRESS_COOKIE');
@@ -54,16 +67,8 @@ async function loadSharedCredentials() {
   } catch (e) {
     console.log('⚠️ فشل تحميل البيانات من DB:', e.message);
   }
-  
-  // Try environment variables
-  if (process.env.TELEGRAM_BOT_TOKEN) credentials.botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (process.env.cook) credentials.cook = process.env.cook;
-  if (Object.keys(credentials).length > 0) {
-    console.log('✅ تم تحميل بيانات حساسة من متغيرات البيئة');
-    return credentials;
-  }
-  
-  // Try local file as last resort
+
+  // Last resort: local file
   try {
     if (fs.existsSync(SHARED_CREDS_FILE)) {
       credentials = JSON.parse(fs.readFileSync(SHARED_CREDS_FILE, 'utf8'));
@@ -71,7 +76,7 @@ async function loadSharedCredentials() {
       return credentials;
     }
   } catch (e) {}
-  
+
   console.log('⚠️ لم يتم العثور على بيانات حساسة - يجب إدخالها في الإعدادات');
   return {};
 }
@@ -153,17 +158,17 @@ function getEnvKeys() {
 function getCurrentGeminiKey() {
   const data = loadGeminiKeys();
   const envKeys = getEnvKeys();
-  
-  // Priority: saved keys > env keys
-  if (data.keys.length > 0) {
-    const index = data.currentIndex % data.keys.length;
-    return data.keys[index];
-  }
-  
-  // Support multiple keys from environment variable
+
+  // Priority: env keys (Render) > saved keys in file
   if (envKeys.length > 0) {
     const envIndex = data.envKeyIndex || 0;
     return envKeys[envIndex % envKeys.length];
+  }
+
+  // Fallback: saved keys in file
+  if (data.keys.length > 0) {
+    const index = data.currentIndex % data.keys.length;
+    return data.keys[index];
   }
   
   return null;

@@ -593,17 +593,21 @@ function invalidateConfigCache() {
 }
 
 async function getBotToken() {
+  // Environment variables (Render) take priority
+  if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN;
   const shared = loadSharedCredentials();
   if (shared.botToken) return shared.botToken;
   const config = await getCachedConfig();
-  return config.botToken || process.env.TELEGRAM_BOT_TOKEN || '';
+  return config.botToken || '';
 }
 
 async function getCookie() {
+  // Environment variables (Render) take priority
+  if (process.env.cook) return process.env.cook;
   const shared = loadSharedCredentials();
   if (shared.cook) return shared.cook;
   const config = await getCachedConfig();
-  const cookie = config.cook || process.env.cook || '';
+  const cookie = config.cook || '';
   if (!cookie) {
     console.log('⚠️ الكوكي غير موجود — تأكد من إدخاله في صفحة الإعدادات الرئيسية');
   }
