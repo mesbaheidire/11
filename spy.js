@@ -933,8 +933,40 @@ async function executePublish(review) {
             await publishBot.telegram.sendMessage(target, textMessage);
           }
         } catch (photoErr) {
-          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — إرسال نص فقط`);
-          await publishBot.telegram.sendMessage(target, textMessage);
+          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — محاولة تحميل كـ Buffer...`);
+          let sentWithBuffer = false;
+          const imgUrl = typeof productImage === 'string' ? productImage : (logImage && !logImage.startsWith('data:') ? logImage : null);
+          if (imgUrl) {
+            try {
+              const imgBuffer = await new Promise((resolve, reject) => {
+                const mod = imgUrl.startsWith('https') ? https : http;
+                mod.get(imgUrl, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (resp) => {
+                  if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+                    const rMod = resp.headers.location.startsWith('https') ? https : http;
+                    rMod.get(resp.headers.location, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r2) => {
+                      const chunks = []; r2.on('data', c => chunks.push(c)); r2.on('end', () => resolve(Buffer.concat(chunks))); r2.on('error', reject);
+                    }).on('error', reject);
+                  } else {
+                    const chunks = []; resp.on('data', c => chunks.push(c)); resp.on('end', () => resolve(Buffer.concat(chunks))); resp.on('error', reject);
+                  }
+                }).on('error', reject);
+              });
+              if (imgBuffer.length > 1000) {
+                await publishBot.telegram.sendPhoto(target, { source: imgBuffer }, { caption: captionMessage });
+                if (message.length > 1000) {
+                  await publishBot.telegram.sendMessage(target, textMessage);
+                }
+                sentWithBuffer = true;
+                console.log(`✅ تم إرسال الصورة كـ Buffer بنجاح في ${target}`);
+              }
+            } catch (bufErr) {
+              console.log(`⚠️ فشل تحميل/إرسال الصورة كـ Buffer: ${bufErr.message}`);
+            }
+          }
+          if (!sentWithBuffer) {
+            console.log(`📝 إرسال نص فقط في ${target}`);
+            await publishBot.telegram.sendMessage(target, textMessage);
+          }
         }
       } else {
         await publishBot.telegram.sendMessage(target, textMessage);
