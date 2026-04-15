@@ -5,6 +5,7 @@ const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink'
 const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
+const sharp = require('sharp');
 
 const https = require('https');
 
@@ -1528,6 +1529,19 @@ async function processPost(config, text, sourceImage, sourceName) {
     productImage = { source: sourceImage };
     resolvedImageUrl = firstProductImage || null;
     console.log(`🖼 استخدام صورة المنشور الأصلي كاحتياط أخير`);
+    // إنشاء مصغّرة base64 للحفظ في المحفوظات عندما لا يوجد رابط URL
+    if (!resolvedImageUrl) {
+      try {
+        const thumb = await sharp(sourceImage)
+          .resize(300, 300, { fit: 'cover' })
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        resolvedImageUrl = `data:image/jpeg;base64,${thumb.toString('base64')}`;
+        console.log(`🖼 تم إنشاء مصغّرة base64 للصورة (${Math.round(thumb.length / 1024)}KB)`);
+      } catch (thumbErr) {
+        console.log(`⚠️ فشل إنشاء المصغّرة: ${thumbErr.message}`);
+      }
+    }
   }
 
   const imageUrlForLog = resolvedImageUrl || (typeof productImage === 'string' ? productImage : null);
