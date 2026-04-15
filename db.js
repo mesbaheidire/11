@@ -401,17 +401,25 @@ async function getSavedPosts(limit = 100) {
       'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1',
       [limit]
     );
-    return result.rows.map(row => ({
-      id: row.post_id || String(row.id),
-      title: row.title,
-      price: row.price,
-      link: row.link,
-      image: row.image_url,
-      coupon: row.coupon,
-      message: row.message,
-      hook: row.hook,
-      createdAt: row.saved_at,
-    }));
+    return result.rows.map(row => {
+      let originalLink = null;
+      try {
+        const data = row.data ? JSON.parse(row.data) : null;
+        if (data && data.originalLink) originalLink = data.originalLink;
+      } catch (e) {}
+      return {
+        id: row.post_id || String(row.id),
+        title: row.title,
+        price: row.price,
+        link: row.link,
+        originalLink,
+        image: row.image_url,
+        coupon: row.coupon,
+        message: row.message,
+        hook: row.hook,
+        createdAt: row.saved_at,
+      };
+    });
   } catch (e) {
     console.log('⚠️ Failed to load saved posts:', e.message);
     return [];

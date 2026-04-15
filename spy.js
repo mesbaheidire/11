@@ -974,6 +974,7 @@ async function executePublish(review) {
         title: productTitle || '',
         price: productPrice || '',
         link: affiliateLink || originalLink || '',
+        originalLink: originalLink || '',
         image: logImage || '',
         message: message || '',
         createdAt: new Date().toISOString()
