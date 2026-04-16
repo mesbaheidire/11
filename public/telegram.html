@@ -566,7 +566,6 @@
                 const result = await res.json();
                 if (result.success) {
                     showToast('تم النشر على فيسبوك! ✅', 'success');
-                    saveCurrentPost();
                 } else {
                     showToast(result.error || 'فشل النشر على فيسبوك', 'error');
                 }
