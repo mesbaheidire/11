@@ -411,7 +411,12 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   <div class="sec" id="savedSec">
     <div class="sec-header">
       <div class="sec-title"><i class="fas fa-star"></i> منتجاتنا المميزة</div>
-      <span class="sec-badge" id="savedBadge">0 منتج</span>
+      <span class="sec-badge" id="savedBadge">0 منشور</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px">
+      <input id="savedDeleteBefore" type="date" style="border:1.5px solid var(--border);border-radius:10px;padding:8px 10px;font-family:'Cairo';font-size:13px;outline:none">
+      <button class="hero-btn" style="padding:8px 12px" onclick="deleteSavedBefore()"><i class="fas fa-trash"></i> حذف قبل التاريخ</button>
+      <button class="hero-btn" style="padding:8px 12px;background:#b42318" onclick="clearAllSaved()"><i class="fas fa-broom"></i> مسح الكل</button>
     </div>
     <div id="savedGrid" class="loading-grid">
       <div class="skel skel-card"></div>
@@ -543,7 +548,7 @@ async function loadSaved(){
     const d=await r.json();
     savedProducts=d.posts||[];
     const grid=document.getElementById('savedGrid');
-    document.getElementById('savedBadge').textContent=savedProducts.length+' منتج';
+    document.getElementById('savedBadge').textContent=savedProducts.length+' منشور';
     if(!savedProducts.length){
       grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted)"><i class="fas fa-box-open" style="font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:var(--pri)"></i><p>لا توجد منتجات محفوظة بعد</p><p style="font-size:11px;margin-top:4px">ابدأ بنشر منتجات من بوت التجسس</p></div>';
       return;
@@ -677,9 +682,9 @@ async function openSaved(p){track('click',p?.title||'saved_product');
         const d=await r.json();
         const info=d.products&&d.products[0];
         if(info&&curProduct&&(curProduct._saved)){
-          if(info.rating)curProduct.rating=info.rating;
-          if(info.orders)curProduct.orders=info.orders;
-          if(info.discount)curProduct.discount=info.discount;
+          if(info.rating!=null&&info.rating!=='')curProduct.rating=info.rating;
+          if(info.orders!=null&&info.orders!=='')curProduct.orders=info.orders;
+          if(info.discount!=null&&info.discount!=='')curProduct.discount=info.discount;
           if(info.shop_name)curProduct.shop_name=info.shop_name;
           if(info.original_price&&!curProduct.original_price)curProduct.original_price=info.original_price;
           if(info.price&&(!curProduct.price||curProduct.price==='0'))curProduct.price=info.price;
@@ -687,14 +692,36 @@ async function openSaved(p){track('click',p?.title||'saved_product');
           if(document.getElementById('detOverlay').classList.contains('show')){
             const ratingVal=curProduct.rating?(Math.round(parseFloat(curProduct.rating)/20*10)/10):null;
             document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
-            document.getElementById('dOrders').textContent=curProduct.orders?Number(curProduct.orders).toLocaleString():'—';
-            document.getElementById('dDisc').textContent=curProduct.discount?parseInt(curProduct.discount)+'%':'—';
+            document.getElementById('dOrders').textContent=curProduct.orders!=null&&curProduct.orders!==''?Number(curProduct.orders).toLocaleString():'—';
+            document.getElementById('dDisc').textContent=curProduct.discount!=null&&curProduct.discount!==''?(/%/.test(String(curProduct.discount))?String(curProduct.discount):parseInt(curProduct.discount)+'%'):'—';
             if(curProduct.shop_name){document.getElementById('detShop').style.display='flex';document.getElementById('detShopName').textContent=curProduct.shop_name}
           }
         }
       }catch(e){}
     }
   }
+}
+async function deleteSavedBefore(){
+  const input=document.getElementById('savedDeleteBefore');
+  if(!input.value){toast('اختار تاريخ أولاً','err');return}
+  if(!confirm('هل تريد حذف كل المنشورات الأقدم من هذا التاريخ؟'))return;
+  try{
+    const r=await fetch('/api/saved-posts/before',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:new Date(input.value).toISOString()})});
+    const d=await r.json();
+    if(!d.success) throw new Error(d.error||'فشل الحذف');
+    toast('تم حذف المنشورات الأقدم من التاريخ');
+    loadSaved();
+  }catch(e){toast(e.message||'فشل الحذف','err')}
+}
+async function clearAllSaved(){
+  if(!confirm('هل تريد مسح كل المنشورات المحفوظة؟'))return;
+  try{
+    const r=await fetch('/api/saved-posts',{method:'DELETE'});
+    const d=await r.json();
+    if(!d.success) throw new Error(d.error||'فشل المسح');
+    toast('تم مسح كل المنشورات');
+    loadSaved();
+  }catch(e){toast(e.message||'فشل المسح','err')}
 }
 function buySaved(p){openURL(p.link)}
 

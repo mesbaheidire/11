@@ -1890,8 +1890,8 @@ app.get('/api/saved-posts', async (req, res) => {
 
 app.post('/api/saved-posts', async (req, res) => {
   try {
-    const { id, title, price, link, coupon, image, message, hook, createdAt } = req.body;
-    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook };
+    const { id, title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink } = req.body;
+    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink };
     const ok = await db.addSavedPost(post);
     if (!ok) return res.status(500).json({ success: false, error: 'Failed to save' });
     res.json({ success: true, post });
@@ -1914,6 +1914,18 @@ app.delete('/api/saved-posts', async (req, res) => {
   try {
     const ok = await db.clearSavedPosts();
     if (!ok) return res.status(500).json({ success: false, error: 'Failed to clear' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/saved-posts/before', async (req, res) => {
+  try {
+    const { date } = req.body;
+    if (!date) return res.status(400).json({ success: false, error: 'date is required' });
+    const ok = await db.deleteSavedPostsBefore(date);
+    if (!ok) return res.status(500).json({ success: false, error: 'Failed to delete by date' });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

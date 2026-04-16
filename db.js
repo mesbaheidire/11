@@ -97,6 +97,9 @@ async function initDatabase() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='hook') THEN
           ALTER TABLE saved_posts ADD COLUMN hook TEXT;
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='created_at') THEN
+          ALTER TABLE saved_posts ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
+        END IF;
       END $$;
     `);
     await pool.query(`
@@ -370,9 +373,10 @@ async function getGeminiKeys() {
 async function addSavedPost(post) {
   try {
     const postId = post.id || post.post_id || Date.now().toString();
+    const savedAt = post.savedAt || post.createdAt || new Date().toISOString();
     await query(
-      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, data) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11)
+      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, created_at, data) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
        ON CONFLICT (post_id) DO NOTHING`,
       [
         postId,
@@ -385,6 +389,7 @@ async function addSavedPost(post) {
         post.coupon || null,
         post.message || null,
         post.hook || null,
+        savedAt,
         JSON.stringify(post)
       ]
     );
@@ -395,12 +400,11 @@ async function addSavedPost(post) {
   }
 }
 
-async function getSavedPosts(limit = 100) {
+async function getSavedPosts(limit = null) {
   try {
-    const result = await query(
-      'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1',
-      [limit]
-    );
+    const sql = limit ? 'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1' : 'SELECT * FROM saved_posts ORDER BY saved_at DESC';
+    const params = limit ? [limit] : [];
+    const result = await query(sql, params);
     return result.rows.map(row => ({
       id: row.post_id || String(row.id),
       title: row.title,
@@ -410,11 +414,22 @@ async function getSavedPosts(limit = 100) {
       coupon: row.coupon,
       message: row.message,
       hook: row.hook,
-      createdAt: row.saved_at,
+      createdAt: row.created_at || row.saved_at,
+      savedAt: row.saved_at,
     }));
   } catch (e) {
     console.log('⚠️ Failed to load saved posts:', e.message);
     return [];
+  }
+}
+
+async function deleteSavedPostsBefore(date) {
+  try {
+    await query('DELETE FROM saved_posts WHERE COALESCE(created_at, saved_at) < $1', [date]);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to delete saved posts before date:', e.message);
+    return false;
   }
 }
 
