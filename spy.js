@@ -1057,18 +1057,47 @@ async function executePublish(review) {
         productId: firstProductId || null,
         createdAt: new Date().toISOString()
       });
-      const options = {
-        hostname: '127.0.0.1',
-        port: parseInt(process.env.PORT) || 5000,
-        path: '/api/saved-posts',
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
-      };
-      const req2 = http.request(options);
-      req2.on('error', () => {});
-      req2.write(postData);
-      req2.end();
-    } catch (e) {}
+      const saveResult = await new Promise((resolve) => {
+        const options = {
+          hostname: '127.0.0.1',
+          port: parseInt(process.env.PORT) || 5000,
+          path: '/api/saved-posts',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+        };
+        const req2 = http.request(options, (res2) => {
+          let body = '';
+          res2.on('data', c => body += c);
+          res2.on('end', () => {
+            try {
+              const parsed = JSON.parse(body);
+              if (parsed.success) {
+                console.log(`💾 تم حفظ المنشور في المحفوظات`);
+              } else {
+                console.log(`⚠️ فشل حفظ المنشور: ${parsed.error || 'unknown'}`);
+              }
+              resolve(parsed.success);
+            } catch(e) {
+              console.log(`⚠️ استجابة غير صالحة من حفظ المنشور: ${body.substring(0, 100)}`);
+              resolve(false);
+            }
+          });
+        });
+        req2.on('error', (err) => {
+          console.log(`❌ خطأ في حفظ المنشور: ${err.message}`);
+          resolve(false);
+        });
+        req2.setTimeout(10000, () => {
+          req2.destroy();
+          console.log(`⏱️ انتهت مهلة حفظ المنشور`);
+          resolve(false);
+        });
+        req2.write(postData);
+        req2.end();
+      });
+    } catch (e) {
+      console.log(`❌ خطأ عام في حفظ المنشور: ${e.message}`);
+    }
   }
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,
