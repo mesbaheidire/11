@@ -1547,6 +1547,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       if (!affLink) {
+        console.log(`❌ فشل تحويل الرابط: ${originalLink.substring(0, 60)} — تخطي هذا الرابط`);
         addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
         inFlightLinks.delete(normalizeAliLink(originalLink));
         continue;
@@ -1556,15 +1557,18 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       if (resolvedProductId) {
         const productKey = 'product:' + resolvedProductId;
-        try {
-          const isDuplicate = await db.isLinkProcessed(productKey);
-          if (isDuplicate) {
-            console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
-            continue;
+        const alreadyInThisPost = convertedLinks.some(cl => cl.resolvedProductId === resolvedProductId);
+        if (!alreadyInThisPost) {
+          try {
+            const isDuplicate = await db.isLinkProcessed(productKey);
+            if (isDuplicate) {
+              console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
+              continue;
+            }
+            await db.addProcessedLink(productKey);
+          } catch (e) {
+            console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
           }
-          await db.addProcessedLink(productKey);
-        } catch (e) {
-          console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
         }
       }
 
