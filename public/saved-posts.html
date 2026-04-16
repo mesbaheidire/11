@@ -22,12 +22,15 @@
         .back-btn:hover { background: rgba(255,255,255,0.2); }
         .content { padding: 30px 20px; max-width: 600px; margin: 0 auto; }
         
-        .stats-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); }
+        .stats-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; padding: 15px; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap; }
         .stats-count { font-size: 14px; color: var(--text-secondary); }
         .stats-count span { color: var(--accent-purple); font-weight: 700; }
         .clear-btn { background: linear-gradient(135deg, #EF4444, #DC2626); border: none; border-radius: var(--radius-sm); color: #fff; padding: 10px 20px; font-family: 'Cairo'; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all var(--transition-fast); }
         .clear-btn:hover { transform: translateY(-1px); }
         .clear-btn:disabled { opacity: 0.5; }
+        .date-actions { display: flex; gap: 10px; flex-wrap: wrap; width: 100%; }
+        .date-input { flex: 1; min-width: 180px; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 10px 12px; font-family: 'Cairo'; }
+        .secondary-btn { background: linear-gradient(135deg, #7C3AED, #6D28D9); }
         
         .posts-list { display: flex; flex-direction: column; gap: 12px; }
         
@@ -78,6 +81,12 @@
             <button class="clear-btn" id="clearAllBtn" style="display: none;">
                 <i class="fas fa-trash"></i> مسح الكل
             </button>
+            <div class="date-actions">
+                <input type="date" id="deleteBeforeDate" class="date-input">
+                <button class="clear-btn secondary-btn" id="deleteBeforeBtn">
+                    <i class="fas fa-calendar-times"></i> حذف الأقدم
+                </button>
+            </div>
         </div>
 
         <div id="loadingState" class="loading">
@@ -127,8 +136,6 @@
                     });
                     // Sort by date descending
                     localPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    // Limit to 50
-                    if (localPosts.length > 50) localPosts = localPosts.slice(0, 50);
                     localStorage.setItem('savedPosts', JSON.stringify(localPosts));
                 }
             } catch (e) {
@@ -305,6 +312,29 @@
             
             showToast('تم حذف جميع المنشورات', 'success');
             loadPosts();
+        };
+
+        document.getElementById('deleteBeforeBtn').onclick = async () => {
+            const date = document.getElementById('deleteBeforeDate').value;
+            if (!date) {
+                showToast('اختر تاريخاً أولاً', 'error');
+                return;
+            }
+            if (!confirm('هل تريد حذف كل المنشورات الأقدم من هذا التاريخ؟')) return;
+            try {
+                const res = await fetch('/api/saved-posts/before', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: new Date(date).toISOString() })
+                });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'فشل الحذف');
+                localStorage.removeItem('savedPosts');
+                showToast('تم حذف المنشورات الأقدم من التاريخ', 'success');
+                loadPosts();
+            } catch (e) {
+                showToast(e.message || 'فشل الحذف', 'error');
+            }
         };
 
         loadPosts();
