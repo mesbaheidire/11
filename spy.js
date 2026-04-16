@@ -511,6 +511,120 @@ function fetchImageViaLinkPreview(url, timeoutMs = 15000) {
   });
 }
 
+// ===== آلية جديدة #1: كشط JSON المضمّن من صفحة AliExpress للجوال =====
+// تحتوي الصفحة على window.runParams.data.imageModule.imagePathList أو أنماط مشابهة
+function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    if (!productId) return resolve(null);
+    const urls = [
+      `https://m.aliexpress.com/item/${productId}.html`,
+      `https://www.aliexpress.com/item/${productId}.html`,
+      `https://ar.aliexpress.com/item/${productId}.html`,
+    ];
+    let attemptIdx = 0;
+    const tryNext = () => {
+      if (attemptIdx >= urls.length) return resolve(null);
+      const url = urls[attemptIdx++];
+      if (!isSafeUrl(url)) return tryNext();
+      const userAgent = attemptIdx === 1
+        ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1'
+        : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36';
+      const req = https.get(url, {
+        headers: { 'User-Agent': userAgent, 'Accept': 'text/html', 'Accept-Language': 'en-US,en;q=0.9' },
+        timeout: timeoutMs,
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          return tryNext();
+        }
+        if (res.statusCode !== 200) { res.resume(); return tryNext(); }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', c => {
+          body += c;
+          if (body.length > 800000) res.destroy();
+        });
+        res.on('end', () => {
+          // محاولة استخراج من أنماط JSON المتعددة في الصفحة
+          const patterns = [
+            /"imagePathList"\s*:\s*\[\s*"([^"]+)"/,
+            /"imageUrl"\s*:\s*"(https?:[^"]+)"/,
+            /"mainImageUrl"\s*:\s*"(https?:[^"]+)"/,
+            /"imageBigViewURL"\s*:\s*\[\s*"([^"]+)"/,
+            /"images"\s*:\s*\[\s*"(https?:[^"]+)"/,
+            /image[Uu]rl["']?\s*[:=]\s*["'](https?:\/\/[^"']*alicdn[^"']+)["']/,
+          ];
+          let imageUrl = null;
+          let title = null;
+          for (const p of patterns) {
+            const m = body.match(p);
+            if (m && m[1]) {
+              imageUrl = m[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/');
+              if (imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
+              break;
+            }
+          }
+          const titleMatch = body.match(/"subject"\s*:\s*"([^"]+)"/) || body.match(/"title"\s*:\s*"([^"]+)"/);
+          if (titleMatch && titleMatch[1]) {
+            title = titleMatch[1].replace(/\\u[\dA-Fa-f]{4}/g, (m) => String.fromCharCode(parseInt(m.slice(2), 16)));
+          }
+          if (imageUrl && /alicdn|aliexpress-media/.test(imageUrl)) {
+            console.log(`✅ Mobile JSON وجد صورة: ${imageUrl.substring(0, 80)}...`);
+            return resolve({ image: imageUrl, title });
+          }
+          tryNext();
+        });
+        res.on('error', () => tryNext());
+      });
+      req.on('error', () => tryNext());
+      req.setTimeout(timeoutMs, () => { req.destroy(); tryNext(); });
+    };
+    tryNext();
+  });
+}
+
+// ===== آلية جديدة #2: بحث صور Bing كملاذ أخير =====
+function fetchImageViaBingSearch(query, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!query || query.length < 3) return resolve(null);
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query + ' aliexpress')}&form=HDRSC2&first=1`;
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+        'Accept': 'text/html',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => {
+        body += c;
+        if (body.length > 500000) res.destroy();
+      });
+      res.on('end', () => {
+        // Bing يخزّن بيانات الصور في سمة m="{...}" على كل عنصر
+        const mMatch = body.match(/m="\{[^}]*?&quot;murl&quot;:&quot;([^&]+)&quot;/);
+        let imageUrl = mMatch ? mMatch[1] : null;
+        if (!imageUrl) {
+          const altMatch = body.match(/"murl":"(https?:[^"]+)"/);
+          imageUrl = altMatch ? altMatch[1] : null;
+        }
+        if (imageUrl) {
+          imageUrl = imageUrl.replace(/&amp;/g, '&');
+          console.log(`✅ Bing Images وجد صورة: ${imageUrl.substring(0, 80)}...`);
+          return resolve({ image: imageUrl });
+        }
+        resolve(null);
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
+}
+
 function normalizeAliExpressLinks(text) {
   if (!text) return '';
   const links = [];
@@ -1549,7 +1663,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 1) LinkPreview.xyz
   if (!productImage && previewLink) {
-    console.log(`🖼 [1/7] محاولة LinkPreview.xyz...`);
+    console.log(`🖼 [1/9] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
       if (lpResult && lpResult.image) {
@@ -1565,7 +1679,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (!productImage) {
     const mlUrl = mobileProductUrl || previewLink;
     if (mlUrl) {
-      console.log(`🖼 [2/7] محاولة Microlink.io...`);
+      console.log(`🖼 [2/9] محاولة Microlink.io...`);
       try {
         const mlResult = await fetchImageViaMicrolink(mlUrl);
         if (mlResult && mlResult.image) {
@@ -1580,7 +1694,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 3) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [3/7] محاولة AliExpress API...`);
+    console.log(`🖼 [3/9] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url) {
@@ -1595,9 +1709,23 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 4) استخراج og:image
+  // 4) 🆕 كشط JSON المضمّن من صفحة الجوال (runParams / imagePathList)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [4/9] محاولة Mobile Page JSON...`);
+    try {
+      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
+      if (mjResult && mjResult.image) {
+        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
+        productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
+        console.log(`✅ نجح Mobile Page JSON`);
+        if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+      }
+    } catch (e) { console.log(`⚠️ فشل Mobile Page JSON: ${e.message}`); }
+  }
+
+  // 5) استخراج og:image
   if (!productImage && convertedLinks[0]?.affLink) {
-    console.log(`🖼 [4/7] محاولة استخراج og:image...`);
+    console.log(`🖼 [5/9] محاولة استخراج og:image...`);
     try {
       const ogImg = await fetchOgImage(convertedLinks[0].affLink);
       if (ogImg) {
@@ -1608,15 +1736,15 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل og:image: ${e.message}`); }
   }
 
-  // 5) صورة من fetchLinkPreview() — السلسلة الكاملة في afflink
+  // 6) صورة من fetchLinkPreview() — السلسلة الكاملة في afflink
   if (!productImage && firstProductImage && typeof firstProductImage === 'string') {
-    console.log(`🖼 [5/7] استخدام صورة fetchLinkPreview...`);
+    console.log(`🖼 [6/9] استخدام صورة fetchLinkPreview...`);
     productImage = firstProductImage;
   }
 
-  // 6) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
+  // 7) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
   if (productImage && typeof productImage === 'string') {
-    console.log(`🖼 [6/7] محاولة تحميل الصورة كـ Buffer...`);
+    console.log(`🖼 [7/9] محاولة تحميل الصورة كـ Buffer...`);
     const buf = await downloadImageAsBuffer(productImage);
     if (buf) {
       productImage = { source: buf };
@@ -1626,9 +1754,27 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 7) صورة المنشور الأصلي (آخر احتياط)
+  // 8) 🆕 بحث صور Bing باسم المنتج/العنوان
+  if (!productImage) {
+    const searchQuery = firstApiTitle || (text || '').split('\n').find(l => l.trim() && !l.startsWith('http') && !l.includes('aliexpress'));
+    if (searchQuery && searchQuery.length >= 5) {
+      console.log(`🖼 [8/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
+      try {
+        const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
+        if (bingResult && bingResult.image) {
+          const bingBuffer = await downloadImageAsBuffer(bingResult.image);
+          if (bingBuffer) {
+            productImage = { source: bingBuffer };
+            console.log(`✅ نجح Bing Images`);
+          }
+        }
+      } catch (e) { console.log(`⚠️ فشل Bing Images: ${e.message}`); }
+    }
+  }
+
+  // 9) صورة المنشور الأصلي (آخر احتياط)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [7/7] استخدام صورة المنشور الأصلي`);
+    console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي`);
     productImage = { source: sourceImage };
   }
 
