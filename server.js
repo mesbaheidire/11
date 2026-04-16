@@ -261,10 +261,13 @@ const RP_ID_FUNC = (req) => (req.get('host') || 'localhost').split(':')[0];
 const webauthnChallenges = new Map();
 const loginAttempts = new Map();
 
-const AUTH_EXCLUDED = ['/login.html', '/api/auth/', '/ping', '/manifest.json', '/sw.js', '/modern-theme.css', '/api/store/track'];
+const AUTH_EXCLUDED = ['/login.html', '/api/auth/', '/ping', '/manifest.json', '/sw.js', '/modern-theme.css', '/api/store/', '/store.html', '/store'];
 
 async function authMiddleware(req, res, next) {
   if (AUTH_EXCLUDED.some(p => req.path.startsWith(p)) || req.path.match(/\.(css|js|png|jpg|ico|woff2?)$/)) {
+    return next();
+  }
+  if (req.path === '/api/saved-posts' && req.method === 'GET') {
     return next();
   }
   const cookies = parseCookies(req.headers.cookie);
