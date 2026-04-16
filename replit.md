@@ -107,6 +107,22 @@ The app uses multiple fallback methods to extract product title and image:
 1. **AliExpress API** - First attempt using internal API
 2. **microlink.io API** - External API for reliable metadata extraction
 3. **Web Scraping** - Multiple AliExpress domains with JSON parsing
+4. **LinkPreview.xyz API** - Fallback via `https://linkpreview.xyz/api/get-meta-tags?url=...` for meta tag extraction
+5. **Mobile page fallback** - Direct scraping of AliExpress mobile pages
+
+### Spy Image Fetching Chain (spy.js)
+When processing spy posts, images are fetched in this priority order:
+1. Product image from `fetchLinkPreview()` in afflink.js (includes all 5 methods above)
+2. Download as buffer via `downloadImageAsBuffer()`
+3. Extract `og:image` via `fetchOgImage()` from affiliate link
+4. **LinkPreview.xyz** direct call via `fetchImageViaLinkPreview()` — added as additional fallback
+5. Source image from original Telegram post (last resort)
+
+## Credential Loading Priority
+Environment variables (Render) always take priority over database and local file storage:
+1. **Environment variables** (Render / hosting platform) — always first
+2. **Database** (app_storage table) — fallback
+3. **Local file** (app_credentials.json) — last resort
 
 ## Environment Variables
 ### Required for Render/Production Deployment:

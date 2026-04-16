@@ -439,6 +439,37 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
   });
 }
 
+function fetchImageViaLinkPreview(url, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    const apiUrl = `https://linkpreview.xyz/api/get-meta-tags?url=${encodeURIComponent(url)}`;
+    const req = https.get(apiUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const imageUrl = data.image || data['og:image'] || data.ogImage || null;
+          const title = data.title || data['og:title'] || data.ogTitle || null;
+          if (imageUrl) {
+            console.log(`✅ LinkPreview.xyz وجد صورة: ${imageUrl.substring(0, 80)}...`);
+            resolve({ image: imageUrl, title: title });
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          resolve(null);
+        }
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
+}
+
 function normalizeAliExpressLinks(text) {
   if (!text) return '';
   const links = [];
@@ -1485,6 +1516,32 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       } catch (e) {
         console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
+      }
+    }
+  }
+
+  if (!productImage) {
+    const linkForPreview = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
+    if (linkForPreview) {
+      console.log(`🖼 محاولة جلب صورة عبر LinkPreview.xyz...`);
+      try {
+        const lpResult = await fetchImageViaLinkPreview(linkForPreview);
+        if (lpResult && lpResult.image) {
+          const lpBuffer = await downloadImageAsBuffer(lpResult.image);
+          if (lpBuffer) {
+            productImage = { source: lpBuffer };
+            console.log(`✅ تم تحميل صورة LinkPreview.xyz (${Math.round(lpBuffer.length/1024)}KB)`);
+          } else {
+            productImage = lpResult.image;
+            console.log(`⚠️ فشل تحميل صورة LP — إرسال URL مباشر`);
+          }
+          if (!firstApiTitle && lpResult.title) {
+            firstApiTitle = lpResult.title;
+            console.log(`📝 LinkPreview.xyz أعطى عنوان: ${lpResult.title.substring(0, 60)}`);
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`);
       }
     }
   }
