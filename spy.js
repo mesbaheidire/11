@@ -410,19 +410,29 @@ function extractOgImageFromHtml(html) {
   return imgMatch ? imgMatch[1] : null;
 }
 
-function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
+function fetchOgImage(url, timeoutMs = 15000, maxRedirects = 8) {
   return new Promise((resolve) => {
     if (!isSafeUrl(url)) return resolve(null);
     const mod = url.startsWith('https') ? https : http;
     const req = mod.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none'
       },
       timeout: timeoutMs
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && maxRedirects > 0) {
-        fetchOgImage(res.headers.location, timeoutMs, maxRedirects - 1).then(resolve);
+        let nextUrl = res.headers.location;
+        if (nextUrl.startsWith('/')) {
+          try { const u = new URL(url); nextUrl = `${u.protocol}//${u.host}${nextUrl}`; } catch(e) {}
+        }
+        fetchOgImage(nextUrl, timeoutMs, maxRedirects - 1).then(resolve);
         return;
       }
       if (res.statusCode !== 200) { res.resume(); return resolve(null); }
@@ -430,7 +440,7 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
       res.setEncoding('utf8');
       res.on('data', c => {
         body += c;
-        if (body.length > 100000) { res.destroy(); const img = extractOgImageFromHtml(body); resolve(img); }
+        if (body.length > 150000) { res.destroy(); resolve(extractOgImageFromHtml(body)); }
       });
       res.on('end', () => resolve(extractOgImageFromHtml(body)));
       res.on('error', () => resolve(null));
@@ -438,6 +448,21 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
     req.on('error', () => resolve(null));
     req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
   });
+}
+
+async function fetchImageViaMicrolink(url) {
+  try {
+    const got = require('got');
+    const res = await got('https://api.microlink.io', {
+      searchParams: { url },
+      responseType: 'json',
+      timeout: { request: 15000 }
+    });
+    if (res.body?.status === 'success' && res.body?.data?.image?.url) {
+      return res.body.data.image.url;
+    }
+  } catch (e) {}
+  return null;
 }
 
 function normalizeAliExpressLinks(text) {
@@ -1550,8 +1575,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (!productImage) {
     const firstAffLink = convertedLinks[0]?.affLink;
     const firstOrigLink = convertedLinks[0]?.originalLink;
-    // جرّب og:image من رابط الأفلييت أولاً، ثم الرابط الأصلي
-    const linksToTry = [firstAffLink, firstOrigLink].filter(Boolean);
+    const linksToTry = [firstOrigLink, firstAffLink].filter(Boolean);
     for (const tryLink of linksToTry) {
       console.log(`🖼 محاولة استخراج og:image من: ${tryLink.substring(0, 80)}...`);
       try {
@@ -1571,6 +1595,25 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       } catch (e) {
         console.log(`⚠️ فشل استخراج og:image من ${tryLink.substring(0, 50)}: ${e.message}`);
+      }
+    }
+    if (!productImage) {
+      for (const tryLink of linksToTry) {
+        console.log(`🖼 محاولة Microlink للصورة: ${tryLink.substring(0, 80)}...`);
+        const mlImg = await fetchImageViaMicrolink(tryLink);
+        if (mlImg) {
+          console.log(`✅ صورة Microlink: ${mlImg.substring(0, 80)}...`);
+          const mlBuffer = await downloadImageAsBuffer(mlImg);
+          if (mlBuffer) {
+            productImage = { source: mlBuffer };
+            resolvedImageUrl = mlImg;
+            console.log(`✅ تم تحميل صورة Microlink (${Math.round(mlBuffer.length/1024)}KB)`);
+          } else {
+            productImage = mlImg;
+            resolvedImageUrl = mlImg;
+          }
+          break;
+        }
       }
     }
   }
