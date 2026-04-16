@@ -656,7 +656,7 @@ async function enrichSavedProducts(){
   }catch(e){}
 }
 
-function openSaved(p){track('click',p?.title||'saved_product');
+async function openSaved(p){track('click',p?.title||'saved_product');
   const rawPrice=p.price||'';
   const isDZD=/دج|DZD/i.test(rawPrice);
   let usdPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
@@ -664,6 +664,33 @@ function openSaved(p){track('click',p?.title||'saved_product');
   if(p.apiPrice&&(!usdPrice||usdPrice==='0'||usdPrice==='NaN'))usdPrice=p.apiPrice;
   curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:p.rating||null,orders:p.orders||null,discount:p.discount||null,shop_name:null,_coupon:p.coupon||null,_message:p.message||p.hook||null,_saved:true};
   showDet();
+  // جلب فوري للبيانات المفقودة (تقييم/طلب/خصم) من AliExpress API
+  if(!curProduct.rating||!curProduct.orders||!curProduct.discount){
+    const pid=extractProductId(p.link);
+    if(pid){
+      try{
+        const r=await fetch('/api/store/product-info?ids='+encodeURIComponent(pid));
+        const d=await r.json();
+        const info=d.products&&d.products[0];
+        if(info&&curProduct&&(curProduct._saved)){
+          if(info.rating)curProduct.rating=info.rating;
+          if(info.orders)curProduct.orders=info.orders;
+          if(info.discount)curProduct.discount=info.discount;
+          if(info.shop_name)curProduct.shop_name=info.shop_name;
+          if(info.original_price&&!curProduct.original_price)curProduct.original_price=info.original_price;
+          if(info.price&&(!curProduct.price||curProduct.price==='0'))curProduct.price=info.price;
+          // تحديث الواجهة المعروضة حالياً
+          if(document.getElementById('detOverlay').classList.contains('show')){
+            const ratingVal=curProduct.rating?(Math.round(parseFloat(curProduct.rating)/20*10)/10):null;
+            document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
+            document.getElementById('dOrders').textContent=curProduct.orders?Number(curProduct.orders).toLocaleString():'—';
+            document.getElementById('dDisc').textContent=curProduct.discount?parseInt(curProduct.discount)+'%':'—';
+            if(curProduct.shop_name){document.getElementById('detShop').style.display='flex';document.getElementById('detShopName').textContent=curProduct.shop_name}
+          }
+        }
+      }catch(e){}
+    }
+  }
 }
 function buySaved(p){openURL(p.link)}
 
