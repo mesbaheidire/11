@@ -1773,9 +1773,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   // 9) صورة المنشور الأصلي (آخر احتياط)
-  if (!productImage && sourceImage) {
-    console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي`);
-    productImage = { source: sourceImage };
+  if (!productImage) {
+    if (sourceImage) {
+      console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي`);
+      productImage = { source: sourceImage };
+    } else {
+      console.log(`⚠️ لا توجد صورة من المصادر الأخرى أو من المنشور الأصلي`);
+    }
   }
 
   const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
