@@ -498,7 +498,7 @@ function prepareCookie(cookie) {
     return cookieStr;
 }
 
-async function directAffLink(cookie, originalUrl) {
+async function directAffLink(cookie, originalUrl, linkStyle = 'coin') {
     let cookieStr = prepareCookie(cookie);
 
     let productId = null;
@@ -511,8 +511,13 @@ async function directAffLink(cookie, originalUrl) {
 
     let targetUrl = originalUrl;
     if (productId) {
-        targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
-        console.log(`🔗 استخدام رابط coin للمنتج: ${productId}`);
+        if (linkStyle === 'super') {
+            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D562`;
+            console.log(`🔗 استخدام رابط super deals للمنتج: ${productId}`);
+        } else {
+            targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
+            console.log(`🔗 استخدام رابط coin للمنتج: ${productId}`);
+        }
     } else if (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com')) {
         try {
             const resolved = await getFinalRedirect(originalUrl);

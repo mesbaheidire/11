@@ -1497,13 +1497,14 @@ async function processPost(config, text, sourceImage, sourceName) {
           }
         }
         if (!affLink) {
-          console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
+          const fallbackStyle = convertedLinks.length === 0 ? 'coin' : 'super';
+          console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر (${fallbackStyle}) كاحتياط...`);
           try {
-            directResult = await directAffLink(cookie, originalLink);
+            directResult = await directAffLink(cookie, originalLink, fallbackStyle);
             if (directResult && directResult.affLink) {
               affLink = directResult.affLink;
               resolvedProductId = directResult.productId || resolvedProductId;
-              console.log(`🔗 تحويل مباشر (احتياط): ${affLink.substring(0, 60)}...`);
+              console.log(`🔗 تحويل مباشر (احتياط ${fallbackStyle}): ${affLink.substring(0, 60)}...`);
               // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
               if (!firstProductId && resolvedProductId) {
                 firstProductId = resolvedProductId;
@@ -1522,13 +1523,13 @@ async function processPost(config, text, sourceImage, sourceName) {
           }
         }
       } else {
+        const linkStyle = convertedLinks.length === 0 ? 'coin' : 'super';
         try {
-          directResult = await directAffLink(cookie, originalLink);
+          directResult = await directAffLink(cookie, originalLink, linkStyle);
           if (directResult && directResult.affLink) {
             affLink = directResult.affLink;
             resolvedProductId = directResult.productId || null;
-            console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
-            // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
+            console.log(`🔗 تحويل مباشر (${linkStyle}): ${affLink.substring(0, 60)}...`);
             if (!firstProductId && resolvedProductId) {
               firstProductId = resolvedProductId;
             }
