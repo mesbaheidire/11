@@ -465,6 +465,24 @@ async function fetchImageViaMicrolink(url) {
   return null;
 }
 
+async function fetchImageViaLinkPreview(url) {
+  try {
+    const got = require('got');
+    const res = await got('https://linkpreview.xyz/api/get-meta-tags', {
+      searchParams: { url },
+      responseType: 'json',
+      timeout: { request: 20000 }
+    });
+    if (res.body?.image) {
+      console.log(`✅ linkpreview.xyz صورة: ${res.body.image.substring(0, 80)}...`);
+      return res.body.image;
+    }
+  } catch (e) {
+    console.log(`⚠️ linkpreview.xyz فشل: ${e.message}`);
+  }
+  return null;
+}
+
 function normalizeAliExpressLinks(text) {
   if (!text) return '';
   const links = [];
@@ -1595,6 +1613,24 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       } catch (e) {
         console.log(`⚠️ فشل استخراج og:image من ${tryLink.substring(0, 50)}: ${e.message}`);
+      }
+    }
+    if (!productImage) {
+      for (const tryLink of linksToTry) {
+        console.log(`🖼 محاولة linkpreview.xyz للصورة: ${tryLink.substring(0, 80)}...`);
+        const lpImg = await fetchImageViaLinkPreview(tryLink);
+        if (lpImg) {
+          const lpBuffer = await downloadImageAsBuffer(lpImg);
+          if (lpBuffer) {
+            productImage = { source: lpBuffer };
+            resolvedImageUrl = lpImg;
+            console.log(`✅ تم تحميل صورة linkpreview.xyz (${Math.round(lpBuffer.length/1024)}KB)`);
+          } else {
+            productImage = lpImg;
+            resolvedImageUrl = lpImg;
+          }
+          break;
+        }
       }
     }
     if (!productImage) {
