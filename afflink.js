@@ -167,7 +167,9 @@ async function idCatcher(input) {
 
 
 async function fetchLinkPreview(productId) {
-    // 1) Microlink.io API first
+    let microlinkData = null;
+
+    // 1) Microlink.io API first (for title/image fallback)
     try {
         console.log("Trying microlink.io API...");
         const apiRes = await got('https://api.microlink.io', {
@@ -192,20 +194,15 @@ async function fetchLinkPreview(productId) {
                 !title.match(/^\d+\.html$/);
             
             if (isValidTitle) {
-                console.log("✅ Product fetched via microlink.io - Title:", title.substring(0, 50) + "...");
-                return {
-                    method: "Microlink API",
-                    title: title,
-                    image_url: imageUrl,
-                    price: "راجع الرابط"
-                };
+                console.log("✅ Microlink title found:", title.substring(0, 50) + "...");
+                microlinkData = { title, image_url: imageUrl };
             }
         }
     } catch (apiErr) {
         console.log("microlink.io API failed:", apiErr.message);
     }
 
-    // 2) AliExpress API
+    // 2) AliExpress API (always try — provides rating/orders)
     try {
         const apiResult = await getProductDetails(productId);
         
@@ -226,6 +223,10 @@ async function fetchLinkPreview(productId) {
         }
     } catch (apiErr) {
         console.log("API fetch failed, falling back to other methods:", apiErr.message);
+    }
+
+    if (microlinkData) {
+        return { method: "Microlink API", ...microlinkData, price: "راجع الرابط", rating: null, orders: null };
     }
 
     // 3) Web Scraping - try multiple URL formats

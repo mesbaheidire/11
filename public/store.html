@@ -607,14 +607,13 @@ function extractProductId(link, originalLink){
 async function enrichSavedProducts(){
   const ids=[];
   savedProducts.forEach((p,i)=>{
-    if(!p._enriched){
-      let pid=extractProductId(p.link,p.originalLink);
-      if(!pid&&p.message){
-        const aliMatch=p.message.match(/aliexpress\.com[^\s]*\/(\d{8,15})\b/);
-        if(aliMatch)pid=aliMatch[1];
-      }
-      if(pid)ids.push({idx:i,pid});
+    if(p._enriched||(p.rating&&p.orders))return;
+    let pid=p.productId||extractProductId(p.link,p.originalLink);
+    if(!pid&&p.message){
+      const aliMatch=p.message.match(/aliexpress\.com[^\s]*\/(\d{8,15})\b/)||p.message.match(/\/(\d{8,15})\.html/);
+      if(aliMatch)pid=aliMatch[1];
     }
+    if(pid)ids.push({idx:i,pid});
   });
   if(!ids.length)return;
   const batchIds=ids.slice(0,10).map(x=>x.pid).join(',');

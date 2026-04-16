@@ -2093,8 +2093,8 @@ app.get('/api/saved-posts', async (req, res) => {
 
 app.post('/api/saved-posts', async (req, res) => {
   try {
-    const { id, title, price, link, coupon, image, message, hook, createdAt } = req.body;
-    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook };
+    const { id, title, price, link, coupon, image, message, hook, createdAt, originalLink, rating, orders, productId } = req.body;
+    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook, originalLink, rating, orders, productId };
     const ok = await db.addSavedPost(post);
     if (!ok) return res.status(500).json({ success: false, error: 'Failed to save' });
     res.json({ success: true, post });

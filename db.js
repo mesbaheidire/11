@@ -418,10 +418,31 @@ async function getSavedPosts(limit = 100) {
     );
     return result.rows.map(row => {
       let originalLink = null;
+      let rating = null;
+      let orders = null;
+      let productId = null;
       try {
-        const data = row.data ? JSON.parse(row.data) : null;
-        if (data && data.originalLink) originalLink = data.originalLink;
+        const data = row.data ? (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) : null;
+        if (data) {
+          if (data.originalLink) originalLink = data.originalLink;
+          if (data.rating) rating = data.rating;
+          if (data.orders) orders = data.orders;
+          if (data.evaluate_rate) rating = data.evaluate_rate;
+          if (data.lastest_volume) orders = data.lastest_volume;
+          if (data.productId || data.product_id) productId = data.productId || data.product_id;
+        }
       } catch (e) {}
+      if (!productId) {
+        const urls = [originalLink, row.link].filter(Boolean);
+        for (const url of urls) {
+          const m = url.match(/\/(\d{8,15})\b/) || url.match(/productId[=:](\d+)/i) || url.match(/item\/(\d+)/);
+          if (m) { productId = m[1]; break; }
+        }
+      }
+      if (!productId && row.message) {
+        const m = row.message.match(/aliexpress\.com[^\s]*\/(\d{8,15})\b/) || row.message.match(/\/(\d{8,15})\.html/);
+        if (m) productId = m[1];
+      }
       return {
         id: row.post_id || String(row.id),
         title: row.title,
@@ -433,6 +454,9 @@ async function getSavedPosts(limit = 100) {
         message: row.message,
         hook: row.hook,
         createdAt: row.saved_at,
+        rating,
+        orders,
+        productId,
       };
     });
   } catch (e) {

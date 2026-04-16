@@ -1009,6 +1009,9 @@ async function executePublish(review) {
         originalLink: originalLink || '',
         image: logImage || '',
         message: message || '',
+        rating: firstProductRating || null,
+        orders: firstProductOrders || null,
+        productId: firstProductId || null,
         createdAt: new Date().toISOString()
       });
       const options = {
@@ -1377,7 +1380,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
   const convertedLinks = [];
-  let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
+  let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '', firstProductRating = null, firstProductOrders = null;
   const cookie = await getCookie();
   if (!cookie) {
     addLogEntry({ source: sourceName, originalLink: aliLinks[0], status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
@@ -1414,6 +1417,8 @@ async function processPost(config, text, sourceImage, sourceName) {
             firstApiTitle = result.previews.title || '';
             firstProductImage = result.previews.image_url || '';
             firstProductPrice = priceFromPost || result.previews.price || '';
+            firstProductRating = result.previews.rating || null;
+            firstProductOrders = result.previews.orders || null;
             if (firstProductImage) console.log(`🖼 صورة من portaffFunction: ${firstProductImage.substring(0, 80)}...`);
           }
         }
@@ -1431,6 +1436,8 @@ async function processPost(config, text, sourceImage, sourceName) {
                 firstApiTitle = directResult.previews.title || '';
                 firstProductImage = directResult.previews.image_url || '';
                 firstProductPrice = priceFromPost || directResult.previews.price || '';
+                firstProductRating = directResult.previews.rating || firstProductRating;
+                firstProductOrders = directResult.previews.orders || firstProductOrders;
                 if (firstProductImage) console.log(`🖼 صورة من directAffLink (احتياط) [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
               }
             }
@@ -1451,6 +1458,8 @@ async function processPost(config, text, sourceImage, sourceName) {
               firstApiTitle = directResult.previews.title || '';
               firstProductImage = directResult.previews.image_url || '';
               firstProductPrice = priceFromPost || directResult.previews.price || '';
+              firstProductRating = directResult.previews.rating || firstProductRating;
+              firstProductOrders = directResult.previews.orders || firstProductOrders;
               if (firstProductImage) console.log(`🖼 صورة من directAffLink [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
             }
           }
@@ -1492,6 +1501,8 @@ async function processPost(config, text, sourceImage, sourceName) {
           firstApiTitle = preview.title || '';
           firstProductImage = preview.image_url || '';
           firstProductPrice = priceFromPost || preview.price || '';
+          firstProductRating = preview.rating || firstProductRating;
+          firstProductOrders = preview.orders || firstProductOrders;
           if (firstProductImage) console.log(`🖼 صورة من fetchLinkPreview احتياط: ${firstProductImage.substring(0, 80)}...`);
         }
       }
