@@ -439,6 +439,46 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
   });
 }
 
+function fetchImageViaMicrolink(url, timeoutMs = 20000) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    const apiUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}`;
+    const req = https.get(apiUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data.status === 'success' && data.data) {
+            const imageUrl = data.data.image?.url || null;
+            let title = data.data.title || null;
+            if (title) {
+              title = title.replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim();
+              const isValid = title.length > 10 && !title.includes('AliExpress') && !title.includes('Smarter Shopping');
+              if (!isValid) title = null;
+            }
+            if (imageUrl) {
+              console.log(`✅ Microlink.io وجد صورة: ${imageUrl.substring(0, 80)}...`);
+              resolve({ image: imageUrl, title: title });
+            } else {
+              resolve(null);
+            }
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          resolve(null);
+        }
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
+}
+
 function fetchImageViaLinkPreview(url, timeoutMs = 15000) {
   return new Promise((resolve) => {
     if (!url) return resolve(null);
@@ -1516,6 +1556,32 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       } catch (e) {
         console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
+      }
+    }
+  }
+
+  if (!productImage) {
+    const microlinkUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : (convertedLinks[0]?.affLink || null);
+    if (microlinkUrl) {
+      console.log(`🖼 محاولة جلب صورة عبر Microlink.io...`);
+      try {
+        const mlResult = await fetchImageViaMicrolink(microlinkUrl);
+        if (mlResult && mlResult.image) {
+          const mlBuffer = await downloadImageAsBuffer(mlResult.image);
+          if (mlBuffer) {
+            productImage = { source: mlBuffer };
+            console.log(`✅ تم تحميل صورة Microlink.io (${Math.round(mlBuffer.length/1024)}KB)`);
+          } else {
+            productImage = mlResult.image;
+            console.log(`⚠️ فشل تحميل صورة Microlink — إرسال URL مباشر`);
+          }
+          if (!firstApiTitle && mlResult.title) {
+            firstApiTitle = mlResult.title;
+            console.log(`📝 Microlink.io أعطى عنوان: ${mlResult.title.substring(0, 60)}`);
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ فشل Microlink.io: ${e.message}`);
       }
     }
   }

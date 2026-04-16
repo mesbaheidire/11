@@ -115,8 +115,9 @@ When processing spy posts, images are fetched in this priority order:
 1. Product image from `fetchLinkPreview()` in afflink.js (includes all 5 methods above)
 2. Download as buffer via `downloadImageAsBuffer()`
 3. Extract `og:image` via `fetchOgImage()` from affiliate link
-4. **LinkPreview.xyz** direct call via `fetchImageViaLinkPreview()` — added as additional fallback
-5. Source image from original Telegram post (last resort)
+4. **Microlink.io API** direct call via `fetchImageViaMicrolink()` — uses mobile AliExpress URL
+5. **LinkPreview.xyz** direct call via `fetchImageViaLinkPreview()` — meta tags extraction
+6. Source image from original Telegram post (last resort)
 
 ## Credential Loading Priority
 Environment variables (Render) always take priority over database and local file storage:
