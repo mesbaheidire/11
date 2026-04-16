@@ -501,19 +501,24 @@ function prepareCookie(cookie) {
 async function directAffLink(cookie, originalUrl) {
     let cookieStr = prepareCookie(cookie);
 
+    let productId = null;
+    try {
+        const idObj = await idCatcher(originalUrl);
+        productId = idObj?.id || null;
+    } catch (e) {
+        console.log(`⚠️ فشل استخراج Product ID: ${e.message}`);
+    }
+
     let targetUrl = originalUrl;
-    if (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com')) {
+    if (productId) {
+        targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
+        console.log(`🔗 استخدام رابط coin للمنتج: ${productId}`);
+    } else if (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com')) {
         try {
             const resolved = await getFinalRedirect(originalUrl);
             if (resolved && resolved !== originalUrl && (resolved.includes('/item/') || resolved.includes('productIds='))) {
                 console.log(`🔗 فك رابط مختصر: ${originalUrl.substring(0, 50)} → ${resolved.substring(0, 80)}`);
                 targetUrl = resolved;
-            } else {
-                const idObj = await idCatcher(originalUrl);
-                if (idObj && idObj.id) {
-                    targetUrl = `https://www.aliexpress.com/item/${idObj.id}.html`;
-                    console.log(`🔗 بناء رابط من ID: ${targetUrl}`);
-                }
             }
         } catch (e) {
             console.log(`⚠️ فشل فك الرابط المختصر: ${e.message}`);
@@ -554,8 +559,13 @@ async function directAffLink(cookie, originalUrl) {
         throw new Error('فشل تحويل الرابط — رابط غير صالح');
     }
 
-    const idObj = await idCatcher(originalUrl);
-    const productId = idObj?.id;
+    if (!productId) {
+        try {
+            const idObj2 = await idCatcher(originalUrl);
+            productId = idObj2?.id || null;
+        } catch (e) {}
+    }
+
     let previews = {};
     if (productId) {
         previews = await fetchLinkPreview(productId);
