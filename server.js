@@ -1782,13 +1782,16 @@ app.get('/api/store/product-info', async (req, res) => {
       try {
         const info = await getProductDetails(pid);
         if (info) {
+          const rating = info.rating || info.evaluate_rate || info.evaluateRate || null;
+          const orders = info.orders || info.lastest_volume || info.lastestVolume || info.volume || info.sales || null;
+          const discount = info.discount || info.discount_rate || info.discountRate || null;
           results.push({
             id: pid,
             price: info.sale_price || info.price || null,
             original_price: info.original_price || null,
-            rating: info.rating || null,
-            orders: info.orders || null,
-            discount: info.discount || null,
+            rating,
+            orders,
+            discount,
             shop_name: info.shop_name || null
           });
         }

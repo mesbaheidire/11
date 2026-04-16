@@ -573,7 +573,11 @@ async function loadSaved(){
 
 function cardHTML(p,i,total){
   const isNew=i<2&&total>2;
-  const disc=p.discount?parseInt(p.discount)+'%':'';
+  const ratingRaw=p.rating!=null&&p.rating!==''?p.rating:null;
+  const ordersRaw=p.orders!=null&&p.orders!==''?p.orders:null;
+  const discountRaw=p.discount!=null&&p.discount!==''?p.discount:null;
+  const ratingVal=ratingRaw?(Math.round(parseFloat(ratingRaw)/20*10)/10):null;
+  const disc=discountRaw?(/%/.test(String(discountRaw))?String(discountRaw):parseInt(discountRaw)+'%'):'';
   const priceVal=p.price||p.sale_price||'';
   const onclickData=p._saved?`openSaved(savedProducts[${p._savedIdx}])`:`openDet(curProducts[${i}])`;
   const buyOnclick=p._saved?`event.stopPropagation();buySaved(savedProducts[${p._savedIdx}])`:`event.stopPropagation();quickBuy(curProducts[${i}])`;
@@ -589,7 +593,7 @@ function cardHTML(p,i,total){
     <div class="pcard-body">
       <div class="pcard-title">${esc(p.title||'منتج')}</div>
       <div>${showPrice}${origPrice}</div>
-      ${p.rating||p.orders?`<div class="pcard-meta">${p.rating?`<span class="pcard-stars">${toStars(p.rating)}</span>`:''}${p.orders?`<span class="pcard-orders">${Number(p.orders).toLocaleString()} طلب</span>`:''}</div>`:''}
+      ${(ratingVal||ordersRaw)?`<div class="pcard-meta">${ratingVal?`<span class="pcard-stars">${toStars(ratingRaw)}</span>`:''}${ordersRaw?`<span class="pcard-orders">${Number(ordersRaw).toLocaleString()} طلب</span>`:''}</div>`:''}
       <button class="pcard-buy" onclick="${buyOnclick}"><i class="fas fa-shopping-cart"></i> اشتري الآن</button>
     </div>
   </div>`;
@@ -779,10 +783,12 @@ function showDet(){
   const price=p.price||p.sale_price||'';
   document.getElementById('detPrice').innerHTML=price?`<span class="cur">USD</span> ${esc(price)}`:'';
   document.getElementById('detOrig').textContent=p.original_price&&p.original_price!==price?('الأصلي: '+p.original_price+' USD'):'';
-  const ratingVal=p.rating?(Math.round(parseFloat(p.rating)/20*10)/10):null;
+  const ratingVal=p.rating!=null&&p.rating!==''?(Math.round(parseFloat(p.rating)/20*10)/10):null;
+  const ordersVal=p.orders!=null&&p.orders!==''?Number(p.orders).toLocaleString():'—';
+  const discVal=p.discount!=null&&p.discount!==''?(/%/.test(String(p.discount))?String(p.discount):parseInt(p.discount)+'%'):'—';
   document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
-  document.getElementById('dOrders').textContent=p.orders?Number(p.orders).toLocaleString():'—';
-  document.getElementById('dDisc').textContent=p.discount?parseInt(p.discount)+'%':'—';
+  document.getElementById('dOrders').textContent=ordersVal;
+  document.getElementById('dDisc').textContent=discVal;
   const shop=document.getElementById('detShop');
   if(p.shop_name){shop.style.display='flex';document.getElementById('detShopName').textContent=p.shop_name}else{shop.style.display='none'}
   const couponEl=document.getElementById('detCoupon');
