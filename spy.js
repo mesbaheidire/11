@@ -928,7 +928,7 @@ function stopReviewBot() {
 }
 
 async function executePublish(review) {
-  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
+  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog, firstProductRating, firstProductOrders, firstProductId } = review;
   const botToken = await getBotToken();
   if (!botToken) {
     console.log('❌ فشل النشر: لا يوجد توكن بوت');
@@ -1914,7 +1914,8 @@ async function processPost(config, text, sourceImage, sourceName) {
   const reviewData = {
     message, productImage, targetIds, sourceName, originalLink: allOriginalLinks,
     affiliateLink: firstAffLink, productTitle, productPrice, imageUrlForLog,
-    originalText: text
+    originalText: text,
+    firstProductRating, firstProductOrders, firstProductId
   };
 
   if (config.manualReview && config.ownerId && botToken) {
