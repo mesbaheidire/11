@@ -1742,9 +1742,15 @@ async function processPost(config, text, sourceImage, sourceName) {
     productImage = firstProductImage;
   }
 
-  // 7) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
+  // 7) صورة المنشور الأصلي كخيار مباشر قبل Bing
+  if (!productImage && sourceImage) {
+    console.log(`🖼 [7/9] استخدام صورة المنشور الأصلي`);
+    productImage = { source: sourceImage };
+  }
+
+  // 8) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
   if (productImage && typeof productImage === 'string') {
-    console.log(`🖼 [7/9] محاولة تحميل الصورة كـ Buffer...`);
+    console.log(`🖼 [8/9] محاولة تحميل الصورة كـ Buffer...`);
     const buf = await downloadImageAsBuffer(productImage);
     if (buf) {
       productImage = { source: buf };
@@ -1754,11 +1760,11 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 8) 🆕 بحث صور Bing باسم المنتج/العنوان
+  // 9) 🆕 بحث صور Bing باسم المنتج/العنوان
   if (!productImage) {
     const searchQuery = firstApiTitle || (text || '').split('\n').find(l => l.trim() && !l.startsWith('http') && !l.includes('aliexpress'));
     if (searchQuery && searchQuery.length >= 5) {
-      console.log(`🖼 [8/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
+      console.log(`🖼 [9/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
       try {
         const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
         if (bingResult && bingResult.image) {
@@ -1772,14 +1778,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 9) صورة المنشور الأصلي (آخر احتياط)
-  if (!productImage) {
-    if (sourceImage) {
-      console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي`);
-      productImage = { source: sourceImage };
-    } else {
-      console.log(`⚠️ لا توجد صورة من المصادر الأخرى أو من المنشور الأصلي`);
-    }
+  if (!productImage && sourceImage) {
+    console.log(`🖼 [10/9] استخدام صورة المنشور الأصلي`);
+    productImage = { source: sourceImage };
   }
 
   const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
