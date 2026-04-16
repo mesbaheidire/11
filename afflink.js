@@ -470,9 +470,10 @@ async function portaffFunction(cookie, ids) {
 
     for (const pr of promoResults) {
         if (pr.data && typeof pr.data === 'object') {
-            result.aff[pr.type] = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
+            const link = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
+            result.aff[pr.type] = (link && !link.includes('@is-not-code') && !link.includes('link-generator-page')) ? link : null;
         } else if (typeof pr.data === 'string') {
-            result.aff[pr.type] = pr.data;
+            result.aff[pr.type] = (pr.data.includes('@is-not-code') || pr.data.includes('link-generator-page')) ? null : pr.data;
         } else {
             result.aff[pr.type] = null;
         }
@@ -500,10 +501,29 @@ function prepareCookie(cookie) {
 async function directAffLink(cookie, originalUrl) {
     let cookieStr = prepareCookie(cookie);
 
+    let targetUrl = originalUrl;
+    if (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com')) {
+        try {
+            const resolved = await getFinalRedirect(originalUrl);
+            if (resolved && resolved !== originalUrl && (resolved.includes('/item/') || resolved.includes('productIds='))) {
+                console.log(`🔗 فك رابط مختصر: ${originalUrl.substring(0, 50)} → ${resolved.substring(0, 80)}`);
+                targetUrl = resolved;
+            } else {
+                const idObj = await idCatcher(originalUrl);
+                if (idObj && idObj.id) {
+                    targetUrl = `https://www.aliexpress.com/item/${idObj.id}.html`;
+                    console.log(`🔗 بناء رابط من ID: ${targetUrl}`);
+                }
+            }
+        } catch (e) {
+            console.log(`⚠️ فشل فك الرابط المختصر: ${e.message}`);
+        }
+    }
+
     const response = await got("https://portals.aliexpress.com/tools/linkGenerate/generatePromotionLink.htm", {
         searchParams: {
             trackId: process.env.ALIEXPRESS_TRACK_ID || "default",
-            targetUrl: originalUrl
+            targetUrl: targetUrl
         },
         headers: {
             cookie: cookieStr
@@ -530,7 +550,9 @@ async function directAffLink(cookie, originalUrl) {
         affLink = data;
     }
 
-    if (!affLink) throw new Error('فشل تحويل الرابط');
+    if (!affLink || affLink.includes('@is-not-code') || affLink.includes('link-generator-page')) {
+        throw new Error('فشل تحويل الرابط — رابط غير صالح');
+    }
 
     const idObj = await idCatcher(originalUrl);
     const productId = idObj?.id;
