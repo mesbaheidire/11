@@ -1705,10 +1705,6 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n`;
   if (t.prefix) message += `${t.prefix} ${productTitle}\n`;
   else if (productTitle) message += `${productTitle}\n`;
-  if (productPrice && t.priceLabel) {
-    const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
-    message += `${t.priceLabel} ${priceDisplay}\n`;
-  }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
     let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
     message += `${label}: ${extractedCoupon}\n`;
