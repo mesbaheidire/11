@@ -2,6 +2,7 @@ const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
+const { getProductDetails } = require('./aliexpress-api');
 const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
@@ -1523,98 +1524,94 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   console.log(`✅ تم تحويل ${convertedLinks.length} رابط من أصل ${aliLinks.length} — بناء منشور واحد`);
 
-  // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
+  // === المرحلة 2: بناء منشور واحد - جلب الصورة بالترتيب الجديد ===
   let productImage = null;
+  const previewLink = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
+  const mobileProductUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : null;
 
-  if (firstProductImage && typeof firstProductImage === 'string') {
-    console.log(`🖼 محاولة تحميل صورة المنتج: ${firstProductImage.substring(0, 80)}...`);
-    const imgBuffer = await downloadImageAsBuffer(firstProductImage);
-    if (imgBuffer) {
-      productImage = { source: imgBuffer };
-      console.log(`✅ تم تحميل صورة المنتج (${Math.round(imgBuffer.length/1024)}KB)`);
-    } else {
-      productImage = firstProductImage;
-      console.log(`⚠️ فشل تحميل الصورة كملف — إرسال URL مباشر`);
-    }
-  }
-
-  if (!productImage) {
-    const firstAffLink = convertedLinks[0]?.affLink;
-    if (firstAffLink) {
-      console.log(`🖼 محاولة استخراج og:image من رابط الأفلييت...`);
-      try {
-        const ogImg = await fetchOgImage(firstAffLink);
-        if (ogImg) {
-          console.log(`🖼 وجد og:image: ${ogImg.substring(0, 80)}...`);
-          const ogBuffer = await downloadImageAsBuffer(ogImg);
-          if (ogBuffer) {
-            productImage = { source: ogBuffer };
-            console.log(`✅ تم تحميل صورة og:image (${Math.round(ogBuffer.length/1024)}KB)`);
-          } else {
-            productImage = ogImg;
-          }
-        }
-      } catch (e) {
-        console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
+  // 1) LinkPreview.xyz
+  if (!productImage && previewLink) {
+    console.log(`🖼 [1/7] محاولة LinkPreview.xyz...`);
+    try {
+      const lpResult = await fetchImageViaLinkPreview(previewLink);
+      if (lpResult && lpResult.image) {
+        const lpBuffer = await downloadImageAsBuffer(lpResult.image);
+        productImage = lpBuffer ? { source: lpBuffer } : lpResult.image;
+        console.log(`✅ نجح LinkPreview.xyz`);
+        if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
       }
-    }
+    } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
+  // 2) Microlink.io
   if (!productImage) {
-    const microlinkUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : (convertedLinks[0]?.affLink || null);
-    if (microlinkUrl) {
-      console.log(`🖼 محاولة جلب صورة عبر Microlink.io...`);
+    const mlUrl = mobileProductUrl || previewLink;
+    if (mlUrl) {
+      console.log(`🖼 [2/7] محاولة Microlink.io...`);
       try {
-        const mlResult = await fetchImageViaMicrolink(microlinkUrl);
+        const mlResult = await fetchImageViaMicrolink(mlUrl);
         if (mlResult && mlResult.image) {
           const mlBuffer = await downloadImageAsBuffer(mlResult.image);
-          if (mlBuffer) {
-            productImage = { source: mlBuffer };
-            console.log(`✅ تم تحميل صورة Microlink.io (${Math.round(mlBuffer.length/1024)}KB)`);
-          } else {
-            productImage = mlResult.image;
-            console.log(`⚠️ فشل تحميل صورة Microlink — إرسال URL مباشر`);
-          }
-          if (!firstApiTitle && mlResult.title) {
-            firstApiTitle = mlResult.title;
-            console.log(`📝 Microlink.io أعطى عنوان: ${mlResult.title.substring(0, 60)}`);
-          }
+          productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
+          console.log(`✅ نجح Microlink.io`);
+          if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
         }
-      } catch (e) {
-        console.log(`⚠️ فشل Microlink.io: ${e.message}`);
-      }
+      } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
     }
   }
 
-  if (!productImage) {
-    const linkForPreview = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
-    if (linkForPreview) {
-      console.log(`🖼 محاولة جلب صورة عبر LinkPreview.xyz...`);
-      try {
-        const lpResult = await fetchImageViaLinkPreview(linkForPreview);
-        if (lpResult && lpResult.image) {
-          const lpBuffer = await downloadImageAsBuffer(lpResult.image);
-          if (lpBuffer) {
-            productImage = { source: lpBuffer };
-            console.log(`✅ تم تحميل صورة LinkPreview.xyz (${Math.round(lpBuffer.length/1024)}KB)`);
-          } else {
-            productImage = lpResult.image;
-            console.log(`⚠️ فشل تحميل صورة LP — إرسال URL مباشر`);
-          }
-          if (!firstApiTitle && lpResult.title) {
-            firstApiTitle = lpResult.title;
-            console.log(`📝 LinkPreview.xyz أعطى عنوان: ${lpResult.title.substring(0, 60)}`);
-          }
+  // 3) AliExpress API (مباشرة)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [3/7] محاولة AliExpress API...`);
+    try {
+      const apiResult = await getProductDetails(firstProductId);
+      if (apiResult && apiResult.image_url) {
+        const apiBuffer = await downloadImageAsBuffer(apiResult.image_url);
+        productImage = apiBuffer ? { source: apiBuffer } : apiResult.image_url;
+        console.log(`✅ نجح AliExpress API`);
+        if (!firstApiTitle && apiResult.title) firstApiTitle = apiResult.title;
+        if (!firstProductPrice && (apiResult.sale_price || apiResult.price)) {
+          firstProductPrice = priceFromPost || apiResult.sale_price || apiResult.price;
         }
-      } catch (e) {
-        console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`);
       }
+    } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
+  }
+
+  // 4) استخراج og:image
+  if (!productImage && convertedLinks[0]?.affLink) {
+    console.log(`🖼 [4/7] محاولة استخراج og:image...`);
+    try {
+      const ogImg = await fetchOgImage(convertedLinks[0].affLink);
+      if (ogImg) {
+        const ogBuffer = await downloadImageAsBuffer(ogImg);
+        productImage = ogBuffer ? { source: ogBuffer } : ogImg;
+        console.log(`✅ نجح og:image`);
+      }
+    } catch (e) { console.log(`⚠️ فشل og:image: ${e.message}`); }
+  }
+
+  // 5) صورة من fetchLinkPreview() — السلسلة الكاملة في afflink
+  if (!productImage && firstProductImage && typeof firstProductImage === 'string') {
+    console.log(`🖼 [5/7] استخدام صورة fetchLinkPreview...`);
+    productImage = firstProductImage;
+  }
+
+  // 6) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
+  if (productImage && typeof productImage === 'string') {
+    console.log(`🖼 [6/7] محاولة تحميل الصورة كـ Buffer...`);
+    const buf = await downloadImageAsBuffer(productImage);
+    if (buf) {
+      productImage = { source: buf };
+      console.log(`✅ تم التحميل كـ Buffer (${Math.round(buf.length/1024)}KB)`);
+    } else {
+      console.log(`⚠️ فشل التحميل كـ Buffer — إرسال URL مباشر`);
     }
   }
 
+  // 7) صورة المنشور الأصلي (آخر احتياط)
   if (!productImage && sourceImage) {
+    console.log(`🖼 [7/7] استخدام صورة المنشور الأصلي`);
     productImage = { source: sourceImage };
-    console.log(`🖼 استخدام صورة المنشور الأصلي كاحتياط أخير`);
   }
 
   const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);

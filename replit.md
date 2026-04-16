@@ -112,12 +112,13 @@ The app uses multiple fallback methods to extract product title and image:
 
 ### Spy Image Fetching Chain (spy.js)
 When processing spy posts, images are fetched in this priority order:
-1. Product image from `fetchLinkPreview()` in afflink.js (includes all 5 methods above)
-2. Download as buffer via `downloadImageAsBuffer()`
-3. Extract `og:image` via `fetchOgImage()` from affiliate link
-4. **Microlink.io API** direct call via `fetchImageViaMicrolink()` — uses mobile AliExpress URL
-5. **LinkPreview.xyz** direct call via `fetchImageViaLinkPreview()` — meta tags extraction
-6. Source image from original Telegram post (last resort)
+1. **LinkPreview.xyz** — `fetchImageViaLinkPreview()` direct call
+2. **Microlink.io API** — `fetchImageViaMicrolink()` using mobile AliExpress URL
+3. **AliExpress API** — `getProductDetails()` direct call from aliexpress-api.js
+4. **og:image extraction** — `fetchOgImage()` from affiliate link HTML
+5. **fetchLinkPreview()** — full wrapper from afflink.js (microlink + API + scraping + linkpreview)
+6. **Download as Buffer** — convert any URL-only image to buffer via `downloadImageAsBuffer()`
+7. **Source image** — original Telegram post image (last resort)
 
 ## Credential Loading Priority
 Environment variables (Render) always take priority over database and local file storage:
