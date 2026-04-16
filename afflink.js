@@ -224,7 +224,55 @@ async function fetchLinkPreview(productId) {
         console.log("⚠️ Microlink failed:", apiErr.message);
     }
 
-    // 2) AliExpress API احتياط
+    // 2) LinkPreview.xyz API
+    try {
+        console.log("🔗 LinkPreview.xyz API...");
+        const lpRes = await got('https://api.linkpreview.net', {
+            searchParams: {
+                key: process.env.LINKPREVIEW_API_KEY || '',
+                q: `https://www.aliexpress.com/item/${productId}.html`
+            },
+            responseType: 'json',
+            timeout: { request: 15000 }
+        });
+        const lp = lpRes.body;
+        if (lp && lp.title && lp.image) {
+            let lpTitle = (lp.title || '').replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim();
+            const lpValid = lpTitle && lpTitle.length > 10 && !lpTitle.includes('AliExpress') && !lpTitle.includes('Smarter Shopping');
+            if (lpValid) {
+                console.log("✅ LinkPreview OK:", lpTitle.substring(0, 50) + "...");
+                let rating = null, orders = null, price = null, original_price = null, discount = null, currency = null, shop_name = null;
+                try {
+                    const apiResult = await getProductDetails(productId);
+                    if (apiResult) {
+                        rating = apiResult.rating || null;
+                        orders = apiResult.orders || null;
+                        price = apiResult.sale_price || apiResult.price || null;
+                        original_price = apiResult.original_price || null;
+                        discount = apiResult.discount || null;
+                        currency = apiResult.currency || null;
+                        shop_name = apiResult.shop_name || null;
+                    }
+                } catch (e) {}
+                return {
+                    method: "LinkPreview + API",
+                    title: lpTitle,
+                    image_url: lp.image,
+                    price: price || "راجع الرابط",
+                    original_price,
+                    discount,
+                    currency,
+                    shop_name,
+                    rating,
+                    orders
+                };
+            }
+        }
+    } catch (lpErr) {
+        console.log("⚠️ LinkPreview failed:", lpErr.message);
+    }
+
+    // 3) AliExpress API احتياط
     try {
         const apiResult = await getProductDetails(productId);
         
