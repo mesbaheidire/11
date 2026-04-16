@@ -1420,6 +1420,8 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
   const convertedLinks = [];
+  const seenAffLinks = new Set();
+  const seenProductIdsInPost = new Set();
   let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
   const cookie = await getCookie();
   if (!cookie) {
@@ -1486,18 +1488,29 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
-      if (resolvedProductId) {
+      // منع التكرار داخل نفس المنشور (نفس رابط الأفليت)
+      if (seenAffLinks.has(affLink)) {
+        console.log(`🔁 تخطي رابط أفليت مكرر داخل نفس المنشور`);
+        continue;
+      }
+      seenAffLinks.add(affLink);
+
+      // فحص التكرار العابر للمنشورات (عبر منتج ID) — لكن السماح بنفس المنتج داخل نفس المنشور
+      if (resolvedProductId && !seenProductIdsInPost.has(resolvedProductId)) {
         const productKey = 'product:' + resolvedProductId;
         try {
           const isDuplicate = await db.isLinkProcessed(productKey);
           if (isDuplicate) {
-            console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
+            console.log(`🔁 تخطي منتج مكرر من منشور سابق (ID: ${resolvedProductId})`);
             continue;
           }
           await db.addProcessedLink(productKey);
+          seenProductIdsInPost.add(resolvedProductId);
         } catch (e) {
           console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
         }
+      } else if (resolvedProductId) {
+        console.log(`✅ رابط إضافي لنفس المنتج داخل المنشور (ID: ${resolvedProductId}) — مقبول`);
       }
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
