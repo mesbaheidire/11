@@ -1695,7 +1695,7 @@ function localQueryExpansion(query) {
 
 // Store: Optimize search query for AliExpress API using AI
 async function optimizeSearchQuery(query) {
-  if (!query) return { keywords: query, categoryId: null };
+  if (!query) return { keywords: query, categoryId: null, language: 'EN' };
   const aiCategoryMap = {
     'phones': '509', 'smartphones': '509', 'mobile': '509', 'cellphone': '509',
     'electronics': '44', 'audio': '44', 'headphones': '44', 'earbuds': '44',
@@ -1704,50 +1704,70 @@ async function optimizeSearchQuery(query) {
     'home': '15', 'kitchen': '15', 'appliances': '15',
     'beauty': '66', 'jewelry': '36', 'kids': '1501', 'toys': '1501', 'sports': '18',
   };
+
+  const hasArabic = /[\u0600-\u06FF]/.test(query);
+  const hasLatin = /[a-zA-Z]/.test(query);
+
+  // كشف أسماء الماركات الرئيسية → فرض تصنيف صارم
+  const brandPatterns = [
+    { re: /\b(poco|xiaomi|redmi|realme|samsung|honor|huawei|oppo|vivo|infinix|tecno|iphone|apple|oneplus|nokia|google\s*pixel)\b/i, cat: '509' },
+    { re: /\b(macbook|laptop|notebook|asus|lenovo|hp|dell|acer|msi)\b/i, cat: '7' },
+    { re: /\b(airpods|earbuds|headphone|speaker|bluetooth)\b/i, cat: '44' },
+    { re: /(هاتف|جوال|موبايل|سمارت\s*فون)/, cat: '509' },
+    { re: /(سماعة|سماعات|سبيكر|مكبر)/, cat: '44' },
+    { re: /(لابتوب|كمبيوتر|حاسوب)/, cat: '7' },
+  ];
+  let detectedCat = null;
+  for (const { re, cat } of brandPatterns) {
+    if (re.test(query)) { detectedCat = cat; break; }
+  }
+
+  // إذا كان الاستعلام يحتوي ماركة لاتينية + كلمات عربية وصفية → استخدم الجزء اللاتيني فقط (أنظف للـ API)
+  const latinPart = (query.match(/[a-zA-Z0-9][\w\d\.\-\s]*[a-zA-Z0-9]/g) || []).join(' ').trim();
+  if (hasArabic && hasLatin && latinPart.length >= 3 && detectedCat) {
+    console.log(`🔤 ماركة مكتشفة: "${query}" → "${latinPart}" [cat:${detectedCat}]`);
+    return { keywords: latinPart, categoryId: detectedCat, language: 'EN' };
+  }
+
+  // استعلام بأحرف لاتينية فقط — استخدمه كما هو مع التصنيف
+  if (hasLatin && !hasArabic) {
+    return { keywords: query.trim(), categoryId: detectedCat, language: 'EN' };
+  }
+
+  // استعلام عربي بحت — حاول الترجمة عبر AI لكن بحدود ضيقة
   try {
     const model = getGeminiModel();
     if (!model) {
       const expanded = localQueryExpansion(query);
-      if (expanded.keywords !== query) console.log(`🔤 توسيع محلي: "${query}" → "${expanded.keywords}" [cat:${expanded.categoryId}]`);
-      return expanded;
+      return { keywords: expanded.keywords, categoryId: expanded.categoryId || detectedCat, language: 'EN' };
     }
     const optimized = await runGeminiWithRotation(
-      `You are an AliExpress product search optimizer. Given a user search query, return a JSON object with optimized English keywords and product category.
+      `Translate this Arabic shopping query to MINIMAL English keywords for AliExpress search.
 
 Rules:
-- If Arabic, translate to English
-- If it's a brand name (Poco, Xiaomi, Samsung etc), add "smartphone mobile phone"
-- Expand vague queries with specific product keywords
-- Keep brand names as-is
-- category must be one of: phones, electronics, computers, fashion, shoes, home, beauty, jewelry, kids, sports
-- Maximum 5-6 keywords
-
-Return ONLY valid JSON like: {"keywords":"POCO smartphone mobile phone","category":"phones"}
+- Output 2-4 English words MAX (no filler words like "buy", "online", "best")
+- Keep brand names as-is (don't expand)
+- Be SPECIFIC, not generic
+- Detect category: one of [phones, electronics, computers, fashion, shoes, home, beauty, jewelry, kids, sports] or null
+- Return ONLY JSON: {"keywords":"...","category":"..."}
 
 Query: "${query}"`
     );
-    try {
-      const jsonMatch = optimized.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const kw = parsed.keywords || query;
-        const cat = aiCategoryMap[parsed.category] || null;
-        console.log(`🔤 تحسين AI: "${query}" → "${kw}" [cat:${cat}]`);
-        return { keywords: kw, categoryId: cat };
-      }
-    } catch (parseErr) {}
-    const clean = optimized.replace(/["\n{}\[\]]/g, '').trim();
-    if (clean.length > 1) {
-      console.log(`🔤 تحسين البحث: "${query}" → "${clean}"`);
-      return { keywords: clean, categoryId: null };
+    const jsonMatch = optimized.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const kw = (parsed.keywords || query).trim();
+      const cat = aiCategoryMap[parsed.category] || detectedCat;
+      console.log(`🔤 ترجمة AI: "${query}" → "${kw}" [cat:${cat}]`);
+      return { keywords: kw, categoryId: cat, language: 'EN' };
     }
-    return { keywords: query, categoryId: null };
   } catch (e) {
-    console.log('AI optimization failed, trying local expansion:', e.message);
-    const expanded = localQueryExpansion(query);
-    if (expanded.keywords !== query) console.log(`🔤 توسيع محلي: "${query}" → "${expanded.keywords}" [cat:${expanded.categoryId}]`);
-    return expanded;
+    console.log('AI optimization failed:', e.message);
   }
+
+  // ملاذ أخير: توسيع محلي
+  const expanded = localQueryExpansion(query);
+  return { keywords: expanded.keywords, categoryId: expanded.categoryId || detectedCat, language: 'EN' };
 }
 
 // Store: Search products
@@ -1783,13 +1803,22 @@ app.get('/api/store/product-info', async (req, res) => {
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;
-    const optimized = q ? await optimizeSearchQuery(q) : { keywords: '', categoryId: null };
+    const optimized = q ? await optimizeSearchQuery(q) : { keywords: '', categoryId: null, language: 'EN' };
+
+    // ترتيب حسب اختيار المستخدم — للبحث الافتراضي لا نُرسل sort (نترك API يرتّب حسب الصلة)
+    let sortValue = null;
+    if (sort === 'price_asc') sortValue = 'SALE_PRICE_ASC';
+    else if (sort === 'price_desc') sortValue = 'SALE_PRICE_DESC';
+    else if (sort === 'orders') sortValue = 'LAST_VOLUME_DESC';
+
     const options = {
       keywords: optimized.keywords,
       page: page || '1',
       limit: '20',
-      sort: sort === 'price_asc' ? 'SALE_PRICE_ASC' : sort === 'price_desc' ? 'SALE_PRICE_DESC' : sort === 'orders' ? 'LAST_VOLUME_DESC' : 'LAST_VOLUME_DESC'
+      language: optimized.language || 'EN'
     };
+    if (sortValue) options.sort = sortValue;
+
     if (category && algerianCategories[category]) {
       options.category = algerianCategories[category].id;
     } else if (optimized.categoryId) {
@@ -1797,7 +1826,16 @@ app.get('/api/store/search', async (req, res) => {
     }
     if (minPrice) options.minPrice = minPrice;
     if (maxPrice) options.maxPrice = maxPrice;
-    const result = optimized.keywords ? await searchProducts(options) : await searchHotProducts(options);
+
+    let result = optimized.keywords ? await searchProducts(options) : await searchHotProducts(options);
+
+    // ملاذ احتياطي: لو لم تُرجَع نتائج، أعد البحث بدون قيد التصنيف
+    if (result.success && (!result.products || result.products.length === 0) && options.category) {
+      console.log(`⚠️ لا نتائج مع التصنيف ${options.category} — إعادة البحث بدونه`);
+      const { category: _, ...optionsNoCategory } = options;
+      result = await searchProducts(optionsNoCategory);
+    }
+
     if (!result.success) return res.json({ success: false, error: result.error, products: [] });
     res.json({ success: true, products: result.products || [], total: result.total || 0, translatedQuery: optimized.keywords !== q ? optimized.keywords : undefined });
   } catch (e) {
