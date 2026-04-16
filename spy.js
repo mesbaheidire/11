@@ -1412,14 +1412,16 @@ async function processPost(config, text, sourceImage, sourceName) {
           resolvedProductId = result.productId || null;
           if (affLink) console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
           // استخدام بيانات المعاينة مباشرة من portaffFunction (نفس آلية الصفحة الرئيسية)
-          if (!firstProductId && resolvedProductId && result.previews) {
+          if (!firstProductId && resolvedProductId) {
             firstProductId = resolvedProductId;
-            firstApiTitle = result.previews.title || '';
-            firstProductImage = result.previews.image_url || '';
-            firstProductPrice = priceFromPost || result.previews.price || '';
-            firstProductRating = result.previews.rating || null;
-            firstProductOrders = result.previews.orders || null;
-            if (firstProductImage) console.log(`🖼 صورة من portaffFunction: ${firstProductImage.substring(0, 80)}...`);
+            if (result.previews) {
+              firstApiTitle = result.previews.title || firstApiTitle;
+              firstProductImage = result.previews.image_url || firstProductImage;
+              firstProductPrice = priceFromPost || result.previews.price || firstProductPrice;
+              firstProductRating = result.previews.rating || firstProductRating;
+              firstProductOrders = result.previews.orders || firstProductOrders;
+              if (firstProductImage) console.log(`🖼 صورة من portaffFunction: ${firstProductImage.substring(0, 80)}...`);
+            }
           }
         }
         if (!affLink) {
@@ -1431,11 +1433,13 @@ async function processPost(config, text, sourceImage, sourceName) {
               resolvedProductId = directResult.productId || resolvedProductId;
               console.log(`🔗 تحويل مباشر (احتياط): ${affLink.substring(0, 60)}...`);
               // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
-              if (!firstProductId && resolvedProductId && directResult.previews) {
+              if (!firstProductId && resolvedProductId) {
                 firstProductId = resolvedProductId;
-                firstApiTitle = directResult.previews.title || '';
-                firstProductImage = directResult.previews.image_url || '';
-                firstProductPrice = priceFromPost || directResult.previews.price || '';
+              }
+              if (resolvedProductId && directResult.previews) {
+                firstApiTitle = directResult.previews.title || firstApiTitle;
+                firstProductImage = directResult.previews.image_url || firstProductImage;
+                firstProductPrice = priceFromPost || directResult.previews.price || firstProductPrice;
                 firstProductRating = directResult.previews.rating || firstProductRating;
                 firstProductOrders = directResult.previews.orders || firstProductOrders;
                 if (firstProductImage) console.log(`🖼 صورة من directAffLink (احتياط) [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
@@ -1453,11 +1457,13 @@ async function processPost(config, text, sourceImage, sourceName) {
             resolvedProductId = directResult.productId || null;
             console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
             // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
-            if (!firstProductId && resolvedProductId && directResult.previews) {
+            if (!firstProductId && resolvedProductId) {
               firstProductId = resolvedProductId;
-              firstApiTitle = directResult.previews.title || '';
-              firstProductImage = directResult.previews.image_url || '';
-              firstProductPrice = priceFromPost || directResult.previews.price || '';
+            }
+            if (resolvedProductId && directResult.previews) {
+              firstApiTitle = directResult.previews.title || firstApiTitle;
+              firstProductImage = directResult.previews.image_url || firstProductImage;
+              firstProductPrice = priceFromPost || directResult.previews.price || firstProductPrice;
               firstProductRating = directResult.previews.rating || firstProductRating;
               firstProductOrders = directResult.previews.orders || firstProductOrders;
               if (firstProductImage) console.log(`🖼 صورة من directAffLink [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
@@ -1566,6 +1572,44 @@ async function processPost(config, text, sourceImage, sourceName) {
       } catch (e) {
         console.log(`⚠️ فشل استخراج og:image من ${tryLink.substring(0, 50)}: ${e.message}`);
       }
+    }
+  }
+
+  if (!productImage && firstProductId) {
+    console.log(`🖼 محاولة جلب صورة المنتج مباشرة من API (ID: ${firstProductId})...`);
+    try {
+      const { getProductDetails } = require('./aliexpress-api');
+      const apiInfo = await getProductDetails(firstProductId);
+      if (apiInfo && apiInfo.image_url) {
+        console.log(`✅ صورة من API مباشر: ${apiInfo.image_url.substring(0, 80)}...`);
+        const apiImgBuffer = await downloadImageAsBuffer(apiInfo.image_url);
+        if (apiImgBuffer) {
+          productImage = { source: apiImgBuffer };
+          resolvedImageUrl = apiInfo.image_url;
+          console.log(`✅ تم تحميل صورة API مباشر (${Math.round(apiImgBuffer.length/1024)}KB)`);
+        } else {
+          productImage = apiInfo.image_url;
+          resolvedImageUrl = apiInfo.image_url;
+        }
+      }
+    } catch (apiImgErr) {
+      console.log(`⚠️ فشل جلب صورة API مباشر: ${apiImgErr.message}`);
+    }
+  }
+
+  if (!productImage && convertedLinks.length > 0) {
+    const resolvedPid = convertedLinks[0]?.resolvedProductId || firstProductId;
+    if (resolvedPid) {
+      const directImgUrl = `https://ae01.alicdn.com/kf/S${resolvedPid}.jpg`;
+      console.log(`🖼 محاولة صورة CDN مباشرة: ${directImgUrl}`);
+      try {
+        const cdnBuffer = await downloadImageAsBuffer(directImgUrl);
+        if (cdnBuffer && cdnBuffer.length > 5000) {
+          productImage = { source: cdnBuffer };
+          resolvedImageUrl = directImgUrl;
+          console.log(`✅ صورة CDN (${Math.round(cdnBuffer.length/1024)}KB)`);
+        }
+      } catch (e) {}
     }
   }
 
