@@ -498,36 +498,62 @@ function prepareCookie(cookie) {
     return cookieStr;
 }
 
-async function directAffLink(cookie, originalUrl, linkStyle = 'coin') {
+async function directAffLink(cookie, originalUrl) {
     let cookieStr = prepareCookie(cookie);
 
     let productId = null;
+    let resolvedUrl = originalUrl;
     try {
         const idObj = await idCatcher(originalUrl);
         productId = idObj?.id || null;
+        if (idObj?.finalUrl) resolvedUrl = idObj.finalUrl;
     } catch (e) {
         console.log(`⚠️ فشل استخراج Product ID: ${e.message}`);
     }
 
-    let targetUrl = originalUrl;
-    if (productId) {
-        if (linkStyle === 'super') {
-            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D562`;
-            console.log(`🔗 استخدام رابط super deals للمنتج: ${productId}`);
-        } else {
-            targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
-            console.log(`🔗 استخدام رابط coin للمنتج: ${productId}`);
-        }
-    } else if (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com')) {
+    if (!productId && (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com'))) {
         try {
             const resolved = await getFinalRedirect(originalUrl);
-            if (resolved && resolved !== originalUrl && (resolved.includes('/item/') || resolved.includes('productIds='))) {
-                console.log(`🔗 فك رابط مختصر: ${originalUrl.substring(0, 50)} → ${resolved.substring(0, 80)}`);
-                targetUrl = resolved;
+            if (resolved && resolved !== originalUrl) {
+                resolvedUrl = resolved;
+                const idObj2 = await idCatcher(resolved);
+                productId = idObj2?.id || null;
             }
         } catch (e) {
             console.log(`⚠️ فشل فك الرابط المختصر: ${e.message}`);
         }
+    }
+
+    let detectedType = 'coin';
+    const checkUrl = (resolvedUrl || originalUrl).toLowerCase();
+    if (checkUrl.includes('bundledeal') || checkUrl.includes('bundle') || checkUrl.includes('sourcetype=561') || checkUrl.includes('/300000512/')) {
+        detectedType = 'bundle';
+    } else if (checkUrl.includes('sourcetype=562') || checkUrl.includes('super') || checkUrl.includes('star.aliexpress')) {
+        detectedType = 'super';
+    } else if (checkUrl.includes('sourcetype=620') || checkUrl.includes('channel=coin') || checkUrl.includes('point')) {
+        detectedType = 'point';
+    } else if (checkUrl.includes('coin') || checkUrl.includes('sourcetype=555')) {
+        detectedType = 'coin';
+    }
+
+    let targetUrl;
+    if (productId) {
+        if (detectedType === 'bundle') {
+            targetUrl = `https://www.aliexpress.com/ssr/300000512/BundleDeals2?disableNav=YES&pha_manifest=ssr&_immersiveMode=true&productIds=${productId}&aff_fcid=`;
+            console.log(`🔗 رابط bundle للمنتج: ${productId}`);
+        } else if (detectedType === 'super') {
+            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D562`;
+            console.log(`🔗 رابط super deals للمنتج: ${productId}`);
+        } else if (detectedType === 'point') {
+            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D620%26channel%3Dcoin`;
+            console.log(`🔗 رابط point للمنتج: ${productId}`);
+        } else {
+            targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
+            console.log(`🔗 رابط coin للمنتج: ${productId}`);
+        }
+    } else {
+        targetUrl = resolvedUrl;
+        console.log(`🔗 استخدام الرابط المفكوك كما هو: ${targetUrl.substring(0, 80)}`);
     }
 
     const response = await got("https://portals.aliexpress.com/tools/linkGenerate/generatePromotionLink.htm", {
