@@ -1459,7 +1459,12 @@ async function processPost(config, text, sourceImage, sourceName) {
     return;
   }
 
-  for (const originalLink of aliLinks) {
+  console.log(`📋 قائمة الروابط المستخرجة (${aliLinks.length}):`);
+  aliLinks.forEach((l, i) => console.log(`   ${i+1}. ${l}`));
+
+  for (let linkIndex = 0; linkIndex < aliLinks.length; linkIndex++) {
+    const originalLink = aliLinks[linkIndex];
+    console.log(`\n🔄 معالجة الرابط ${linkIndex+1}/${aliLinks.length}: ${originalLink.substring(0, 60)}`);
     if (await isLinkProcessed(originalLink)) {
       console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
       continue;
@@ -1546,12 +1551,13 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       if (!affLink) {
-        console.log(`❌ فشل تحويل الرابط: ${originalLink.substring(0, 60)} — تخطي هذا الرابط`);
+        console.log(`❌ فشل تحويل الرابط ${linkIndex+1}: ${originalLink.substring(0, 60)} — تخطي هذا الرابط`);
         addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
         inFlightLinks.delete(normalizeAliLink(originalLink));
         continue;
       }
 
+      console.log(`✅ نجح تحويل الرابط ${linkIndex+1}: ${affLink.substring(0, 60)} (Product: ${resolvedProductId || 'غير معروف'})`);
       markLinkProcessed(originalLink);
 
       if (resolvedProductId) {
@@ -1603,6 +1609,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   console.log(`✅ تم تحويل ${convertedLinks.length} رابط من أصل ${aliLinks.length} — بناء منشور واحد`);
+  convertedLinks.forEach((cl, i) => console.log(`   رابط ${i+1}: ${cl.affLink.substring(0, 70)} (Product: ${cl.resolvedProductId || '?'})`));
 
   // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
   let productImage = null;

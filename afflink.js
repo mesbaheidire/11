@@ -143,11 +143,21 @@ function extractProductId(url) {
 }
 
 
+const idCatcherCache = new Map();
 async function idCatcher(input) {
     if (!input || typeof input !== "string") return null;
 
     if (/^\d+$/.test(input)) {
         return { id: input };
+    }
+
+    if (idCatcherCache.has(input)) {
+        const cached = idCatcherCache.get(input);
+        if (Date.now() - cached.ts < 300000) {
+            console.log(`📦 idCatcher cache hit: ${input.substring(0, 50)} → ${cached.result?.id}`);
+            return cached.result;
+        }
+        idCatcherCache.delete(input);
     }
 
     if (!input.startsWith("http")) {
@@ -162,7 +172,13 @@ async function idCatcher(input) {
     
     console.log("Extracted Product ID:", id);
 
-    return { id, finalUrl };
+    const result = { id, finalUrl };
+    idCatcherCache.set(input, { result, ts: Date.now() });
+    if (idCatcherCache.size > 200) {
+        const firstKey = idCatcherCache.keys().next().value;
+        idCatcherCache.delete(firstKey);
+    }
+    return result;
 }
 
 
