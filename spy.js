@@ -1743,27 +1743,43 @@ async function processPost(config, text, sourceImage, sourceName) {
   const imageUrlForLog = resolvedImageUrl || (typeof productImage === 'string' ? productImage : null);
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
-  if (!productTitle) {
-    const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
-    if (postLines.length > 0) {
-      productTitle = postLines[0];
-      console.log(`📝 استخدام عنوان المنشور كاحتياط: ${productTitle}`);
-    }
-  }
-  if (!productTitle || productTitle === firstApiTitle) {
+
+  if (!productTitle || /^\d+$/.test(productTitle)) {
     try {
       const aiInfo = await extractProductInfoWithAI(text, firstApiTitle);
-      if (aiInfo && aiInfo.productName) {
+      if (aiInfo && aiInfo.productName && !/^\d+$/.test(aiInfo.productName)) {
         productTitle = aiInfo.productName;
         console.log(`🤖 AI استخرج المنتج: "${productTitle}"`);
-      } else if (firstApiTitle) {
-        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
       }
     } catch (e) {
-      if (firstApiTitle) {
-        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
-      }
+      console.log(`⚠️ فشل AI في استخراج العنوان: ${e.message}`);
     }
+  }
+
+  if (!productTitle || /^\d+$/.test(productTitle)) {
+    const postLines = (text || '').split('\n').map(l => l.trim()).filter(l =>
+      l && l.length > 3 &&
+      !l.startsWith('http') && !l.startsWith('👇') &&
+      !l.includes('aliexpress.com') && !l.includes('s.click') &&
+      !l.includes('t.me/') && !l.includes('قناتنا') &&
+      !/^[\u0600-\u06FF\s.,!؟?]+$/.test(l) &&
+      !/^[🔥💰🎁✅❌⭐🏷️📢📦🎉💥🔔⚡🛒🛍️💸🎊🤩👇👆🔗📌💡🏪🎈🔝📣]+$/.test(l)
+    );
+    const englishLine = postLines.find(l => /[A-Za-z]{3,}/.test(l) && /\b[A-Z][a-z]/.test(l));
+    if (englishLine) {
+      productTitle = englishLine
+        .replace(/^[✅☑️🔹🔸▶️➡️•\-\d.)\]]+\s*/, '')
+        .replace(/[\u0600-\u06FF]+/g, '')
+        .trim();
+      console.log(`📝 عنوان مستخرج من المنشور (إنجليزي): ${productTitle}`);
+    } else if (postLines.length > 0) {
+      productTitle = postLines[0].replace(/^[✅☑️🔹🔸▶️➡️•\-\d.)\]]+\s*/, '').trim();
+      console.log(`📝 عنوان مستخرج من المنشور (أول سطر): ${productTitle}`);
+    }
+  }
+
+  if (firstApiTitle && firstApiTitle !== productTitle && firstApiTitle.length > productTitle?.length) {
+    try { productTitle = (await refineTitle(firstApiTitle)) || productTitle || firstApiTitle; } catch (aiErr) {}
   }
 
   if (productTitle && productTitle.length > 60) {
