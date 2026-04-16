@@ -4,12 +4,12 @@
 **AffiliDz** is an Arabic-language affiliate marketing automation platform for Telegram channel owners targeting the Algerian/DZD market. Features include affiliate link generation, competitor monitoring (spy), AI content generation, image watermarking, automated Telegram + Facebook publishing, and a Telegram Mini App store. The app is a PWA (Progressive Web App) that can be installed on mobile devices.
 
 ## Project Structure
-- `server.js` - Main Express server entry point (includes auth middleware + WebAuthn)
+- `server.js` - Main Express server entry point
 - `afflink.js` - AliExpress affiliate link generation logic
 - `scheduler.js` - Post scheduling functionality
 - `aliexpress-api.js` - AliExpress API integration
+- `index.js` - Telegram bot entry point
 - `spy.js` - Channel spy module (monitor competitor channels)
-- `db.js` - PostgreSQL database layer (auth sessions, analytics, saved posts, config)
 - `public/` - Static frontend files
   - `index.html` - Main app interface
   - `spy.html` - Channel spy management page
@@ -32,7 +32,7 @@
   - Focus-visible accessibility styles, smooth transitions, responsive breakpoints
   - Imported by all dark-themed pages (index, telegram, spy, discover, saved-posts, collections, video-generator)
   - `store.html` and `store-analytics.html` use their own independent theme systems
-- **Dependencies**: axios, cheerio, cors, express, sharp, telegraf, @simplewebauthn/server
+- **Dependencies**: axios, cheerio, cors, express, sharp, telegraf
 
 ## Running the App
 The app runs on port 5000 with the command:
@@ -131,9 +131,7 @@ The app uses PostgreSQL with the following key tables:
 - `telegram_session` - Telegram user session
 - `gemini_keys` - Gemini API keys storage
 - `saved_posts` - User's saved posts
-- `app_storage` - General key-value storage (PIN hash, WebAuthn credentials, settings)
-- `auth_sessions` - Session tokens with expiry for PIN/fingerprint auth
-- `store_analytics` - Analytics events (visits, searches, clicks, categories)
+- `app_storage` - General key-value storage for Render compatibility
 
 ## Database / Storage
 - **Neon PostgreSQL** - Primary persistent storage (free tier, always-on)

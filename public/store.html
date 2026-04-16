@@ -595,25 +595,19 @@ function cardHTML(p,i,total){
   </div>`;
 }
 
-function extractProductId(link, originalLink){
-  const urls=[originalLink,link].filter(Boolean);
-  for(const url of urls){
-    const m=url.match(/\/(\d{8,15})\b/)||url.match(/productId[=:](\d+)/i)||url.match(/item\/(\d+)/);
-    if(m)return m[1];
-  }
-  return null;
+function extractProductId(link){
+  if(!link)return null;
+  const m=link.match(/\/(\d{8,15})\b/)||link.match(/productId[=:](\d+)/i)||link.match(/item\/(\d+)/);
+  return m?m[1]:null;
 }
 
 async function enrichSavedProducts(){
   const ids=[];
   savedProducts.forEach((p,i)=>{
-    if(p._enriched||(p.rating&&p.orders))return;
-    let pid=p.productId||extractProductId(p.link,p.originalLink);
-    if(!pid&&p.message){
-      const aliMatch=p.message.match(/aliexpress\.com[^\s]*\/(\d{8,15})\b/)||p.message.match(/\/(\d{8,15})\.html/);
-      if(aliMatch)pid=aliMatch[1];
+    if(!p._enriched){
+      const pid=extractProductId(p.link);
+      if(pid)ids.push({idx:i,pid});
     }
-    if(pid)ids.push({idx:i,pid});
   });
   if(!ids.length)return;
   const batchIds=ids.slice(0,10).map(x=>x.pid).join(',');

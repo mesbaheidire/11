@@ -143,21 +143,11 @@ function extractProductId(url) {
 }
 
 
-const idCatcherCache = new Map();
 async function idCatcher(input) {
     if (!input || typeof input !== "string") return null;
 
     if (/^\d+$/.test(input)) {
         return { id: input };
-    }
-
-    if (idCatcherCache.has(input)) {
-        const cached = idCatcherCache.get(input);
-        if (Date.now() - cached.ts < 300000) {
-            console.log(`📦 idCatcher cache hit: ${input.substring(0, 50)} → ${cached.result?.id}`);
-            return cached.result;
-        }
-        idCatcherCache.delete(input);
     }
 
     if (!input.startsWith("http")) {
@@ -172,20 +162,14 @@ async function idCatcher(input) {
     
     console.log("Extracted Product ID:", id);
 
-    const result = { id, finalUrl };
-    idCatcherCache.set(input, { result, ts: Date.now() });
-    if (idCatcherCache.size > 200) {
-        const firstKey = idCatcherCache.keys().next().value;
-        idCatcherCache.delete(firstKey);
-    }
-    return result;
+    return { id, finalUrl };
 }
 
 
 async function fetchLinkPreview(productId) {
-    // 1) Microlink.io API — أسرع وأدق
+    // 1) Microlink.io API first
     try {
-        console.log("🚀 Microlink.io API...");
+        console.log("Trying microlink.io API...");
         const apiRes = await got('https://api.microlink.io', {
             searchParams: {
                 url: `https://m.aliexpress.com/item/${productId}.html`
@@ -207,45 +191,26 @@ async function fetchLinkPreview(productId) {
                 !title.includes('Smarter Shopping') &&
                 !title.match(/^\d+\.html$/);
             
-            if (isValidTitle && imageUrl) {
-                console.log("✅ Microlink OK:", title.substring(0, 50) + "...");
-                let rating = null, orders = null, price = null, original_price = null, discount = null, currency = null, shop_name = null;
-                try {
-                    const apiResult = await getProductDetails(productId);
-                    if (apiResult) {
-                        rating = apiResult.rating || null;
-                        orders = apiResult.orders || null;
-                        price = apiResult.sale_price || apiResult.price || null;
-                        original_price = apiResult.original_price || null;
-                        discount = apiResult.discount || null;
-                        currency = apiResult.currency || null;
-                        shop_name = apiResult.shop_name || null;
-                    }
-                } catch (e) {}
+            if (isValidTitle) {
+                console.log("✅ Product fetched via microlink.io - Title:", title.substring(0, 50) + "...");
                 return {
-                    method: "Microlink + API",
-                    title,
+                    method: "Microlink API",
+                    title: title,
                     image_url: imageUrl,
-                    price: price || "راجع الرابط",
-                    original_price,
-                    discount,
-                    currency,
-                    shop_name,
-                    rating,
-                    orders
+                    price: "راجع الرابط"
                 };
             }
         }
     } catch (apiErr) {
-        console.log("⚠️ Microlink failed:", apiErr.message);
+        console.log("microlink.io API failed:", apiErr.message);
     }
 
-    // 2) AliExpress API احتياط
+    // 2) AliExpress API
     try {
         const apiResult = await getProductDetails(productId);
         
         if (apiResult && apiResult.title) {
-            console.log("✅ AliExpress API:", apiResult.title.substring(0, 50) + "...");
+            console.log("✅ Product fetched via API - Title:", apiResult.title.substring(0, 50) + "...");
             return {
                 method: "AliExpress API",
                 title: apiResult.title,
@@ -260,7 +225,7 @@ async function fetchLinkPreview(productId) {
             };
         }
     } catch (apiErr) {
-        console.log("⚠️ AliExpress API failed:", apiErr.message);
+        console.log("API fetch failed, falling back to other methods:", apiErr.message);
     }
 
     // 3) Web Scraping - try multiple URL formats
@@ -486,10 +451,9 @@ async function portaffFunction(cookie, ids) {
 
     for (const pr of promoResults) {
         if (pr.data && typeof pr.data === 'object') {
-            const link = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
-            result.aff[pr.type] = (link && !link.includes('@is-not-code') && !link.includes('link-generator-page')) ? link : null;
+            result.aff[pr.type] = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
         } else if (typeof pr.data === 'string') {
-            result.aff[pr.type] = (pr.data.includes('@is-not-code') || pr.data.includes('link-generator-page')) ? null : pr.data;
+            result.aff[pr.type] = pr.data;
         } else {
             result.aff[pr.type] = null;
         }
@@ -517,65 +481,10 @@ function prepareCookie(cookie) {
 async function directAffLink(cookie, originalUrl) {
     let cookieStr = prepareCookie(cookie);
 
-    let productId = null;
-    let resolvedUrl = originalUrl;
-    try {
-        const idObj = await idCatcher(originalUrl);
-        productId = idObj?.id || null;
-        if (idObj?.finalUrl) resolvedUrl = idObj.finalUrl;
-    } catch (e) {
-        console.log(`⚠️ فشل استخراج Product ID: ${e.message}`);
-    }
-
-    if (!productId && (originalUrl.includes('s.click.aliexpress.com') || originalUrl.includes('/e/_') || originalUrl.includes('a.aliexpress.com'))) {
-        try {
-            const resolved = await getFinalRedirect(originalUrl);
-            if (resolved && resolved !== originalUrl) {
-                resolvedUrl = resolved;
-                const idObj2 = await idCatcher(resolved);
-                productId = idObj2?.id || null;
-            }
-        } catch (e) {
-            console.log(`⚠️ فشل فك الرابط المختصر: ${e.message}`);
-        }
-    }
-
-    let detectedType = 'coin';
-    const checkUrl = (resolvedUrl || originalUrl).toLowerCase();
-    if (checkUrl.includes('bundledeal') || checkUrl.includes('bundle') || checkUrl.includes('sourcetype=561') || checkUrl.includes('/300000512/')) {
-        detectedType = 'bundle';
-    } else if (checkUrl.includes('sourcetype=562') || checkUrl.includes('super') || checkUrl.includes('star.aliexpress')) {
-        detectedType = 'super';
-    } else if (checkUrl.includes('sourcetype=620') || checkUrl.includes('channel=coin') || checkUrl.includes('point')) {
-        detectedType = 'point';
-    } else if (checkUrl.includes('coin') || checkUrl.includes('sourcetype=555')) {
-        detectedType = 'coin';
-    }
-
-    let targetUrl;
-    if (productId) {
-        if (detectedType === 'bundle') {
-            targetUrl = `https://www.aliexpress.com/ssr/300000512/BundleDeals2?disableNav=YES&pha_manifest=ssr&_immersiveMode=true&productIds=${productId}&aff_fcid=`;
-            console.log(`🔗 رابط bundle للمنتج: ${productId}`);
-        } else if (detectedType === 'super') {
-            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D562`;
-            console.log(`🔗 رابط super deals للمنتج: ${productId}`);
-        } else if (detectedType === 'point') {
-            targetUrl = `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D620%26channel%3Dcoin`;
-            console.log(`🔗 رابط point للمنتج: ${productId}`);
-        } else {
-            targetUrl = `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`;
-            console.log(`🔗 رابط coin للمنتج: ${productId}`);
-        }
-    } else {
-        targetUrl = resolvedUrl;
-        console.log(`🔗 استخدام الرابط المفكوك كما هو: ${targetUrl.substring(0, 80)}`);
-    }
-
     const response = await got("https://portals.aliexpress.com/tools/linkGenerate/generatePromotionLink.htm", {
         searchParams: {
             trackId: process.env.ALIEXPRESS_TRACK_ID || "default",
-            targetUrl: targetUrl
+            targetUrl: originalUrl
         },
         headers: {
             cookie: cookieStr
@@ -602,17 +511,10 @@ async function directAffLink(cookie, originalUrl) {
         affLink = data;
     }
 
-    if (!affLink || affLink.includes('@is-not-code') || affLink.includes('link-generator-page')) {
-        throw new Error('فشل تحويل الرابط — رابط غير صالح');
-    }
+    if (!affLink) throw new Error('فشل تحويل الرابط');
 
-    if (!productId) {
-        try {
-            const idObj2 = await idCatcher(originalUrl);
-            productId = idObj2?.id || null;
-        } catch (e) {}
-    }
-
+    const idObj = await idCatcher(originalUrl);
+    const productId = idObj?.id;
     let previews = {};
     if (productId) {
         previews = await fetchLinkPreview(productId);

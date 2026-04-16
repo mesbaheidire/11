@@ -3,7 +3,6 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const crypto = require('crypto');
 const { portaffFunction } = require('./afflink');
 const { searchHotProducts, searchProducts } = require('./aliexpress-api');
 const { Telegraf } = require('telegraf');
@@ -14,7 +13,6 @@ const http = require('http');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const db = require('./db');
 const { postToFacebookPage, verifyPageToken } = require('./facebook');
-const { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 
 const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish } = require('./spy');
 
@@ -228,255 +226,6 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   next();
 });
-
-function hashPin(pin) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(pin, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPin(pin, stored) {
-  const [salt, hash] = stored.split(':');
-  if (!salt || !hash) return false;
-  const check = crypto.scryptSync(pin, salt, 64).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
-}
-
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-function parseCookies(cookieStr) {
-  const cookies = {};
-  if (!cookieStr) return cookies;
-  cookieStr.split(';').forEach(c => {
-    const [k, v] = c.trim().split('=');
-    if (k && v) cookies[k] = v;
-  });
-  return cookies;
-}
-
-const RP_NAME = 'AliOffers DZ';
-const RP_ID_FUNC = (req) => (req.get('host') || 'localhost').split(':')[0];
-const webauthnChallenges = new Map();
-const loginAttempts = new Map();
-
-const AUTH_EXCLUDED = ['/login.html', '/api/auth/', '/ping', '/manifest.json', '/sw.js', '/modern-theme.css', '/api/store/', '/store.html', '/store'];
-
-async function authMiddleware(req, res, next) {
-  if (AUTH_EXCLUDED.some(p => req.path.startsWith(p)) || req.path.match(/\.(css|js|png|jpg|ico|woff2?)$/)) {
-    return next();
-  }
-  if (req.path === '/api/saved-posts' && req.method === 'GET') {
-    return next();
-  }
-  const clientIp = req.ip || req.connection?.remoteAddress || '';
-  if (req.path === '/api/saved-posts' && req.method === 'POST' && (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === '::ffff:127.0.0.1')) {
-    return next();
-  }
-  const cookies = parseCookies(req.headers.cookie);
-  const token = cookies.auth_token;
-  if (token && await db.validateAuthSession(token)) {
-    req.authToken = token;
-    return next();
-  }
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ success: false, error: 'غير مصرح' });
-  }
-  return res.redirect('/login.html');
-}
-
-app.get('/api/auth/status', async (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const token = cookies.auth_token;
-  const authenticated = token ? await db.validateAuthSession(token) : false;
-  const pinHash = await db.getAppStorage('auth_pin_hash');
-  const webauthnCreds = await db.getAppStorage('webauthn_credentials');
-  res.json({
-    success: true,
-    authenticated,
-    pinSet: !!pinHash,
-    webauthnRegistered: !!webauthnCreds
-  });
-});
-
-app.post('/api/auth/setup', async (req, res) => {
-  const existing = await db.getAppStorage('auth_pin_hash');
-  if (existing) return res.json({ success: false, error: 'الرمز موجود بالفعل' });
-  const { pin } = req.body;
-  if (!pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-    return res.json({ success: false, error: 'الرمز يجب أن يكون 4 أرقام' });
-  }
-  await db.setAppStorage('auth_pin_hash', hashPin(pin));
-  const token = generateToken();
-  await db.createAuthSession(token, 72);
-  res.cookie('auth_token', token, { httpOnly: true, maxAge: 72 * 60 * 60 * 1000, sameSite: 'lax' });
-  res.json({ success: true, token });
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  const { pin } = req.body;
-  if (!pin) return res.json({ success: false, error: 'أدخل الرمز' });
-  const ip = req.ip || 'unknown';
-  const attempts = loginAttempts.get(ip) || { count: 0, lockUntil: 0 };
-  if (Date.now() < attempts.lockUntil) {
-    const wait = Math.ceil((attempts.lockUntil - Date.now()) / 1000);
-    return res.json({ success: false, error: `محاولات كثيرة — انتظر ${wait} ثانية` });
-  }
-  const stored = await db.getAppStorage('auth_pin_hash');
-  if (!stored) return res.json({ success: false, error: 'لم يتم إعداد الرمز' });
-  if (!verifyPin(pin, stored)) {
-    attempts.count++;
-    if (attempts.count >= 5) {
-      attempts.lockUntil = Date.now() + 60000;
-      attempts.count = 0;
-    }
-    loginAttempts.set(ip, attempts);
-    return res.json({ success: false, error: 'رمز خاطئ' });
-  }
-  loginAttempts.delete(ip);
-  const token = generateToken();
-  await db.createAuthSession(token, 72);
-  const isSecure = (req.get('x-forwarded-proto') === 'https') || req.secure;
-  res.cookie('auth_token', token, { httpOnly: true, secure: isSecure, maxAge: 72 * 60 * 60 * 1000, sameSite: 'lax' });
-  res.json({ success: true });
-});
-
-app.post('/api/auth/logout', async (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  if (cookies.auth_token) await db.deleteAuthSession(cookies.auth_token);
-  res.clearCookie('auth_token');
-  res.json({ success: true });
-});
-
-app.get('/api/auth/webauthn/register-options', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token || !(await db.validateAuthSession(token))) {
-    return res.json({ success: false, error: 'غير مصرح' });
-  }
-  try {
-    const rpID = RP_ID_FUNC(req);
-    const userID = crypto.randomBytes(16);
-    const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
-      rpID,
-      userID,
-      userName: 'admin',
-      userDisplayName: 'Admin',
-      attestationType: 'none',
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' }
-    });
-    const challengeId = crypto.randomBytes(16).toString('hex');
-    webauthnChallenges.set(challengeId, { challenge: options.challenge, expires: Date.now() + 120000 });
-    res.json({ success: true, options, challengeId });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/auth/webauthn/register-verify', async (req, res) => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token || !(await db.validateAuthSession(token))) {
-    return res.json({ success: false, error: 'غير مصرح' });
-  }
-  try {
-    const { challengeId, ...body } = req.body;
-    const stored = webauthnChallenges.get(challengeId);
-    if (!stored || Date.now() > stored.expires) {
-      return res.json({ success: false, error: 'انتهت صلاحية التحدي' });
-    }
-    const rpID = RP_ID_FUNC(req);
-    const origin = `https://${req.get('host')}`;
-    const verification = await verifyRegistrationResponse({
-      response: body,
-      expectedChallenge: stored.challenge,
-      expectedOrigin: [origin, `http://${req.get('host')}`],
-      expectedRPID: rpID
-    });
-    webauthnChallenges.delete(challengeId);
-    if (verification.verified && verification.registrationInfo) {
-      const { credential } = verification.registrationInfo;
-      const credData = {
-        id: credential.id,
-        publicKey: Buffer.from(credential.publicKey).toString('base64'),
-        counter: credential.counter
-      };
-      await db.setAppStorage('webauthn_credentials', JSON.stringify(credData));
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, error: 'فشل التحقق' });
-    }
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-app.get('/api/auth/webauthn/auth-options', async (req, res) => {
-  try {
-    const raw = await db.getAppStorage('webauthn_credentials');
-    if (!raw) return res.json({ success: false, error: 'لا توجد بصمة مسجلة' });
-    const cred = JSON.parse(raw);
-    const rpID = RP_ID_FUNC(req);
-    const options = await generateAuthenticationOptions({
-      rpID,
-      userVerification: 'required',
-      allowCredentials: [{ id: cred.id, type: 'public-key' }]
-    });
-    const challengeId = crypto.randomBytes(16).toString('hex');
-    webauthnChallenges.set(challengeId, { challenge: options.challenge, expires: Date.now() + 120000 });
-    res.json({ success: true, options, challengeId });
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/auth/webauthn/auth-verify', async (req, res) => {
-  try {
-    const { challengeId, ...body } = req.body;
-    const stored = webauthnChallenges.get(challengeId);
-    if (!stored || Date.now() > stored.expires) {
-      return res.json({ success: false, error: 'انتهت صلاحية التحدي' });
-    }
-    const raw = await db.getAppStorage('webauthn_credentials');
-    if (!raw) return res.json({ success: false, error: 'لا توجد بصمة' });
-    const cred = JSON.parse(raw);
-    const rpID = RP_ID_FUNC(req);
-    const origin = `https://${req.get('host')}`;
-    const verification = await verifyAuthenticationResponse({
-      response: body,
-      expectedChallenge: stored.challenge,
-      expectedOrigin: [origin, `http://${req.get('host')}`],
-      expectedRPID: rpID,
-      credential: {
-        id: cred.id,
-        publicKey: Uint8Array.from(Buffer.from(cred.publicKey, 'base64')),
-        counter: cred.counter
-      }
-    });
-    webauthnChallenges.delete(challengeId);
-    if (verification.verified) {
-      cred.counter = verification.authenticationInfo.newCounter;
-      await db.setAppStorage('webauthn_credentials', JSON.stringify(cred));
-      const token = generateToken();
-      await db.createAuthSession(token, 72);
-      const isSecure = (req.get('x-forwarded-proto') === 'https') || req.secure;
-      res.cookie('auth_token', token, { httpOnly: true, secure: isSecure, maxAge: 72 * 60 * 60 * 1000, sameSite: 'lax' });
-      res.json({ success: true });
-    } else {
-      res.json({ success: false, error: 'فشل التحقق' });
-    }
-  } catch (e) {
-    res.json({ success: false, error: e.message });
-  }
-});
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of webauthnChallenges) { if (now > v.expires) webauthnChallenges.delete(k); }
-  for (const [k, v] of loginAttempts) { if (v.lockUntil && now > v.lockUntil + 120000) loginAttempts.delete(k); }
-}, 60000);
-
-app.use(authMiddleware);
 
 // Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -2100,8 +1849,8 @@ app.get('/api/saved-posts', async (req, res) => {
 
 app.post('/api/saved-posts', async (req, res) => {
   try {
-    const { id, title, price, link, coupon, image, message, hook, createdAt, originalLink, rating, orders, productId } = req.body;
-    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook, originalLink, rating, orders, productId };
+    const { id, title, price, link, coupon, image, message, hook, createdAt } = req.body;
+    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook };
     const ok = await db.addSavedPost(post);
     if (!ok) return res.status(500).json({ success: false, error: 'Failed to save' });
     res.json({ success: true, post });
@@ -2946,6 +2695,52 @@ app.get('/api/proxy-image', async (req, res) => {
 })();
 
 // ==================== Store Analytics System ====================
+const ANALYTICS_FILE = path.join(__dirname, 'store_analytics.json');
+
+function loadAnalyticsData() {
+  try {
+    if (fs.existsSync(ANALYTICS_FILE)) {
+      return JSON.parse(fs.readFileSync(ANALYTICS_FILE, 'utf8'));
+    }
+  } catch(e) {}
+  return { events: [], searches: {}, clicks: {}, categories: {}, dailyVisits: {}, visitors: {} };
+}
+
+let analyticsSavePending = false;
+function saveAnalyticsData(data) {
+  if (analyticsSavePending) return;
+  analyticsSavePending = true;
+  setTimeout(() => {
+    try {
+      const trimmed = { ...data };
+      if (trimmed.events && trimmed.events.length > 5000) trimmed.events = trimmed.events.slice(-5000);
+      const searchKeys = Object.keys(trimmed.searches || {});
+      if (searchKeys.length > 500) {
+        const sorted = searchKeys.sort((a, b) => trimmed.searches[b] - trimmed.searches[a]).slice(0, 500);
+        trimmed.searches = Object.fromEntries(sorted.map(k => [k, trimmed.searches[k]]));
+      }
+      const clickKeys = Object.keys(trimmed.clicks || {});
+      if (clickKeys.length > 500) {
+        const sorted = clickKeys.sort((a, b) => (trimmed.clicks[b]?.count || 0) - (trimmed.clicks[a]?.count || 0)).slice(0, 500);
+        trimmed.clicks = Object.fromEntries(sorted.map(k => [k, trimmed.clicks[k]]));
+      }
+      const catKeys = Object.keys(trimmed.categories || {});
+      if (catKeys.length > 100) {
+        const sorted = catKeys.sort((a, b) => trimmed.categories[b] - trimmed.categories[a]).slice(0, 100);
+        trimmed.categories = Object.fromEntries(sorted.map(k => [k, trimmed.categories[k]]));
+      }
+      fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(trimmed));
+    } catch(e) {}
+    analyticsSavePending = false;
+  }, 3000);
+}
+
+let analyticsCache = null;
+function getAnalytics() {
+  if (!analyticsCache) analyticsCache = loadAnalyticsData();
+  return analyticsCache;
+}
+
 const VALID_EVENT_TYPES = ['visit', 'search', 'click', 'category'];
 const MAX_DETAIL_LENGTH = 200;
 
@@ -2953,10 +2748,31 @@ function trackEvent(type, detail, userId) {
   if (!VALID_EVENT_TYPES.includes(type)) return;
   const safeDetail = detail ? String(detail).slice(0, MAX_DETAIL_LENGTH) : '';
   const safeUserId = userId && userId !== 'anon' ? String(userId).slice(0, 50) : null;
+
+  const analytics = getAnalytics();
   const now = new Date();
   const dateKey = now.toISOString().split('T')[0];
   const hour = now.getHours();
-  db.addAnalyticsEvent(type, safeDetail, safeUserId || 'anon', hour, dateKey);
+
+  analytics.events.push({ type, detail: safeDetail, userId: safeUserId || 'anon', timestamp: now.toISOString(), hour, date: dateKey });
+
+  if (type === 'visit') {
+    analytics.dailyVisits[dateKey] = (analytics.dailyVisits[dateKey] || 0) + 1;
+    if (safeUserId) analytics.visitors[safeUserId] = (analytics.visitors[safeUserId] || 0) + 1;
+  }
+  if (type === 'search' && safeDetail) {
+    const q = safeDetail.toLowerCase().trim();
+    analytics.searches[q] = (analytics.searches[q] || 0) + 1;
+  }
+  if (type === 'click' && safeDetail) {
+    analytics.clicks[safeDetail] = (analytics.clicks[safeDetail] || { count: 0, name: safeDetail });
+    analytics.clicks[safeDetail].count++;
+  }
+  if (type === 'category' && safeDetail) {
+    analytics.categories[safeDetail] = (analytics.categories[safeDetail] || 0) + 1;
+  }
+
+  saveAnalyticsData(analytics);
 }
 
 const trackRateLimit = {};
@@ -2983,6 +2799,7 @@ setInterval(() => { Object.keys(trackRateLimit).forEach(k => { if (Date.now() - 
 app.get('/api/store/analytics', async (req, res) => {
   try {
     const { period } = req.query;
+    const analytics = getAnalytics();
     const now = new Date();
 
     let startDate;
@@ -2996,13 +2813,13 @@ app.get('/api/store/analytics', async (req, res) => {
       startDate = new Date(0);
     }
 
-    const rows = await db.getAnalyticsEvents(startDate);
+    const filtered = analytics.events.filter(e => new Date(e.timestamp) >= startDate);
 
-    const visits = rows.filter(e => e.type === 'visit');
-    const searches = rows.filter(e => e.type === 'search');
-    const clicks = rows.filter(e => e.type === 'click');
+    const visits = filtered.filter(e => e.type === 'visit');
+    const searches = filtered.filter(e => e.type === 'search');
+    const clicks = filtered.filter(e => e.type === 'click');
 
-    const uniqueVisitorIds = new Set(visits.map(v => v.user_id).filter(id => id && id !== 'anon'));
+    const uniqueVisitorIds = new Set(visits.map(v => v.userId).filter(id => id && id !== 'anon'));
 
     const searchCounts = {};
     searches.forEach(s => {
@@ -3024,7 +2841,7 @@ app.get('/api/store/analytics', async (req, res) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    const catFiltered = rows.filter(e => e.type === 'category');
+    const catFiltered = filtered.filter(e => e.type === 'category');
     const catCounts = {};
     catFiltered.forEach(c => {
       const name = c.detail || '';
@@ -3036,7 +2853,7 @@ app.get('/api/store/analytics', async (req, res) => {
       .slice(0, 10);
 
     const hourCounts = {};
-    rows.forEach(e => {
+    filtered.forEach(e => {
       const h = e.hour;
       hourCounts[h] = (hourCounts[h] || 0) + 1;
     });
@@ -3064,7 +2881,7 @@ app.get('/api/store/analytics', async (req, res) => {
         topProducts,
         topCategories,
         hourlyActivity,
-        recentActivity: rows.slice(0, 15).map(r => ({ type: r.type, detail: r.detail, userId: r.user_id, timestamp: r.created_at, hour: r.hour, date: r.date }))
+        recentActivity: filtered.slice(-15).reverse()
       }
     });
   } catch(e) {
@@ -3172,8 +2989,6 @@ async function startServer() {
   spyConfigCacheTime = 0;
   try { await loadSpyConfigCached(); } catch(e) {}
   setTimeout(runAutoCleanup, 10000);
-  db.cleanExpiredSessions();
-  setInterval(() => db.cleanExpiredSessions(), 6 * 60 * 60 * 1000);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port ${PORT}`);
   });

@@ -85,21 +85,6 @@ async function initDatabase() {
         value TEXT,
         updated_at TIMESTAMP DEFAULT NOW()
       );
-      CREATE TABLE IF NOT EXISTS auth_sessions (
-        id SERIAL PRIMARY KEY,
-        token TEXT UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        expires_at TIMESTAMP NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS store_analytics (
-        id SERIAL PRIMARY KEY,
-        type TEXT NOT NULL,
-        detail TEXT,
-        user_id TEXT,
-        hour INTEGER,
-        date TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
     `);
     await pool.query(`
       DO $$ BEGIN
@@ -416,49 +401,17 @@ async function getSavedPosts(limit = 100) {
       'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1',
       [limit]
     );
-    return result.rows.map(row => {
-      let originalLink = null;
-      let rating = null;
-      let orders = null;
-      let productId = null;
-      try {
-        const data = row.data ? (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) : null;
-        if (data) {
-          if (data.originalLink) originalLink = data.originalLink;
-          if (data.rating) rating = data.rating;
-          if (data.orders) orders = data.orders;
-          if (data.evaluate_rate) rating = data.evaluate_rate;
-          if (data.lastest_volume) orders = data.lastest_volume;
-          if (data.productId || data.product_id) productId = data.productId || data.product_id;
-        }
-      } catch (e) {}
-      if (!productId) {
-        const urls = [originalLink, row.link].filter(Boolean);
-        for (const url of urls) {
-          const m = url.match(/\/(\d{8,15})\b/) || url.match(/productId[=:](\d+)/i) || url.match(/item\/(\d+)/);
-          if (m) { productId = m[1]; break; }
-        }
-      }
-      if (!productId && row.message) {
-        const m = row.message.match(/aliexpress\.com[^\s]*\/(\d{8,15})\b/) || row.message.match(/\/(\d{8,15})\.html/);
-        if (m) productId = m[1];
-      }
-      return {
-        id: row.post_id || String(row.id),
-        title: row.title,
-        price: row.price,
-        link: row.link,
-        originalLink,
-        image: row.image_url,
-        coupon: row.coupon,
-        message: row.message,
-        hook: row.hook,
-        createdAt: row.saved_at,
-        rating,
-        orders,
-        productId,
-      };
-    });
+    return result.rows.map(row => ({
+      id: row.post_id || String(row.id),
+      title: row.title,
+      price: row.price,
+      link: row.link,
+      image: row.image_url,
+      coupon: row.coupon,
+      message: row.message,
+      hook: row.hook,
+      createdAt: row.saved_at,
+    }));
   } catch (e) {
     console.log('⚠️ Failed to load saved posts:', e.message);
     return [];
@@ -509,53 +462,6 @@ async function getAppStorage(key) {
   }
 }
 
-async function createAuthSession(token, hours = 72) {
-  try {
-    await query(
-      'INSERT INTO auth_sessions (token, expires_at) VALUES ($1, NOW() + make_interval(hours => $2))',
-      [token, hours]
-    );
-    return true;
-  } catch (e) { return false; }
-}
-
-async function validateAuthSession(token) {
-  try {
-    const result = await query(
-      'SELECT id FROM auth_sessions WHERE token = $1 AND expires_at > NOW()',
-      [token]
-    );
-    return result.rows.length > 0;
-  } catch (e) { return false; }
-}
-
-async function deleteAuthSession(token) {
-  try { await query('DELETE FROM auth_sessions WHERE token = $1', [token]); } catch (e) {}
-}
-
-async function cleanExpiredSessions() {
-  try { await query('DELETE FROM auth_sessions WHERE expires_at < NOW()'); } catch (e) {}
-}
-
-async function addAnalyticsEvent(type, detail, userId, hour, date) {
-  try {
-    await query(
-      'INSERT INTO store_analytics (type, detail, user_id, hour, date) VALUES ($1, $2, $3, $4, $5)',
-      [type, detail || '', userId || 'anon', hour, date]
-    );
-  } catch (e) {}
-}
-
-async function getAnalyticsEvents(since) {
-  try {
-    const result = await query(
-      'SELECT type, detail, user_id, hour, date, created_at FROM store_analytics WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 10000',
-      [since]
-    );
-    return result.rows;
-  } catch (e) { return []; }
-}
-
 module.exports = {
   initDatabase,
   query,
@@ -580,11 +486,5 @@ module.exports = {
   clearSavedPosts,
   setAppStorage,
   getAppStorage,
-  createAuthSession,
-  validateAuthSession,
-  deleteAuthSession,
-  cleanExpiredSessions,
-  addAnalyticsEvent,
-  getAnalyticsEvents,
   closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
 };

@@ -54,8 +54,7 @@ async function getProductDetails(productId, options = {}) {
                 product_ids: String(productId),
                 target_currency: options.currency || 'USD',
                 target_language: options.language || 'EN',
-                tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default',
-                fields: 'product_id,product_title,product_main_image_url,product_small_image_urls,target_sale_price,target_original_price,target_sale_price_currency,discount,product_detail_url,promotion_link,shop_title,evaluate_rate,lastest_volume,commission_rate'
+                tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default'
             };
 
             params.sign = signRequest(params, appSecret);
@@ -136,8 +135,7 @@ async function searchHotProducts(options = {}) {
                 target_language: options.language || 'EN',
                 tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default',
                 page_no: options.page || '1',
-                page_size: options.limit || '10',
-                fields: 'product_id,product_title,product_main_image_url,product_small_image_urls,target_sale_price,target_original_price,target_sale_price_currency,discount,product_detail_url,promotion_link,shop_title,evaluate_rate,lastest_volume,commission_rate'
+                page_size: options.limit || '10'
             };
 
             if (options.category) params.category_ids = options.category;
@@ -230,8 +228,7 @@ async function searchProducts(options = {}) {
                 tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default',
                 page_no: options.page || '1',
                 page_size: options.limit || '10',
-                sort: options.sort || 'SALE_PRICE_ASC',
-                fields: 'product_id,product_title,product_main_image_url,product_small_image_urls,target_sale_price,target_original_price,target_sale_price_currency,discount,product_detail_url,promotion_link,shop_title,evaluate_rate,lastest_volume,commission_rate'
+                sort: options.sort || 'SALE_PRICE_ASC'
             };
 
             if (options.keywords) params.keywords = options.keywords;

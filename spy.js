@@ -5,7 +5,6 @@ const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink'
 const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
-const sharp = require('sharp');
 
 const https = require('https');
 
@@ -410,29 +409,19 @@ function extractOgImageFromHtml(html) {
   return imgMatch ? imgMatch[1] : null;
 }
 
-function fetchOgImage(url, timeoutMs = 15000, maxRedirects = 8) {
+function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
   return new Promise((resolve) => {
     if (!isSafeUrl(url)) return resolve(null);
     const mod = url.startsWith('https') ? https : http;
     const req = mod.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-        'Accept-Encoding': 'identity',
-        'Cache-Control': 'no-cache',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html'
       },
       timeout: timeoutMs
     }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && maxRedirects > 0) {
-        let nextUrl = res.headers.location;
-        if (nextUrl.startsWith('/')) {
-          try { const u = new URL(url); nextUrl = `${u.protocol}//${u.host}${nextUrl}`; } catch(e) {}
-        }
-        fetchOgImage(nextUrl, timeoutMs, maxRedirects - 1).then(resolve);
+        fetchOgImage(res.headers.location, timeoutMs, maxRedirects - 1).then(resolve);
         return;
       }
       if (res.statusCode !== 200) { res.resume(); return resolve(null); }
@@ -440,7 +429,7 @@ function fetchOgImage(url, timeoutMs = 15000, maxRedirects = 8) {
       res.setEncoding('utf8');
       res.on('data', c => {
         body += c;
-        if (body.length > 150000) { res.destroy(); resolve(extractOgImageFromHtml(body)); }
+        if (body.length > 100000) { res.destroy(); const img = extractOgImageFromHtml(body); resolve(img); }
       });
       res.on('end', () => resolve(extractOgImageFromHtml(body)));
       res.on('error', () => resolve(null));
@@ -448,39 +437,6 @@ function fetchOgImage(url, timeoutMs = 15000, maxRedirects = 8) {
     req.on('error', () => resolve(null));
     req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
   });
-}
-
-async function fetchImageViaMicrolink(url) {
-  try {
-    const got = require('got');
-    const res = await got('https://api.microlink.io', {
-      searchParams: { url },
-      responseType: 'json',
-      timeout: { request: 15000 }
-    });
-    if (res.body?.status === 'success' && res.body?.data?.image?.url) {
-      return res.body.data.image.url;
-    }
-  } catch (e) {}
-  return null;
-}
-
-async function fetchImageViaLinkPreview(url) {
-  try {
-    const got = require('got');
-    const res = await got('https://linkpreview.xyz/api/get-meta-tags', {
-      searchParams: { url },
-      responseType: 'json',
-      timeout: { request: 20000 }
-    });
-    if (res.body?.image) {
-      console.log(`✅ linkpreview.xyz صورة: ${res.body.image.substring(0, 80)}...`);
-      return res.body.image;
-    }
-  } catch (e) {
-    console.log(`⚠️ linkpreview.xyz فشل: ${e.message}`);
-  }
-  return null;
 }
 
 function normalizeAliExpressLinks(text) {
@@ -928,7 +884,7 @@ function stopReviewBot() {
 }
 
 async function executePublish(review) {
-  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog, firstProductRating, firstProductOrders, firstProductId } = review;
+  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
   const botToken = await getBotToken();
   if (!botToken) {
     console.log('❌ فشل النشر: لا يوجد توكن بوت');
@@ -976,40 +932,8 @@ async function executePublish(review) {
             await publishBot.telegram.sendMessage(target, textMessage);
           }
         } catch (photoErr) {
-          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — محاولة تحميل كـ Buffer...`);
-          let sentWithBuffer = false;
-          const imgUrl = typeof productImage === 'string' ? productImage : (logImage && !logImage.startsWith('data:') ? logImage : null);
-          if (imgUrl) {
-            try {
-              const imgBuffer = await new Promise((resolve, reject) => {
-                const mod = imgUrl.startsWith('https') ? https : http;
-                mod.get(imgUrl, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (resp) => {
-                  if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
-                    const rMod = resp.headers.location.startsWith('https') ? https : http;
-                    rMod.get(resp.headers.location, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }, (r2) => {
-                      const chunks = []; r2.on('data', c => chunks.push(c)); r2.on('end', () => resolve(Buffer.concat(chunks))); r2.on('error', reject);
-                    }).on('error', reject);
-                  } else {
-                    const chunks = []; resp.on('data', c => chunks.push(c)); resp.on('end', () => resolve(Buffer.concat(chunks))); resp.on('error', reject);
-                  }
-                }).on('error', reject);
-              });
-              if (imgBuffer.length > 1000) {
-                await publishBot.telegram.sendPhoto(target, { source: imgBuffer }, { caption: captionMessage });
-                if (message.length > 1000) {
-                  await publishBot.telegram.sendMessage(target, textMessage);
-                }
-                sentWithBuffer = true;
-                console.log(`✅ تم إرسال الصورة كـ Buffer بنجاح في ${target}`);
-              }
-            } catch (bufErr) {
-              console.log(`⚠️ فشل تحميل/إرسال الصورة كـ Buffer: ${bufErr.message}`);
-            }
-          }
-          if (!sentWithBuffer) {
-            console.log(`📝 إرسال نص فقط في ${target}`);
-            await publishBot.telegram.sendMessage(target, textMessage);
-          }
+          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — إرسال نص فقط`);
+          await publishBot.telegram.sendMessage(target, textMessage);
         }
       } else {
         await publishBot.telegram.sendMessage(target, textMessage);
@@ -1049,55 +973,22 @@ async function executePublish(review) {
         title: productTitle || '',
         price: productPrice || '',
         link: affiliateLink || originalLink || '',
-        originalLink: originalLink || '',
         image: logImage || '',
         message: message || '',
-        rating: firstProductRating || null,
-        orders: firstProductOrders || null,
-        productId: firstProductId || null,
         createdAt: new Date().toISOString()
       });
-      const saveResult = await new Promise((resolve) => {
-        const options = {
-          hostname: '127.0.0.1',
-          port: parseInt(process.env.PORT) || 5000,
-          path: '/api/saved-posts',
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
-        };
-        const req2 = http.request(options, (res2) => {
-          let body = '';
-          res2.on('data', c => body += c);
-          res2.on('end', () => {
-            try {
-              const parsed = JSON.parse(body);
-              if (parsed.success) {
-                console.log(`💾 تم حفظ المنشور في المحفوظات`);
-              } else {
-                console.log(`⚠️ فشل حفظ المنشور: ${parsed.error || 'unknown'}`);
-              }
-              resolve(parsed.success);
-            } catch(e) {
-              console.log(`⚠️ استجابة غير صالحة من حفظ المنشور: ${body.substring(0, 100)}`);
-              resolve(false);
-            }
-          });
-        });
-        req2.on('error', (err) => {
-          console.log(`❌ خطأ في حفظ المنشور: ${err.message}`);
-          resolve(false);
-        });
-        req2.setTimeout(10000, () => {
-          req2.destroy();
-          console.log(`⏱️ انتهت مهلة حفظ المنشور`);
-          resolve(false);
-        });
-        req2.write(postData);
-        req2.end();
-      });
-    } catch (e) {
-      console.log(`❌ خطأ عام في حفظ المنشور: ${e.message}`);
-    }
+      const options = {
+        hostname: '127.0.0.1',
+        port: parseInt(process.env.PORT) || 5000,
+        path: '/api/saved-posts',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+      };
+      const req2 = http.request(options);
+      req2.on('error', () => {});
+      req2.write(postData);
+      req2.end();
+    } catch (e) {}
   }
   addLogEntry({
     source: sourceName, originalLink, affiliateLink,
@@ -1452,19 +1343,14 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
   const convertedLinks = [];
-  let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '', firstProductRating = null, firstProductOrders = null;
+  let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
   const cookie = await getCookie();
   if (!cookie) {
     addLogEntry({ source: sourceName, originalLink: aliLinks[0], status: 'cookie_expired', error: 'الكوكي غير موجود — أدخله في الإعدادات الرئيسية' });
     return;
   }
 
-  console.log(`📋 قائمة الروابط المستخرجة (${aliLinks.length}):`);
-  aliLinks.forEach((l, i) => console.log(`   ${i+1}. ${l}`));
-
-  for (let linkIndex = 0; linkIndex < aliLinks.length; linkIndex++) {
-    const originalLink = aliLinks[linkIndex];
-    console.log(`\n🔄 معالجة الرابط ${linkIndex+1}/${aliLinks.length}: ${originalLink.substring(0, 60)}`);
+  for (const originalLink of aliLinks) {
     if (await isLinkProcessed(originalLink)) {
       console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
       continue;
@@ -1488,18 +1374,6 @@ async function processPost(config, text, sourceImage, sourceName) {
           affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
           resolvedProductId = result.productId || null;
           if (affLink) console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
-          // استخدام بيانات المعاينة مباشرة من portaffFunction (نفس آلية الصفحة الرئيسية)
-          if (!firstProductId && resolvedProductId) {
-            firstProductId = resolvedProductId;
-            if (result.previews) {
-              firstApiTitle = result.previews.title || firstApiTitle;
-              firstProductImage = result.previews.image_url || firstProductImage;
-              firstProductPrice = priceFromPost || result.previews.price || firstProductPrice;
-              firstProductRating = result.previews.rating || firstProductRating;
-              firstProductOrders = result.previews.orders || firstProductOrders;
-              if (firstProductImage) console.log(`🖼 صورة من portaffFunction: ${firstProductImage.substring(0, 80)}...`);
-            }
-          }
         }
         if (!affLink) {
           console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
@@ -1509,18 +1383,6 @@ async function processPost(config, text, sourceImage, sourceName) {
               affLink = directResult.affLink;
               resolvedProductId = directResult.productId || resolvedProductId;
               console.log(`🔗 تحويل مباشر (احتياط): ${affLink.substring(0, 60)}...`);
-              // استخدام previews من directAffLink مباشرة (تحتوي على نتائج كل طرق الجلب)
-              if (!firstProductId && resolvedProductId) {
-                firstProductId = resolvedProductId;
-              }
-              if (resolvedProductId && directResult.previews) {
-                firstApiTitle = directResult.previews.title || firstApiTitle;
-                firstProductImage = directResult.previews.image_url || firstProductImage;
-                firstProductPrice = priceFromPost || directResult.previews.price || firstProductPrice;
-                firstProductRating = directResult.previews.rating || firstProductRating;
-                firstProductOrders = directResult.previews.orders || firstProductOrders;
-                if (firstProductImage) console.log(`🖼 صورة من directAffLink (احتياط) [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
-              }
             }
           } catch (directErr) {
             console.log(`❌ فشل التحويل المباشر أيضاً: ${directErr.message}`);
@@ -1533,17 +1395,6 @@ async function processPost(config, text, sourceImage, sourceName) {
             affLink = directResult.affLink;
             resolvedProductId = directResult.productId || null;
             console.log(`🔗 تحويل مباشر: ${affLink.substring(0, 60)}...`);
-            if (!firstProductId && resolvedProductId) {
-              firstProductId = resolvedProductId;
-            }
-            if (resolvedProductId && directResult.previews) {
-              firstApiTitle = directResult.previews.title || firstApiTitle;
-              firstProductImage = directResult.previews.image_url || firstProductImage;
-              firstProductPrice = priceFromPost || directResult.previews.price || firstProductPrice;
-              firstProductRating = directResult.previews.rating || firstProductRating;
-              firstProductOrders = directResult.previews.orders || firstProductOrders;
-              if (firstProductImage) console.log(`🖼 صورة من directAffLink [${directResult.previews.method}]: ${firstProductImage.substring(0, 80)}...`);
-            }
           }
         } catch (directErr) {
           console.log(`❌ فشل التحويل المباشر: ${directErr.message}`);
@@ -1551,46 +1402,37 @@ async function processPost(config, text, sourceImage, sourceName) {
       }
 
       if (!affLink) {
-        console.log(`❌ فشل تحويل الرابط ${linkIndex+1}: ${originalLink.substring(0, 60)} — تخطي هذا الرابط`);
         addLogEntry({ source: sourceName, originalLink, status: 'failed', error: 'فشل تحويل الرابط' });
         inFlightLinks.delete(normalizeAliLink(originalLink));
         continue;
       }
 
-      console.log(`✅ نجح تحويل الرابط ${linkIndex+1}: ${affLink.substring(0, 60)} (Product: ${resolvedProductId || 'غير معروف'})`);
       markLinkProcessed(originalLink);
 
       if (resolvedProductId) {
         const productKey = 'product:' + resolvedProductId;
-        const alreadyInThisPost = convertedLinks.some(cl => cl.resolvedProductId === resolvedProductId);
-        if (!alreadyInThisPost) {
-          try {
-            const isDuplicate = await db.isLinkProcessed(productKey);
-            if (isDuplicate) {
-              console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
-              continue;
-            }
-            await db.addProcessedLink(productKey);
-          } catch (e) {
-            console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
+        try {
+          const isDuplicate = await db.isLinkProcessed(productKey);
+          if (isDuplicate) {
+            console.log(`🔁 تخطي منتج مكرر (ID: ${resolvedProductId})`);
+            continue;
           }
+          await db.addProcessedLink(productKey);
+        } catch (e) {
+          console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
         }
       }
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
-      // احتياط: جلب بيانات المنتج إذا لم تُجلب بعد من portaffFunction أو directAffLink
       if (!firstProductId && resolvedProductId) {
         firstProductId = resolvedProductId;
         const preview = await fetchLinkPreview(resolvedProductId);
         if (preview) {
-          console.log(`✅ بيانات المنتج احتياط (الطريقة: ${preview.method})`);
+          console.log(`✅ بيانات المنتج (الطريقة: ${preview.method})`);
           firstApiTitle = preview.title || '';
           firstProductImage = preview.image_url || '';
           firstProductPrice = priceFromPost || preview.price || '';
-          firstProductRating = preview.rating || firstProductRating;
-          firstProductOrders = preview.orders || firstProductOrders;
-          if (firstProductImage) console.log(`🖼 صورة من fetchLinkPreview احتياط: ${firstProductImage.substring(0, 80)}...`);
         }
       }
     } catch (linkErr) {
@@ -1609,187 +1451,73 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   console.log(`✅ تم تحويل ${convertedLinks.length} رابط من أصل ${aliLinks.length} — بناء منشور واحد`);
-  convertedLinks.forEach((cl, i) => console.log(`   رابط ${i+1}: ${cl.affLink.substring(0, 70)} (Product: ${cl.resolvedProductId || '?'})`));
 
   // === المرحلة 2: بناء منشور واحد يحتوي كل الروابط المحوّلة ===
   let productImage = null;
-  let resolvedImageUrl = null; // رابط الصورة المستخدم (للسجل والمحفوظات)
 
   if (firstProductImage && typeof firstProductImage === 'string') {
     console.log(`🖼 محاولة تحميل صورة المنتج: ${firstProductImage.substring(0, 80)}...`);
     const imgBuffer = await downloadImageAsBuffer(firstProductImage);
     if (imgBuffer) {
       productImage = { source: imgBuffer };
-      resolvedImageUrl = firstProductImage;
       console.log(`✅ تم تحميل صورة المنتج (${Math.round(imgBuffer.length/1024)}KB)`);
     } else {
       productImage = firstProductImage;
-      resolvedImageUrl = firstProductImage;
       console.log(`⚠️ فشل تحميل الصورة كملف — إرسال URL مباشر`);
     }
   }
 
   if (!productImage) {
     const firstAffLink = convertedLinks[0]?.affLink;
-    const firstOrigLink = convertedLinks[0]?.originalLink;
-    const linksToTry = [firstOrigLink, firstAffLink].filter(Boolean);
-    for (const tryLink of linksToTry) {
-      console.log(`🖼 محاولة استخراج og:image من: ${tryLink.substring(0, 80)}...`);
+    if (firstAffLink) {
+      console.log(`🖼 محاولة استخراج og:image من رابط الأفلييت...`);
       try {
-        const ogImg = await fetchOgImage(tryLink);
+        const ogImg = await fetchOgImage(firstAffLink);
         if (ogImg) {
           console.log(`🖼 وجد og:image: ${ogImg.substring(0, 80)}...`);
           const ogBuffer = await downloadImageAsBuffer(ogImg);
           if (ogBuffer) {
             productImage = { source: ogBuffer };
-            resolvedImageUrl = ogImg;
             console.log(`✅ تم تحميل صورة og:image (${Math.round(ogBuffer.length/1024)}KB)`);
           } else {
             productImage = ogImg;
-            resolvedImageUrl = ogImg;
           }
-          break;
         }
       } catch (e) {
-        console.log(`⚠️ فشل استخراج og:image من ${tryLink.substring(0, 50)}: ${e.message}`);
+        console.log(`⚠️ فشل استخراج og:image: ${e.message}`);
       }
-    }
-    if (!productImage) {
-      for (const tryLink of linksToTry) {
-        console.log(`🖼 محاولة linkpreview.xyz للصورة: ${tryLink.substring(0, 80)}...`);
-        const lpImg = await fetchImageViaLinkPreview(tryLink);
-        if (lpImg) {
-          const lpBuffer = await downloadImageAsBuffer(lpImg);
-          if (lpBuffer) {
-            productImage = { source: lpBuffer };
-            resolvedImageUrl = lpImg;
-            console.log(`✅ تم تحميل صورة linkpreview.xyz (${Math.round(lpBuffer.length/1024)}KB)`);
-          } else {
-            productImage = lpImg;
-            resolvedImageUrl = lpImg;
-          }
-          break;
-        }
-      }
-    }
-    if (!productImage) {
-      for (const tryLink of linksToTry) {
-        console.log(`🖼 محاولة Microlink للصورة: ${tryLink.substring(0, 80)}...`);
-        const mlImg = await fetchImageViaMicrolink(tryLink);
-        if (mlImg) {
-          console.log(`✅ صورة Microlink: ${mlImg.substring(0, 80)}...`);
-          const mlBuffer = await downloadImageAsBuffer(mlImg);
-          if (mlBuffer) {
-            productImage = { source: mlBuffer };
-            resolvedImageUrl = mlImg;
-            console.log(`✅ تم تحميل صورة Microlink (${Math.round(mlBuffer.length/1024)}KB)`);
-          } else {
-            productImage = mlImg;
-            resolvedImageUrl = mlImg;
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  if (!productImage && firstProductId) {
-    console.log(`🖼 محاولة جلب صورة المنتج مباشرة من API (ID: ${firstProductId})...`);
-    try {
-      const { getProductDetails } = require('./aliexpress-api');
-      const apiInfo = await getProductDetails(firstProductId);
-      if (apiInfo && apiInfo.image_url) {
-        console.log(`✅ صورة من API مباشر: ${apiInfo.image_url.substring(0, 80)}...`);
-        const apiImgBuffer = await downloadImageAsBuffer(apiInfo.image_url);
-        if (apiImgBuffer) {
-          productImage = { source: apiImgBuffer };
-          resolvedImageUrl = apiInfo.image_url;
-          console.log(`✅ تم تحميل صورة API مباشر (${Math.round(apiImgBuffer.length/1024)}KB)`);
-        } else {
-          productImage = apiInfo.image_url;
-          resolvedImageUrl = apiInfo.image_url;
-        }
-      }
-    } catch (apiImgErr) {
-      console.log(`⚠️ فشل جلب صورة API مباشر: ${apiImgErr.message}`);
-    }
-  }
-
-  if (!productImage && convertedLinks.length > 0) {
-    const resolvedPid = convertedLinks[0]?.resolvedProductId || firstProductId;
-    if (resolvedPid) {
-      const directImgUrl = `https://ae01.alicdn.com/kf/S${resolvedPid}.jpg`;
-      console.log(`🖼 محاولة صورة CDN مباشرة: ${directImgUrl}`);
-      try {
-        const cdnBuffer = await downloadImageAsBuffer(directImgUrl);
-        if (cdnBuffer && cdnBuffer.length > 5000) {
-          productImage = { source: cdnBuffer };
-          resolvedImageUrl = directImgUrl;
-          console.log(`✅ صورة CDN (${Math.round(cdnBuffer.length/1024)}KB)`);
-        }
-      } catch (e) {}
     }
   }
 
   if (!productImage && sourceImage) {
     productImage = { source: sourceImage };
-    resolvedImageUrl = firstProductImage || null;
     console.log(`🖼 استخدام صورة المنشور الأصلي كاحتياط أخير`);
-    // إنشاء مصغّرة base64 للحفظ في المحفوظات عندما لا يوجد رابط URL
-    if (!resolvedImageUrl) {
-      try {
-        const thumb = await sharp(sourceImage)
-          .resize(300, 300, { fit: 'cover' })
-          .jpeg({ quality: 75 })
-          .toBuffer();
-        resolvedImageUrl = `data:image/jpeg;base64,${thumb.toString('base64')}`;
-        console.log(`🖼 تم إنشاء مصغّرة base64 للصورة (${Math.round(thumb.length / 1024)}KB)`);
-      } catch (thumbErr) {
-        console.log(`⚠️ فشل إنشاء المصغّرة: ${thumbErr.message}`);
-      }
-    }
   }
 
-  const imageUrlForLog = resolvedImageUrl || (typeof productImage === 'string' ? productImage : null);
+  const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
-
-  if (!productTitle || /^\d+$/.test(productTitle)) {
+  if (!productTitle) {
+    const postLines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('http') && !l.startsWith('👇') && !l.includes('aliexpress.com') && !l.includes('s.click'));
+    if (postLines.length > 0) {
+      productTitle = postLines[0];
+      console.log(`📝 استخدام عنوان المنشور كاحتياط: ${productTitle}`);
+    }
+  }
+  if (!productTitle || productTitle === firstApiTitle) {
     try {
       const aiInfo = await extractProductInfoWithAI(text, firstApiTitle);
-      if (aiInfo && aiInfo.productName && !/^\d+$/.test(aiInfo.productName)) {
+      if (aiInfo && aiInfo.productName) {
         productTitle = aiInfo.productName;
         console.log(`🤖 AI استخرج المنتج: "${productTitle}"`);
+      } else if (firstApiTitle) {
+        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
       }
     } catch (e) {
-      console.log(`⚠️ فشل AI في استخراج العنوان: ${e.message}`);
+      if (firstApiTitle) {
+        try { productTitle = (await refineTitle(firstApiTitle)) || firstApiTitle; } catch (aiErr) {}
+      }
     }
-  }
-
-  if (!productTitle || /^\d+$/.test(productTitle)) {
-    const postLines = (text || '').split('\n').map(l => l.trim()).filter(l =>
-      l && l.length > 3 &&
-      !l.startsWith('http') && !l.startsWith('👇') &&
-      !l.includes('aliexpress.com') && !l.includes('s.click') &&
-      !l.includes('t.me/') && !l.includes('قناتنا') &&
-      !/^[\u0600-\u06FF\s.,!؟?]+$/.test(l) &&
-      !/^[🔥💰🎁✅❌⭐🏷️📢📦🎉💥🔔⚡🛒🛍️💸🎊🤩👇👆🔗📌💡🏪🎈🔝📣]+$/.test(l)
-    );
-    const englishLine = postLines.find(l => /[A-Za-z]{3,}/.test(l) && /\b[A-Z][a-z]/.test(l));
-    if (englishLine) {
-      productTitle = englishLine
-        .replace(/^[✅☑️🔹🔸▶️➡️•\-\d.)\]]+\s*/, '')
-        .replace(/[\u0600-\u06FF]+/g, '')
-        .trim();
-      console.log(`📝 عنوان مستخرج من المنشور (إنجليزي): ${productTitle}`);
-    } else if (postLines.length > 0) {
-      productTitle = postLines[0].replace(/^[✅☑️🔹🔸▶️➡️•\-\d.)\]]+\s*/, '').trim();
-      console.log(`📝 عنوان مستخرج من المنشور (أول سطر): ${productTitle}`);
-    }
-  }
-
-  if (firstApiTitle && firstApiTitle !== productTitle && firstApiTitle.length > productTitle?.length) {
-    try { productTitle = (await refineTitle(firstApiTitle)) || productTitle || firstApiTitle; } catch (aiErr) {}
   }
 
   if (productTitle && productTitle.length > 60) {
@@ -1940,8 +1668,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   const reviewData = {
     message, productImage, targetIds, sourceName, originalLink: allOriginalLinks,
     affiliateLink: firstAffLink, productTitle, productPrice, imageUrlForLog,
-    originalText: text,
-    firstProductRating, firstProductOrders, firstProductId
+    originalText: text
   };
 
   if (config.manualReview && config.ownerId && botToken) {
