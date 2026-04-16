@@ -85,6 +85,21 @@ async function initDatabase() {
         value TEXT,
         updated_at TIMESTAMP DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id SERIAL PRIMARY KEY,
+        token TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS store_analytics (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        detail TEXT,
+        user_id TEXT,
+        hour INTEGER,
+        date TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
     await pool.query(`
       DO $$ BEGIN
@@ -470,6 +485,53 @@ async function getAppStorage(key) {
   }
 }
 
+async function createAuthSession(token, hours = 72) {
+  try {
+    await query(
+      'INSERT INTO auth_sessions (token, expires_at) VALUES ($1, NOW() + make_interval(hours => $2))',
+      [token, hours]
+    );
+    return true;
+  } catch (e) { return false; }
+}
+
+async function validateAuthSession(token) {
+  try {
+    const result = await query(
+      'SELECT id FROM auth_sessions WHERE token = $1 AND expires_at > NOW()',
+      [token]
+    );
+    return result.rows.length > 0;
+  } catch (e) { return false; }
+}
+
+async function deleteAuthSession(token) {
+  try { await query('DELETE FROM auth_sessions WHERE token = $1', [token]); } catch (e) {}
+}
+
+async function cleanExpiredSessions() {
+  try { await query('DELETE FROM auth_sessions WHERE expires_at < NOW()'); } catch (e) {}
+}
+
+async function addAnalyticsEvent(type, detail, userId, hour, date) {
+  try {
+    await query(
+      'INSERT INTO store_analytics (type, detail, user_id, hour, date) VALUES ($1, $2, $3, $4, $5)',
+      [type, detail || '', userId || 'anon', hour, date]
+    );
+  } catch (e) {}
+}
+
+async function getAnalyticsEvents(since) {
+  try {
+    const result = await query(
+      'SELECT type, detail, user_id, hour, date, created_at FROM store_analytics WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 10000',
+      [since]
+    );
+    return result.rows;
+  } catch (e) { return []; }
+}
+
 module.exports = {
   initDatabase,
   query,
@@ -494,5 +556,11 @@ module.exports = {
   clearSavedPosts,
   setAppStorage,
   getAppStorage,
+  createAuthSession,
+  validateAuthSession,
+  deleteAuthSession,
+  cleanExpiredSessions,
+  addAnalyticsEvent,
+  getAnalyticsEvents,
   closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
 };
