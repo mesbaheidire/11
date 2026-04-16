@@ -167,11 +167,9 @@ async function idCatcher(input) {
 
 
 async function fetchLinkPreview(productId) {
-    let microlinkData = null;
-
-    // 1) Microlink.io API first (for title/image fallback)
+    // 1) Microlink.io API — أسرع وأدق
     try {
-        console.log("Trying microlink.io API...");
+        console.log("🚀 Microlink.io API...");
         const apiRes = await got('https://api.microlink.io', {
             searchParams: {
                 url: `https://m.aliexpress.com/item/${productId}.html`
@@ -193,21 +191,45 @@ async function fetchLinkPreview(productId) {
                 !title.includes('Smarter Shopping') &&
                 !title.match(/^\d+\.html$/);
             
-            if (isValidTitle) {
-                console.log("✅ Microlink title found:", title.substring(0, 50) + "...");
-                microlinkData = { title, image_url: imageUrl };
+            if (isValidTitle && imageUrl) {
+                console.log("✅ Microlink OK:", title.substring(0, 50) + "...");
+                let rating = null, orders = null, price = null, original_price = null, discount = null, currency = null, shop_name = null;
+                try {
+                    const apiResult = await getProductDetails(productId);
+                    if (apiResult) {
+                        rating = apiResult.rating || null;
+                        orders = apiResult.orders || null;
+                        price = apiResult.sale_price || apiResult.price || null;
+                        original_price = apiResult.original_price || null;
+                        discount = apiResult.discount || null;
+                        currency = apiResult.currency || null;
+                        shop_name = apiResult.shop_name || null;
+                    }
+                } catch (e) {}
+                return {
+                    method: "Microlink + API",
+                    title,
+                    image_url: imageUrl,
+                    price: price || "راجع الرابط",
+                    original_price,
+                    discount,
+                    currency,
+                    shop_name,
+                    rating,
+                    orders
+                };
             }
         }
     } catch (apiErr) {
-        console.log("microlink.io API failed:", apiErr.message);
+        console.log("⚠️ Microlink failed:", apiErr.message);
     }
 
-    // 2) AliExpress API (always try — provides rating/orders)
+    // 2) AliExpress API احتياط
     try {
         const apiResult = await getProductDetails(productId);
         
         if (apiResult && apiResult.title) {
-            console.log("✅ Product fetched via API - Title:", apiResult.title.substring(0, 50) + "...");
+            console.log("✅ AliExpress API:", apiResult.title.substring(0, 50) + "...");
             return {
                 method: "AliExpress API",
                 title: apiResult.title,
@@ -222,11 +244,7 @@ async function fetchLinkPreview(productId) {
             };
         }
     } catch (apiErr) {
-        console.log("API fetch failed, falling back to other methods:", apiErr.message);
-    }
-
-    if (microlinkData) {
-        return { method: "Microlink API", ...microlinkData, price: "راجع الرابط", rating: null, orders: null };
+        console.log("⚠️ AliExpress API failed:", apiErr.message);
     }
 
     // 3) Web Scraping - try multiple URL formats
