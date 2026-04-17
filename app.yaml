@@ -1,0 +1,30 @@
+name: boty-1
+services:
+- name: web
+  github:
+    repo: ahmedboukhotem/boty-1  # Updated to match your screenshot
+    branch: main
+    deploy_on_push: true
+  dockerfile_path: Dockerfile
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 5000
+  envs:
+  - key: PORT
+    scope: RUN_AND_BUILD_TIME
+    value: "5000"
+  - key: cook
+    scope: RUN_TIME
+    type: SECRET
+  - key: TELEGRAM_BOT_TOKEN
+    scope: RUN_TIME
+    type: SECRET
+  - key: TELEGRAM_CHANNEL_ID
+    scope: RUN_TIME
+    type: SECRET
+  - key: ALIEXPRESS_APP_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: ALIEXPRESS_APP_SECRET
+    scope: RUN_TIME
+    type: SECRET

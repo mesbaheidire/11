@@ -189,8 +189,6 @@ async function getAuthState() {
 
 async function saveAuthState(state) {
   try {
-    // Keep only the latest auth state — delete old rows first to prevent unbounded growth
-    await query('DELETE FROM spy_auth_state', []);
     await query(
       'INSERT INTO spy_auth_state (step, phone_code_hash, phone_number, updated_at) VALUES ($1, $2, $3, NOW())',
       [state.step, state.phoneCodeHash, state.phoneNumber]
@@ -198,42 +196,6 @@ async function saveAuthState(state) {
     return true;
   } catch (e) {
     console.log('⚠️ Failed to save auth state:', e.message);
-    return false;
-  }
-}
-
-async function cleanupOldLogs(daysToKeep = 30) {
-  try {
-    const result = await query(
-      "DELETE FROM spy_log WHERE timestamp < NOW() - make_interval(days => $1)",
-      [daysToKeep]
-    );
-    if (result.rowCount > 0) {
-      console.log(`🧹 Cleaned up ${result.rowCount} old log entries (>${daysToKeep} days)`);
-    }
-    return result.rowCount || 0;
-  } catch (e) {
-    console.log('⚠️ Failed to cleanup old logs:', e.message);
-    return 0;
-  }
-}
-
-async function getDailyCount(date) {
-  try {
-    const raw = await getAppStorage('daily_publish_counter');
-    if (!raw) return 0;
-    const data = JSON.parse(raw);
-    return data.date === date ? (data.count || 0) : 0;
-  } catch (e) {
-    return 0;
-  }
-}
-
-async function setDailyCount(date, count) {
-  try {
-    await setAppStorage('daily_publish_counter', JSON.stringify({ date, count }));
-    return true;
-  } catch (e) {
     return false;
   }
 }
@@ -536,9 +498,6 @@ module.exports = {
   addLogEntry,
   deleteLogEntry,
   clearLog,
-  cleanupOldLogs,
-  getDailyCount,
-  setDailyCount,
   getLog,
   getTelegramSession,
   saveTelegramSession,

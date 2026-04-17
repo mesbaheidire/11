@@ -14,7 +14,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const db = require('./db');
 const { postToFacebookPage, verifyPageToken } = require('./facebook');
 
-const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish, logoutSpy } = require('./spy');
+const { loadConfig: loadSpyConfig, saveConfig: saveSpyConfig, invalidateConfigCache: invalidateSpyCache, startSpy, stopSpy, getStatus: getSpyStatus, loadLog: loadSpyLog, sendLoginCode, verifyCode, executePublish } = require('./spy');
 
 const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
 
@@ -2103,6 +2103,7 @@ app.post('/api/spy/start', async (req, res) => {
 
 app.post('/api/spy/logout', async (req, res) => {
   try {
+    const { logoutSpy } = require('./spy');
     await logoutSpy();
     res.json({ success: true, message: 'تم تسجيل الخروج بنجاح' });
   } catch (error) {
@@ -2133,6 +2134,7 @@ app.get('/api/spy/log', async (req, res) => {
 
 app.delete('/api/spy/log/:id', async (req, res) => {
   try {
+    const db = require('./db');
     await db.deleteLogEntry(req.params.id);
     res.json({ success: true });
   } catch (error) {
@@ -2142,6 +2144,7 @@ app.delete('/api/spy/log/:id', async (req, res) => {
 
 app.delete('/api/spy/log', async (req, res) => {
   try {
+    const db = require('./db');
     await db.clearLog();
     res.json({ success: true });
   } catch (error) {
@@ -2452,6 +2455,7 @@ app.post('/api/video/generate-veo-prompt', async (req, res) => {
 
     if (imageUrl) {
       try {
+        const axios = require('axios');
         const imgResponse = await axios.get(imageUrl, {
           responseType: 'arraybuffer',
           timeout: 10000,
@@ -2714,6 +2718,7 @@ app.get('/api/proxy-image', async (req, res) => {
       return res.status(403).send('Domain not allowed');
     }
 
+    const axios = require('axios');
     const response = await axios.get(imageUrl, {
       responseType: 'arraybuffer',
       timeout: 10000,
@@ -3030,13 +3035,6 @@ async function runAutoCleanup() {
 }
 
 setInterval(runAutoCleanup, 60 * 60 * 1000);
-
-// Daily cleanup of old spy log entries (keep last 30 days)
-async function runLogCleanup() {
-  try { await db.cleanupOldLogs(30); } catch (e) {}
-}
-setInterval(runLogCleanup, 24 * 60 * 60 * 1000);
-setTimeout(runLogCleanup, 30000);
 
 // ==================== End Analytics ====================
 

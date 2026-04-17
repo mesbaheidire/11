@@ -80,7 +80,7 @@ npm start
   - Bot token and cookie used automatically from main app environment variables
   - Configurable message template with seller coupon field
   - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
-  - Duplicate link detection — skips already-processed links (stored in PostgreSQL `spy_processed_links` table, configurable cooldown 1-168h)
+  - Duplicate link detection — skips already-processed links (stored 7 days, file: `spy_processed.json`)
   - Random publish delay (configurable 1-60 min range) to avoid detection
   - Daily publish limit — configurable max posts per day (0 = unlimited), resets at midnight
   - Manual review mode — products sent to you via bot with "Publish"/"Skip" buttons before posting (30-min expiry)
@@ -144,7 +144,7 @@ Environment variables (Render) always take priority over database and local file
 The app uses PostgreSQL with the following key tables:
 - `spy_config` - Spy module configuration
 - `spy_auth_state` - Telegram authentication state
-- `spy_processed_links` - History of processed links (auto-purged after 168h max cooldown)
+- `spy_processed_links` - 7-day history of processed links
 - `spy_log` - Activity log for spy operations
 - `telegram_session` - Telegram user session
 - `gemini_keys` - Gemini API keys storage
