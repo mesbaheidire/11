@@ -3,7 +3,7 @@ services:
     name: boty-1
     env: node
     plan: free
-    buildCommand: npm ci --include=optional --foreground-scripts && npm rebuild --platform=linux --libc=glibc sharp
+    buildCommand: npm install --include=optional
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
