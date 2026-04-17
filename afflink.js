@@ -3,6 +3,19 @@ const { URL } = require("url");
 const { getProductDetails } = require('./aliexpress-api');
 
 
+function isValidAffUrl(value) {
+    if (!value || typeof value !== 'string') return false;
+    const v = value.trim();
+    if (!/^https?:\/\//i.test(v)) return false;
+    try {
+        const u = new URL(v);
+        if (!u.hostname || !u.hostname.includes('.')) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function getFinalRedirect(url, maxRedirects = 10) {
     let currentUrl = url;
     let bestUrl = url;
@@ -450,13 +463,13 @@ async function portaffFunction(cookie, ids) {
     }
 
     for (const pr of promoResults) {
+        let candidate = null;
         if (pr.data && typeof pr.data === 'object') {
-            result.aff[pr.type] = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
+            candidate = pr.data.promotionUrl || pr.data.couponUrl || pr.data.url || null;
         } else if (typeof pr.data === 'string') {
-            result.aff[pr.type] = pr.data;
-        } else {
-            result.aff[pr.type] = null;
+            candidate = pr.data;
         }
+        result.aff[pr.type] = isValidAffUrl(candidate) ? candidate : null;
     }
 
     result.previews = await fetchLinkPreview(productId);
@@ -511,7 +524,10 @@ async function directAffLink(cookie, originalUrl) {
         affLink = data;
     }
 
-    if (!affLink) throw new Error('فشل تحويل الرابط');
+    if (!isValidAffUrl(affLink)) {
+        console.log(`⚠️ رد غير صالح من AliExpress (ليس رابطاً): ${String(affLink).substring(0, 80)}`);
+        throw new Error('فشل تحويل الرابط — رد غير صالح من AliExpress (تحقق من الكوكي)');
+    }
 
     const idObj = await idCatcher(originalUrl);
     const productId = idObj?.id;

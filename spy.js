@@ -1564,9 +1564,14 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
         if (result && result.aff) {
           const linkType = config.linkType || 'coin';
-          affLink = result.aff[linkType] || result.aff.coin || result.aff.super || result.aff.point || Object.values(result.aff).find(v => v);
+          const isUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
+          const pickValid = (...vals) => vals.find(v => isUrl(v)) || null;
+          affLink = pickValid(result.aff[linkType], result.aff.coin, result.aff.super, result.aff.point)
+            || Object.values(result.aff).find(v => isUrl(v))
+            || null;
           resolvedProductId = result.productId || null;
           if (affLink) console.log(`🔗 تحويل بالنوع (${linkType}): ${affLink.substring(0, 60)}...`);
+          else console.log(`⚠️ لا يوجد رابط أفليت صالح في رد AliExpress (الرد ليس URL)`);
         }
         if (!affLink) {
           console.log(`⚠️ لم ينجح التحويل بالنوع — تجربة التحويل المباشر كاحتياط...`);
