@@ -3,11 +3,11 @@ services:
     name: boty-1
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci --include=optional --foreground-scripts && npm rebuild --platform=linux --libc=glibc sharp
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: 22
       - key: PORT
         value: 5000
       - key: cook
