@@ -592,6 +592,20 @@ app.post('/api/affiliate', async (req, res) => {
     const result = await portaffFunction(cookies, url);
     if (!result?.previews?.title) return res.status(400).json({ success: false, error: 'رابط غير صالح' });
 
+    const validUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
+    const links = {
+      coin: validUrl(result.aff.coin) ? result.aff.coin : null,
+      point: validUrl(result.aff.point) ? result.aff.point : null,
+      super: validUrl(result.aff.super) ? result.aff.super : null,
+      limit: validUrl(result.aff.limit) ? result.aff.limit : null,
+      bundle: validUrl(result.aff.ther3) ? result.aff.ther3 : null
+    };
+    const anyValid = Object.values(links).some(Boolean);
+    if (!anyValid) {
+      console.log('⚠️ /api/affiliate: لا يوجد أي رابط أفليت صالح في رد AliExpress', result.aff);
+      return res.status(400).json({ success: false, error: 'فشل تحويل الرابط — قد يكون الكوكي منتهي الصلاحية. جدّد الكوكي من الإعدادات.' });
+    }
+
     res.json({
       success: true,
       data: {
@@ -604,17 +618,12 @@ app.post('/api/affiliate', async (req, res) => {
         shop_name: result.previews.shop_name,
         rating: result.previews.rating,
         orders: result.previews.orders,
-        links: {
-          coin: result.aff.coin,
-          point: result.aff.point,
-          super: result.aff.super,
-          limit: result.aff.limit,
-          bundle: result.aff.ther3
-        }
+        links
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'حدث خطأ' });
+    console.error('❌ /api/affiliate error:', error?.message || error);
+    res.status(500).json({ success: false, error: error?.message || 'حدث خطأ أثناء تحويل الرابط' });
   }
 });
 
