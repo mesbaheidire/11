@@ -180,7 +180,29 @@ async function idCatcher(input) {
 
 
 async function fetchLinkPreview(productId) {
-    // 1) Microlink.io API first
+    // 1) AliExpress API (الأسرع والأكثر موثوقية — رسمي)
+    try {
+        const apiResult = await getProductDetails(productId);
+        if (apiResult && apiResult.title) {
+            console.log("✅ Product fetched via AliExpress API - Title:", apiResult.title.substring(0, 50) + "...");
+            return {
+                method: "AliExpress API",
+                title: apiResult.title,
+                image_url: apiResult.image_url,
+                price: apiResult.sale_price || apiResult.price || "غير متوفر",
+                original_price: apiResult.original_price,
+                discount: apiResult.discount,
+                currency: apiResult.currency,
+                shop_name: apiResult.shop_name,
+                rating: apiResult.rating,
+                orders: apiResult.orders
+            };
+        }
+    } catch (apiErr) {
+        console.log("AliExpress API fetch failed:", apiErr.message);
+    }
+
+    // 2) Microlink.io API (احتياط خارجي)
     try {
         console.log("Trying microlink.io API...");
         const apiRes = await got('https://api.microlink.io', {
@@ -188,7 +210,7 @@ async function fetchLinkPreview(productId) {
                 url: `https://m.aliexpress.com/item/${productId}.html`
             },
             responseType: 'json',
-            timeout: { request: 20000 }
+            timeout: { request: 15000 }
         });
         
         const data = apiRes.body;
@@ -216,29 +238,6 @@ async function fetchLinkPreview(productId) {
         }
     } catch (apiErr) {
         console.log("microlink.io API failed:", apiErr.message);
-    }
-
-    // 2) AliExpress API
-    try {
-        const apiResult = await getProductDetails(productId);
-        
-        if (apiResult && apiResult.title) {
-            console.log("✅ Product fetched via API - Title:", apiResult.title.substring(0, 50) + "...");
-            return {
-                method: "AliExpress API",
-                title: apiResult.title,
-                image_url: apiResult.image_url,
-                price: apiResult.sale_price || apiResult.price || "غير متوفر",
-                original_price: apiResult.original_price,
-                discount: apiResult.discount,
-                currency: apiResult.currency,
-                shop_name: apiResult.shop_name,
-                rating: apiResult.rating,
-                orders: apiResult.orders
-            };
-        }
-    } catch (apiErr) {
-        console.log("API fetch failed, falling back to other methods:", apiErr.message);
     }
 
     // 3) Web Scraping - try multiple URL formats
@@ -500,16 +499,23 @@ async function portaffFunction(cookie, ids) {
 }
 
 function prepareCookie(cookie) {
-    let cookieStr = cookie.trim();
-    if (cookieStr.includes('xman_t=')) {
-        const match = cookieStr.match(/xman_t=([^;]+)/);
-        if (match) {
-            cookieStr = `xman_t=${match[1]};`;
+    let cookieStr = String(cookie || '').trim();
+    if (!cookieStr) return '';
+
+    // إذا كان كوكي كامل (يحتوي على ; وعدة أسماء) — مرّره كما هو
+    if (cookieStr.includes(';') && cookieStr.includes('=')) {
+        // تأكد من وجود xman_t — إن لم يكن، فالكوكي ليس صالحاً للأفلييت
+        if (!/xman_t=/.test(cookieStr)) {
+            console.log('⚠️ الكوكي لا يحتوي على xman_t — قد لا يعمل');
         }
-    } else {
-        cookieStr = `xman_t=${cookieStr};`;
+        return cookieStr;
     }
-    return cookieStr;
+
+    // إذا كان فقط القيمة الخام (بدون اسم) — لفّها بـ xman_t
+    if (cookieStr.includes('xman_t=')) {
+        return cookieStr.endsWith(';') ? cookieStr : cookieStr + ';';
+    }
+    return `xman_t=${cookieStr};`;
 }
 
 async function directAffLink(cookie, originalUrl) {

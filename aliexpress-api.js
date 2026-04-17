@@ -33,8 +33,10 @@ async function getProductDetails(productId, options = {}) {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // Add small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1100 * attempt));
+            // تأخير فقط قبل المحاولات اللاحقة (وليس الأولى)
+            if (attempt > 1) {
+                await new Promise(resolve => setTimeout(resolve, 1100 * (attempt - 1)));
+            }
 
             const appKey = process.env.ALIEXPRESS_APP_KEY;
             const appSecret = process.env.ALIEXPRESS_APP_SECRET;
@@ -114,7 +116,9 @@ async function searchHotProducts(options = {}) {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            await new Promise(resolve => setTimeout(resolve, 1100 * attempt));
+            if (attempt > 1) {
+                await new Promise(resolve => setTimeout(resolve, 1100 * (attempt - 1)));
+            }
 
             const appKey = process.env.ALIEXPRESS_APP_KEY;
             const appSecret = process.env.ALIEXPRESS_APP_SECRET;
@@ -206,7 +210,9 @@ async function searchProducts(options = {}) {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            await new Promise(resolve => setTimeout(resolve, 1100 * attempt));
+            if (attempt > 1) {
+                await new Promise(resolve => setTimeout(resolve, 1100 * (attempt - 1)));
+            }
 
             const appKey = process.env.ALIEXPRESS_APP_KEY;
             const appSecret = process.env.ALIEXPRESS_APP_SECRET;

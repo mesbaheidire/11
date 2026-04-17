@@ -581,11 +581,6 @@ app.post('/api/affiliate', async (req, res) => {
   try {
     const { url, credentials } = req.body;
     const cookies = credentials?.cook || await getSharedCookie();
-    if (credentials?.cook) {
-      const shared = await loadSharedCredentials();
-      shared.cook = credentials.cook;
-      await saveSharedCredentials(shared);
-    }
     if (!url) return res.status(400).json({ success: false, error: 'الرجاء إرسال رابط المنتج' });
     if (!cookies) return res.status(500).json({ success: false, error: 'الرجاء إدخال Cookie في الإعدادات' });
 
@@ -605,6 +600,17 @@ app.post('/api/affiliate', async (req, res) => {
     if (!anyValid) {
       console.log('⚠️ /api/affiliate: لا يوجد أي رابط أفليت صالح في رد AliExpress', result.aff);
       return res.status(400).json({ success: false, error: 'فشل تحويل الرابط — قد يكون الكوكي منتهي الصلاحية. جدّد الكوكي من الإعدادات.' });
+    }
+
+    // الكوكي صالح — احفظه الآن (بعد التحقق فقط)
+    if (credentials?.cook && credentials.cook !== await getSharedCookie()) {
+      try {
+        const shared = await loadSharedCredentials();
+        shared.cook = credentials.cook;
+        await saveSharedCredentials(shared);
+      } catch (saveErr) {
+        console.log('⚠️ فشل حفظ الكوكي بعد التحقق:', saveErr.message);
+      }
     }
 
     res.json({
@@ -2258,47 +2264,24 @@ app.post('/api/video/fetch-product', async (req, res) => {
     }
 
     const result = await portaffFunction(cookies, url);
-    if (!result?.previews?.title) {
-      return res.json({
-        success: true,
-        data: {
-          title: 'منتج من AliExpress',
-          image: '',
-          price: '$29.99',
-          original_price: '$59.99',
-          discount: '-50%',
-          shop_name: 'Store'
-        }
-      });
-    }
-
+    const previews = result?.previews || {};
     res.json({
       success: true,
       data: {
-        title: result.previews.title,
-        image: result.previews.image_url,
-        price: result.previews.price,
-        original_price: result.previews.original_price,
-        discount: result.previews.discount,
-        currency: result.previews.currency,
-        shop_name: result.previews.shop_name,
-        rating: result.previews.rating,
-        orders: result.previews.orders
+        title: previews.title || `منتج من AliExpress`,
+        image: previews.image_url || '',
+        price: previews.price || '',
+        original_price: previews.original_price || '',
+        discount: previews.discount || '',
+        currency: previews.currency || 'USD',
+        shop_name: previews.shop_name || '',
+        rating: previews.rating || '',
+        orders: previews.orders || ''
       }
     });
   } catch (error) {
-    console.log('Video fetch-product error:', error.message);
-    res.json({
-      success: true,
-      data: {
-        title: 'منتج من AliExpress',
-        image: '',
-        price: '$29.99',
-        original_price: '$59.99',
-        discount: '-50%',
-        shop_name: 'Store'
-      }
-    });
+    console.error('❌ Video fetch-product error:', error?.message || error);
+    res.status(500).json({ success: false, error: error?.message || 'فشل جلب بيانات المنتج' });
   }
 });
 
