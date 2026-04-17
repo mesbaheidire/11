@@ -585,17 +585,28 @@
             localStorage.setItem('appSettings', JSON.stringify(settings));
             document.getElementById('warningText').textContent = settings.warning;
 
-            if (settings.telegramToken) {
-                const syncData = { botToken: settings.telegramToken };
-                fetch('/api/spy/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(syncData)
-                }).catch(() => {});
-            }
+            const syncData = {
+                dedupeEnabled: settings.dedupeEnabled,
+                dedupeHours: settings.dedupeHours
+            };
+            if (settings.telegramToken) syncData.botToken = settings.telegramToken;
+            fetch('/api/spy/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(syncData)
+            }).catch(() => {});
 
             closeSettings();
             showToast('تم حفظ الإعدادات');
+        }
+
+        function resetSettings() {
+            if (!confirm('هل أنت متأكد من استعادة القيم الافتراضية؟ سيتم فقدان جميع التخصيصات.')) return;
+            settings = { ...defaultSettings };
+            localStorage.setItem('appSettings', JSON.stringify(settings));
+            openSettings();
+            document.getElementById('warningText').textContent = settings.warning;
+            showToast('تم استعادة القيم الافتراضية');
         }
 
         let currentProductData = null;

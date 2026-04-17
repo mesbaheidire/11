@@ -203,12 +203,12 @@ async function saveAuthState(state) {
 async function getProcessedLinks() {
   try {
     const now = Date.now();
-    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
-    
-    // Delete old entries
-    await query('DELETE FROM spy_processed_links WHERE time < $1', [twentyFourHoursAgo]);
-    
-    // Get remaining
+    // Maximum retention = 168 hours (7 days) — matches the largest configurable cooldown
+    const maxRetention = now - (168 * 60 * 60 * 1000);
+
+    // Delete entries older than the maximum allowed cooldown
+    await query('DELETE FROM spy_processed_links WHERE time < $1', [maxRetention]);
+
     const result = await query('SELECT link, time FROM spy_processed_links ORDER BY time DESC LIMIT 10000');
     return result.rows.map(row => ({ link: row.link, time: row.time }));
   } catch (e) {
@@ -230,8 +230,16 @@ async function addProcessedLink(link) {
   }
 }
 
-async function isLinkProcessed(link) {
+async function isLinkProcessed(link, cooldownMs) {
   try {
+    if (cooldownMs && Number.isFinite(cooldownMs) && cooldownMs > 0) {
+      const cutoff = Date.now() - cooldownMs;
+      const result = await query(
+        'SELECT id FROM spy_processed_links WHERE link = $1 AND time >= $2 LIMIT 1',
+        [link, cutoff]
+      );
+      return result.rows.length > 0;
+    }
     const result = await query('SELECT id FROM spy_processed_links WHERE link = $1 LIMIT 1', [link]);
     return result.rows.length > 0;
   } catch (e) {

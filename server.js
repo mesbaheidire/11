@@ -2043,6 +2043,8 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
+    if (incoming.dedupeEnabled !== undefined) config.dedupeEnabled = !!incoming.dedupeEnabled;
+    if (incoming.dedupeHours !== undefined) config.dedupeHours = Math.max(1, Math.min(168, parseInt(incoming.dedupeHours) || 24));
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
     if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
     if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && !incoming.facebookPageToken.includes('****')) config.facebookPageToken = incoming.facebookPageToken;
@@ -2080,6 +2082,8 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.manualReview !== undefined) config.manualReview = incoming.manualReview;
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
+    if (incoming.dedupeEnabled !== undefined) config.dedupeEnabled = !!incoming.dedupeEnabled;
+    if (incoming.dedupeHours !== undefined) config.dedupeHours = Math.max(1, Math.min(168, parseInt(incoming.dedupeHours) || 24));
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
     if (incoming.facebookPageId !== undefined) config.facebookPageId = incoming.facebookPageId;
     if (incoming.facebookPageToken !== undefined && incoming.facebookPageToken !== '' && !incoming.facebookPageToken.includes('****')) config.facebookPageToken = incoming.facebookPageToken;

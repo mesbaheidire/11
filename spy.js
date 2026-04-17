@@ -10,9 +10,7 @@ const { postToFacebookPage } = require('./facebook');
 const https = require('https');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
-const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
-const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
 const AUTH_STATE_FILE = path.join(__dirname, 'spy_auth_state.json');
 
 const inFlightLinks = new Map(); // change to Map to track timeout
@@ -1536,7 +1534,6 @@ async function processPost(config, text, sourceImage, sourceName) {
   // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
   const convertedLinks = [];
   const seenAffLinks = new Set();
-  const seenProductIdsInPost = new Set();
   let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
   const cookie = await getCookie();
   if (!cookie) {
@@ -1611,11 +1608,6 @@ async function processPost(config, text, sourceImage, sourceName) {
         continue;
       }
       seenAffLinks.add(affLink);
-
-      // مستوى واحد فقط: نفس الرابط لا يعاد نشره خلال 24 ساعة
-      if (resolvedProductId && !seenProductIdsInPost.has(resolvedProductId)) {
-        seenProductIdsInPost.add(resolvedProductId);
-      }
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
