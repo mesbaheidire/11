@@ -58,9 +58,10 @@ async function loadProcessedLinks() {
   }
 }
 
-async function isLinkProcessed(link) {
+async function isLinkProcessed(link, cooldownHours = 24) {
   const normalized = normalizeAliLink(link);
   const now = Date.now();
+  const cooldownMs = Math.max(1, Math.min(168, parseInt(cooldownHours) || 24)) * 60 * 60 * 1000;
   
   if (inFlightLinks.has(normalized)) {
     const timestamp = inFlightLinks.get(normalized);
@@ -73,7 +74,7 @@ async function isLinkProcessed(link) {
   }
   
   try {
-    return await db.isLinkProcessed(normalized);
+    return await db.isLinkProcessed(normalized, cooldownMs);
   } catch (e) {
     console.log('⚠️ Error checking link:', e.message);
     return false;
@@ -1544,7 +1545,14 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   for (const originalLink of aliLinks) {
-    reserveLink(originalLink);
+      reserveLink(originalLink);
+
+      const dedupeEnabled = config.dedupeEnabled !== false;
+      const dedupeHours = Math.max(1, Math.min(168, parseInt(config.dedupeHours) || 24));
+      if (dedupeEnabled && await isLinkProcessed(originalLink, dedupeHours)) {
+        console.log(`🔁 تخطي رابط مكرر ضمن ${dedupeHours} ساعة: ${originalLink.substring(0, 50)}...`);
+        continue;
+      }
 
     try {
       let affLink = null, resolvedProductId = null;

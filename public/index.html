@@ -368,6 +368,21 @@
                 </div>
                 
                 <div class="form-group">
+                    <label>🧹 منع التكرار:</label>
+                    <div class="toggle-row" style="margin: 0; padding: 10px 0;">
+                        <label class="toggle-row-label" for="settingDedupeEnabled"><i class="fas fa-shield-alt"></i> تفعيل منع التكرار</label>
+                        <label class="switch"><input type="checkbox" id="settingDedupeEnabled" checked><span class="slider"></span></label>
+                    </div>
+                    <div class="inline-fields">
+                        <div class="form-group" style="margin-bottom:0; flex:1;">
+                            <label>مدة المنع (ساعة):</label>
+                            <input type="number" id="settingDedupeHours" min="1" max="168" value="24" style="direction:ltr;">
+                            <p class="settings-hint">مثال: 24 ساعة = يوم كامل</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
                     <label>🖼️ إطار الصورة (Frame):</label>
                     <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                         <img src="/frame.jpg" id="currentFramePreview" style="width: 60px; height: 60px; border-radius: 8px; border: 1px solid #2d2d44; object-fit: cover;">
@@ -480,7 +495,9 @@
             warning: 'غيّر البلد إلى كندا 🇨🇦',
             telegramToken: '',
             channelId: '',
-            channelId2: '@AffiliDz'
+            channelId2: '@AffiliDz',
+            dedupeEnabled: true,
+            dedupeHours: 24
         };
 
         let settings = JSON.parse(localStorage.getItem('appSettings')) || { ...defaultSettings };
@@ -499,6 +516,8 @@
             document.getElementById('settingBotToken').value = settings.telegramToken || '';
             document.getElementById('settingChannelId').value = settings.channelId || '';
             document.getElementById('settingChannelId2').value = settings.channelId2 || '';
+            document.getElementById('settingDedupeEnabled').checked = settings.dedupeEnabled !== false;
+            document.getElementById('settingDedupeHours').value = settings.dedupeHours || 24;
             document.getElementById('settingGeminiKeys').value = '';
             checkGeminiStatus();
             document.getElementById('settingsModal').classList.add('show');
@@ -560,6 +579,8 @@
             settings.telegramToken = document.getElementById('settingBotToken').value;
             settings.channelId = document.getElementById('settingChannelId').value;
             settings.channelId2 = document.getElementById('settingChannelId2').value;
+            settings.dedupeEnabled = document.getElementById('settingDedupeEnabled').checked;
+            settings.dedupeHours = Math.max(1, Math.min(168, parseInt(document.getElementById('settingDedupeHours').value) || 24));
             
             localStorage.setItem('appSettings', JSON.stringify(settings));
             document.getElementById('warningText').textContent = settings.warning;
