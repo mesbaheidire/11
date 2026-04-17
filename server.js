@@ -590,7 +590,8 @@ app.post('/api/affiliate', async (req, res) => {
     if (!cookies) return res.status(500).json({ success: false, error: 'الرجاء إدخال Cookie في الإعدادات' });
 
     const result = await portaffFunction(cookies, url);
-    if (!result?.previews?.title) return res.status(400).json({ success: false, error: 'رابط غير صالح' });
+    if (!result) return res.status(400).json({ success: false, error: 'رابط غير صالح' });
+    if (!result.previews) result.previews = {};
 
     const validUrl = (v) => typeof v === 'string' && /^https?:\/\//i.test(v.trim());
     const links = {

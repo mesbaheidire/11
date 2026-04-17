@@ -472,7 +472,28 @@ async function portaffFunction(cookie, ids) {
         result.aff[pr.type] = isValidAffUrl(candidate) ? candidate : null;
     }
 
-    result.previews = await fetchLinkPreview(productId);
+    try {
+        result.previews = await fetchLinkPreview(productId);
+    } catch (previewErr) {
+        console.log(`⚠️ فشل جلب معاينة المنتج: ${previewErr.message} — متابعة بدون صورة`);
+        result.previews = {
+            method: "Fallback (Preview Error)",
+            title: `منتج AliExpress #${productId}`,
+            image_url: null,
+            price: "راجع الرابط"
+        };
+    }
+    if (!result.previews) {
+        result.previews = {
+            method: "Fallback (No Preview)",
+            title: `منتج AliExpress #${productId}`,
+            image_url: null,
+            price: "راجع الرابط"
+        };
+    }
+    if (!result.previews.title) {
+        result.previews.title = `منتج AliExpress #${productId}`;
+    }
     result.productId = productId;
 
     return result;
