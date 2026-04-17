@@ -11,9 +11,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "engines": {
-    "node": ">=20.0.0"
-  },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.15.0",

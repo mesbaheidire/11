@@ -85,23 +85,6 @@ async function initDatabase() {
         value TEXT,
         updated_at TIMESTAMP DEFAULT NOW()
       );
-      CREATE TABLE IF NOT EXISTS scheduled_posts (
-        id TEXT PRIMARY KEY,
-        message TEXT,
-        image TEXT,
-        scheduled_time TIMESTAMP,
-        channel_choice TEXT,
-        credentials JSONB,
-        status TEXT DEFAULT 'pending',
-        error TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        published_at TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS pending_reviews (
-        review_id TEXT PRIMARY KEY,
-        data JSONB,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
     `);
     await pool.query(`
       DO $$ BEGIN
@@ -123,7 +106,6 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_spy_processed_links_time ON spy_processed_links(time DESC);
       CREATE INDEX IF NOT EXISTS idx_spy_log_timestamp ON spy_log(timestamp DESC);
       CREATE INDEX IF NOT EXISTS idx_saved_posts_saved_at ON saved_posts(saved_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_scheduled_posts_status_time ON scheduled_posts(status, scheduled_time);
     `);
     console.log('✅ تم إنشاء/التحقق من جداول قاعدة البيانات بنجاح');
     return true;
@@ -568,122 +550,5 @@ module.exports = {
   clearSavedPosts,
   setAppStorage,
   getAppStorage,
-  // Scheduled posts
-  async getScheduledPosts() {
-    try {
-      const r = await query('SELECT * FROM scheduled_posts ORDER BY scheduled_time ASC');
-      return r.rows.map(row => ({
-        id: row.id,
-        message: row.message,
-        image: row.image,
-        scheduledTime: row.scheduled_time ? new Date(row.scheduled_time).toISOString() : null,
-        channelChoice: row.channel_choice,
-        credentials: row.credentials,
-        status: row.status,
-        error: row.error,
-        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-        publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,
-      }));
-    } catch (e) {
-      console.log('⚠️ Failed to load scheduled posts:', e.message);
-      return [];
-    }
-  },
-  async addScheduledPost(post) {
-    try {
-      await query(
-        `INSERT INTO scheduled_posts (id, message, image, scheduled_time, channel_choice, credentials, status, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
-        [post.id, post.message, post.image, post.scheduledTime, post.channelChoice, post.credentials ? JSON.stringify(post.credentials) : null]
-      );
-      return true;
-    } catch (e) {
-      console.log('⚠️ Failed to add scheduled post:', e.message);
-      return false;
-    }
-  },
-  async claimDueScheduledPosts(now) {
-    // Atomically claim posts due for publishing to prevent double-publishing
-    try {
-      const r = await query(
-        `UPDATE scheduled_posts SET status = 'processing'
-         WHERE id IN (
-           SELECT id FROM scheduled_posts
-           WHERE status = 'pending' AND scheduled_time <= $1
-           FOR UPDATE SKIP LOCKED
-         )
-         RETURNING *`,
-        [now]
-      );
-      return r.rows.map(row => ({
-        id: row.id,
-        message: row.message,
-        image: row.image,
-        scheduledTime: row.scheduled_time ? new Date(row.scheduled_time).toISOString() : null,
-        channelChoice: row.channel_choice,
-        credentials: row.credentials,
-        status: row.status,
-      }));
-    } catch (e) {
-      console.log('⚠️ Failed to claim scheduled posts:', e.message);
-      return [];
-    }
-  },
-  async updateScheduledPostStatus(id, status, error) {
-    try {
-      const publishedAt = status === 'published' ? 'NOW()' : 'NULL';
-      await query(
-        `UPDATE scheduled_posts SET status = $1, error = $2, published_at = ${publishedAt} WHERE id = $3`,
-        [status, error || null, id]
-      );
-      return true;
-    } catch (e) {
-      console.log('⚠️ Failed to update scheduled post:', e.message);
-      return false;
-    }
-  },
-  async deleteScheduledPost(id) {
-    try {
-      await query('DELETE FROM scheduled_posts WHERE id = $1', [id]);
-      return true;
-    } catch (e) { return false; }
-  },
-  // Pending reviews
-  async getPendingReviews() {
-    try {
-      const r = await query('SELECT review_id, data FROM pending_reviews');
-      const map = new Map();
-      r.rows.forEach(row => map.set(row.review_id, row.data));
-      return map;
-    } catch (e) {
-      console.log('⚠️ Failed to load pending reviews:', e.message);
-      return new Map();
-    }
-  },
-  async setPendingReview(reviewId, data) {
-    try {
-      await query(
-        `INSERT INTO pending_reviews (review_id, data, created_at) VALUES ($1, $2, NOW())
-         ON CONFLICT (review_id) DO UPDATE SET data = $2`,
-        [reviewId, JSON.stringify(data)]
-      );
-      return true;
-    } catch (e) {
-      console.log('⚠️ Failed to save pending review:', e.message);
-      return false;
-    }
-  },
-  async deletePendingReview(reviewId) {
-    try {
-      await query('DELETE FROM pending_reviews WHERE review_id = $1', [reviewId]);
-      return true;
-    } catch (e) { return false; }
-  },
-  async clearPendingReviews() {
-    try {
-      await query('DELETE FROM pending_reviews', []);
-      return true;
-    } catch (e) { return false; }
-  },
   closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
 };
