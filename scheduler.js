@@ -1,12 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { Telegraf } = require('telegraf');
-
-const SCHEDULED_FILE = path.join(__dirname, 'scheduled_posts.json');
+const db = require('./db');
 
 class PostScheduler {
   constructor() {
-    this.scheduledPosts = this.loadScheduledPosts();
     this.checkInterval = null;
     this.cachedCredentials = null;
   }
@@ -15,82 +11,47 @@ class PostScheduler {
     this.cachedCredentials = credentials;
   }
 
-  saveScheduledPosts() {
-    try {
-      const postsToSave = this.scheduledPosts.map(p => {
-        // We need to keep credentials for at least one turn to ensure publishPost can access them
-        // But for security, we'll only save them if they aren't already in the file or if we really need them
-        return p; 
-      });
-      fs.writeFileSync(SCHEDULED_FILE, JSON.stringify(postsToSave, null, 2));
-    } catch (e) {
-      console.error('Error saving scheduled posts:', e);
-    }
-  }
-
-  loadScheduledPosts() {
-    try {
-      if (fs.existsSync(SCHEDULED_FILE)) {
-        return JSON.parse(fs.readFileSync(SCHEDULED_FILE, 'utf8'));
-      }
-    } catch (e) {
-      console.error('Error loading scheduled posts:', e);
-    }
-    return [];
-  }
-
-  addPost(post) {
+  async addPost(post) {
     if (post.credentials) {
       this.cachedCredentials = post.credentials;
     }
-    
     const newPost = {
       id: Date.now().toString(),
       message: post.message,
       image: post.image,
       scheduledTime: post.scheduledTime,
       channelChoice: post.credentials?.channelChoice || 'both',
-      credentials: post.credentials, // Store credentials with the post
+      credentials: post.credentials || null,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
-    this.scheduledPosts.push(newPost);
-    this.saveScheduledPosts();
+    await db.addScheduledPost(newPost);
     return newPost;
   }
 
-  removePost(id) {
-    this.scheduledPosts = this.scheduledPosts.filter(p => p.id !== id);
-    this.saveScheduledPosts();
+  async removePost(id) {
+    await db.deleteScheduledPost(id);
   }
 
-  getScheduledPosts() {
-    return this.scheduledPosts.filter(p => p.status === 'pending');
-  }
-
-  getAllPosts() {
-    return this.scheduledPosts;
+  async getAllPosts() {
+    return await db.getScheduledPosts();
   }
 
   async checkAndPublish() {
-    const now = new Date();
-    const pendingPosts = this.scheduledPosts.filter(p => p.status === 'pending');
-    
-    for (const post of pendingPosts) {
-      const scheduledTime = new Date(post.scheduledTime);
-      
-      if (scheduledTime <= now) {
-        try {
-          await this.publishPost(post);
-          post.status = 'published';
-          post.publishedAt = new Date().toISOString();
-          console.log(`✅ Published scheduled post: ${post.id}`);
-        } catch (e) {
-          post.status = 'failed';
-          post.error = e.message;
-          console.error(`❌ Failed to publish post ${post.id}:`, e.message);
-        }
-        this.saveScheduledPosts();
+    let claimed;
+    try {
+      claimed = await db.claimDueScheduledPosts(new Date());
+    } catch (e) {
+      return;
+    }
+    for (const post of claimed) {
+      try {
+        await this.publishPost(post);
+        await db.updateScheduledPostStatus(post.id, 'published', null);
+        console.log(`✅ Published scheduled post: ${post.id}`);
+      } catch (e) {
+        await db.updateScheduledPostStatus(post.id, 'failed', e.message);
+        console.error(`❌ Failed to publish post ${post.id}:`, e.message);
       }
     }
   }
@@ -98,7 +59,7 @@ class PostScheduler {
   async publishPost(post) {
     const { message, image, channelChoice, credentials: postCredentials } = post;
     const credentials = postCredentials || this.cachedCredentials;
-    
+
     if (!credentials || !credentials.telegramToken) {
       const envToken = process.env.TELEGRAM_BOT_TOKEN;
       if (!envToken) {
@@ -109,7 +70,6 @@ class PostScheduler {
       if (!envChannelId) {
         throw new Error('Channel ID not configured');
       }
-
       if (image) {
         if (image.startsWith('data:image')) {
           const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
@@ -123,10 +83,9 @@ class PostScheduler {
       }
       return;
     }
-    
+
     const bot = new Telegraf(credentials.telegramToken);
     const channels = [];
-    
     const choice = channelChoice || credentials.channelChoice || 'both';
     if (choice === '1' || choice === 'both') {
       if (credentials.channelId) channels.push(this.formatChannelId(credentials.channelId));
@@ -134,11 +93,9 @@ class PostScheduler {
     if (choice === '2' || choice === 'both') {
       if (credentials.channelId2) channels.push(this.formatChannelId(credentials.channelId2));
     }
-    
     if (channels.length === 0) {
       throw new Error('No channels specified');
     }
-    
     for (const ch of channels) {
       if (image) {
         if (image.startsWith('data:image')) {
@@ -168,8 +125,12 @@ class PostScheduler {
 
   start() {
     console.log('📅 Post scheduler started');
-    this.checkInterval = setInterval(() => this.checkAndPublish(), 30000);
-    this.checkAndPublish();
+    this.checkInterval = setInterval(() => {
+      this.checkAndPublish().catch(e => console.error('Scheduler error:', e.message));
+    }, 30000);
+    setTimeout(() => {
+      this.checkAndPublish().catch(() => {});
+    }, 5000);
   }
 
   stop() {

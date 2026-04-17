@@ -702,31 +702,31 @@ let reviewBot = null;
 const pendingReviews = new Map();
 const editingState = new Map(); // userId -> { reviewId }
 
-const PENDING_REVIEWS_FILE = path.join(__dirname, 'spy_pending_reviews.json');
-
+let _savePendingReviewsQueue = Promise.resolve();
 function savePendingReviews() {
-  try {
-    const obj = {};
-    for (const [id, review] of pendingReviews.entries()) obj[id] = review;
-    fs.writeFileSync(PENDING_REVIEWS_FILE, JSON.stringify(obj));
-  } catch (e) {
-    console.log('⚠️ فشل حفظ المراجعات المعلقة:', e.message);
-  }
-}
-
-function loadPendingReviews() {
-  try {
-    if (fs.existsSync(PENDING_REVIEWS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(PENDING_REVIEWS_FILE, 'utf8'));
-      for (const [id, review] of Object.entries(data)) pendingReviews.set(id, review);
-      if (pendingReviews.size > 0) console.log(`📋 تم استعادة ${pendingReviews.size} مراجعة معلقة من الملف`);
+  // Serialize all syncs so concurrent calls don't collide on the DELETE+INSERT pattern
+  _savePendingReviewsQueue = _savePendingReviewsQueue.then(async () => {
+    try {
+      const snapshot = Array.from(pendingReviews.entries());
+      await db.clearPendingReviews();
+      for (const [id, review] of snapshot) {
+        await db.setPendingReview(id, review);
+      }
+    } catch (e) {
+      console.log('⚠️ فشل حفظ المراجعات المعلقة في DB:', e.message);
     }
-  } catch (e) {
-    console.log('⚠️ فشل تحميل المراجعات المعلقة:', e.message);
-  }
+  });
 }
 
-loadPendingReviews();
+setTimeout(async () => {
+  try {
+    const dbReviews = await db.getPendingReviews();
+    for (const [id, review] of dbReviews.entries()) pendingReviews.set(id, review);
+    if (pendingReviews.size > 0) console.log(`📋 تم استعادة ${pendingReviews.size} مراجعة معلقة من قاعدة البيانات`);
+  } catch (e) {
+    console.log('⚠️ فشل تحميل المراجعات المعلقة من DB:', e.message);
+  }
+}, 3000);
 
 async function loadAuthState() {
   try {

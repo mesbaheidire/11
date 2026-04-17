@@ -750,21 +750,13 @@ app.post('/api/publish-collection', async (req, res) => {
 });
 
 // Scheduling API
-app.post('/api/schedule-post', (req, res) => {
+app.post('/api/schedule-post', async (req, res) => {
   try {
     const { message, image, scheduledTime, credentials } = req.body;
-    
     if (!scheduledTime) {
       return res.status(400).json({ success: false, error: 'يرجى تحديد وقت النشر' });
     }
-    
-    const post = postScheduler.addPost({
-      message,
-      image,
-      scheduledTime,
-      credentials
-    });
-    
+    const post = await postScheduler.addPost({ message, image, scheduledTime, credentials });
     res.json({ success: true, post });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1372,14 +1364,22 @@ app.post('/api/generate-algerian-hook', async (req, res) => {
   }
 });
 
-app.get('/api/scheduled-posts', (req, res) => {
-  const posts = postScheduler.getAllPosts();
-  res.json({ success: true, posts });
+app.get('/api/scheduled-posts', async (req, res) => {
+  try {
+    const posts = await postScheduler.getAllPosts();
+    res.json({ success: true, posts });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
-app.delete('/api/scheduled-posts/:id', (req, res) => {
-  postScheduler.removePost(req.params.id);
-  res.json({ success: true });
+app.delete('/api/scheduled-posts/:id', async (req, res) => {
+  try {
+    await postScheduler.removePost(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 const algerianCategories = {
@@ -2747,14 +2747,9 @@ app.get('/api/proxy-image', async (req, res) => {
 })();
 
 // ==================== Store Analytics System ====================
-const ANALYTICS_FILE = path.join(__dirname, 'store_analytics.json');
+const ANALYTICS_STORAGE_KEY = 'store_analytics';
 
-function loadAnalyticsData() {
-  try {
-    if (fs.existsSync(ANALYTICS_FILE)) {
-      return JSON.parse(fs.readFileSync(ANALYTICS_FILE, 'utf8'));
-    }
-  } catch(e) {}
+function emptyAnalytics() {
   return { events: [], searches: {}, clicks: {}, categories: {}, dailyVisits: {}, visitors: {} };
 }
 
@@ -2762,7 +2757,7 @@ let analyticsSavePending = false;
 function saveAnalyticsData(data) {
   if (analyticsSavePending) return;
   analyticsSavePending = true;
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       const trimmed = { ...data };
       if (trimmed.events && trimmed.events.length > 5000) trimmed.events = trimmed.events.slice(-5000);
@@ -2781,17 +2776,51 @@ function saveAnalyticsData(data) {
         const sorted = catKeys.sort((a, b) => trimmed.categories[b] - trimmed.categories[a]).slice(0, 100);
         trimmed.categories = Object.fromEntries(sorted.map(k => [k, trimmed.categories[k]]));
       }
-      fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(trimmed));
-    } catch(e) {}
+      await db.setAppStorage(ANALYTICS_STORAGE_KEY, JSON.stringify(trimmed));
+    } catch(e) {
+      console.log('⚠️ فشل حفظ بيانات التحليلات:', e.message);
+    }
     analyticsSavePending = false;
   }, 3000);
 }
 
 let analyticsCache = null;
+let analyticsLoadPromise = null;
+async function loadAnalyticsFromDB() {
+  try {
+    const raw = await db.getAppStorage(ANALYTICS_STORAGE_KEY);
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return { ...emptyAnalytics(), ...parsed };
+    }
+  } catch (e) {
+    console.log('⚠️ فشل تحميل بيانات التحليلات:', e.message);
+  }
+  return emptyAnalytics();
+}
 function getAnalytics() {
-  if (!analyticsCache) analyticsCache = loadAnalyticsData();
+  if (analyticsCache) return analyticsCache;
+  if (!analyticsLoadPromise) {
+    analyticsCache = emptyAnalytics();
+    analyticsLoadPromise = loadAnalyticsFromDB().then(data => {
+      // Merge any in-memory state tracked while loading
+      const pending = analyticsCache;
+      analyticsCache = data;
+      if (pending.events.length) analyticsCache.events.push(...pending.events);
+      for (const [k, v] of Object.entries(pending.searches)) analyticsCache.searches[k] = (analyticsCache.searches[k] || 0) + v;
+      for (const [k, v] of Object.entries(pending.categories)) analyticsCache.categories[k] = (analyticsCache.categories[k] || 0) + v;
+      for (const [k, v] of Object.entries(pending.dailyVisits)) analyticsCache.dailyVisits[k] = (analyticsCache.dailyVisits[k] || 0) + v;
+      for (const [k, v] of Object.entries(pending.visitors)) analyticsCache.visitors[k] = (analyticsCache.visitors[k] || 0) + v;
+      for (const [k, v] of Object.entries(pending.clicks)) {
+        if (!analyticsCache.clicks[k]) analyticsCache.clicks[k] = { count: 0, name: v.name || k };
+        analyticsCache.clicks[k].count += v.count || 0;
+      }
+    });
+  }
   return analyticsCache;
 }
+// Kick off loading at startup
+getAnalytics();
 
 const VALID_EVENT_TYPES = ['visit', 'search', 'click', 'category'];
 const MAX_DETAIL_LENGTH = 200;
