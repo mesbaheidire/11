@@ -1544,11 +1544,6 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   for (const originalLink of aliLinks) {
-    if (await isLinkProcessed(originalLink)) {
-      console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
-      continue;
-    }
-
     reserveLink(originalLink);
 
     try {
@@ -1602,7 +1597,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
-      // منع تكرار الرابط داخل نفس المنشور فقط
+      // السماح برابطين لنفس المنتج داخل نفس المنشور
       if (seenAffLinks.has(affLink)) {
         console.log(`🔁 تخطي رابط أفليت مكرر داخل نفس المنشور`);
         continue;
