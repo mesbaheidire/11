@@ -19,10 +19,6 @@ const MAX_PROCESSED_MESSAGES = 500;
 const MAX_INFLIGHT_LINKS = 1000;
 const INFLIGHT_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
 
-let processedLinksCache = null;
-let processedLinksCacheTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
 function isMessageProcessed(chatId, msgId) {
   const key = `${chatId}:${msgId}`;
   return processedMessageIds.has(key);
@@ -34,25 +30,6 @@ function markMessageProcessed(chatId, msgId) {
   if (processedMessageIds.size > MAX_PROCESSED_MESSAGES) {
     const first = processedMessageIds.values().next().value;
     processedMessageIds.delete(first);
-  }
-}
-
-async function loadProcessedLinks() {
-  const now = Date.now();
-  if (processedLinksCache && (now - processedLinksCacheTime) < CACHE_DURATION) {
-    return processedLinksCache;
-  }
-  
-  try {
-    const links = await db.getProcessedLinks();
-    processedLinksCache = links;
-    processedLinksCacheTime = now;
-    return links;
-  } catch (e) {
-    console.log('⚠️ Error loading processed links:', e.message);
-    processedLinksCache = [];
-    processedLinksCacheTime = now;
-    return [];
   }
 }
 
@@ -127,33 +104,38 @@ function randomDelay(minMinutes, maxMinutes) {
 
 let dailyPublishCount = 0;
 let dailyPublishDate = '';
+let dailyCounterLoaded = false;
 
 function getTodayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-function getDailyCount() {
+async function getDailyCount() {
   const today = getTodayStr();
-  if (dailyPublishDate !== today) {
+  if (!dailyCounterLoaded || dailyPublishDate !== today) {
     dailyPublishDate = today;
-    dailyPublishCount = 0;
+    dailyPublishCount = await db.getDailyCount(today);
+    dailyCounterLoaded = true;
   }
   return dailyPublishCount;
 }
 
-function incrementDailyCount() {
+async function incrementDailyCount() {
   const today = getTodayStr();
-  if (dailyPublishDate !== today) {
+  if (!dailyCounterLoaded || dailyPublishDate !== today) {
     dailyPublishDate = today;
-    dailyPublishCount = 0;
+    dailyPublishCount = await db.getDailyCount(today);
+    dailyCounterLoaded = true;
   }
   dailyPublishCount++;
+  db.setDailyCount(today, dailyPublishCount).catch(() => {});
   return dailyPublishCount;
 }
 
-function isDailyLimitReached(config) {
+async function isDailyLimitReached(config) {
   if (!config.dailyLimit || config.dailyLimit <= 0) return false;
-  return getDailyCount() >= config.dailyLimit;
+  const count = await getDailyCount();
+  return count >= config.dailyLimit;
 }
 
 async function sendOwnerNotification(botToken, ownerId, entry) {
@@ -320,15 +302,6 @@ function extractCouponFromPost(text) {
   return Array.from(coupons).join(' | ');
 }
 
-function extractCouponFromTextLine(line) {
-  if (!line) return null;
-  const cleaned = line.trim();
-  const match = cleaned.match(/(?:كوبون|قسيمة|coupon|code|كود|رمز|store coupon)[:\s]*([A-Z0-9]{3,20})/i);
-  if (match && match[1]) return match[1].toUpperCase();
-  const fallback = cleaned.match(/\b([A-Z]{2,8}[0-9]{1,6})\b/);
-  return fallback ? fallback[1].toUpperCase() : null;
-}
-
 function extractSellerCouponFromPost(text) {
   if (!text) return null;
   const coupons = new Set();
@@ -354,14 +327,6 @@ function extractSellerCouponFromPost(text) {
   }
   if (coupons.size === 0) return null;
   return Array.from(coupons).join(' | ');
-}
-
-function extractSellerCouponFromTextLine(line) {
-  if (!line) return null;
-  const cleaned = line.trim();
-  const match = cleaned.match(/(?:قسيمة\s*البائع|seller\s*coupon|seller\s*code|coupon\s*code|code)[:\s]*([A-Z0-9$\/.-]{3,30})/i);
-  if (match && match[1]) return match[1].trim();
-  return null;
 }
 
 function isSafeUrl(url) {
@@ -624,80 +589,6 @@ function fetchImageViaBingSearch(query, timeoutMs = 12000) {
   });
 }
 
-function normalizeAliExpressLinks(text) {
-  if (!text) return '';
-  const links = [];
-  const seen = new Set();
-  const pattern = /(?:https?:\/\/)?(?:s\.click\.)?aliexpress\.com\/[^\s<>()\]]+/gi;
-  let match;
-  while ((match = pattern.exec(text)) !== null) {
-    const clean = match[0].replace(/[)\].,;!?]+$/g, '');
-    if (!seen.has(clean)) {
-      seen.add(clean);
-      links.push(clean);
-    }
-  }
-  return links.join(' ');
-}
-
-function extractAliExpressLinksByLine(text) {
-  if (!text) return [];
-  return text
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => /(?:s\.click\.)?aliexpress\.com/i.test(line))
-    .map(line => line.replace(/^[-•*]\s*/, '').replace(/[)\].,;!?]+$/g, ''));
-}
-
-function isPhoneProduct(title, text) {
-  const combined = ((title || '') + ' ' + (text || '')).toLowerCase();
-  const phoneKeywords = [
-    'smartphone', 'phone', 'iphone', 'samsung', 'galaxy', 'xiaomi', 'redmi',
-    'poco', 'realme', 'oppo', 'vivo', 'oneplus', 'huawei', 'honor', 'nokia',
-    'motorola', 'pixel', 'nothing phone', 'zte', 'infinix', 'tecno', 'itel',
-    'meizu', 'lenovo', 'asus', 'rog phone', 'sony xperia', 'google pixel',
-    'nubia', 'cubot', 'doogee', 'ulefone', 'umidigi', 'oukitel', 'blackview',
-    'oscal', 'fossibot', 'hotwav', 'agm', 'unihertz', 'cat phone',
-    'tcl', 'alcatel', 'wiko', 'fairphone', 'sharp aquos', 'hisense',
-    'coolpad', 'micromax', 'lava', 'karbonn', 'gionee', 'leagoo',
-    'vernee', 'elephone', 'bluboo', 'homtom', 'leeco', 'letv',
-    'snapdragon', 'dimensity', 'mediatek', 'helio', 'exynos', 'kirin',
-    'amoled', 'هاتف', 'موبايل', 'جوال', 'تلفون', 'سمارتفون',
-    '5g phone', '4g phone', 'cellphone', 'cell phone', 'mobile phone',
-    'dual sim', 'sim card', 'nfc phone'
-  ];
-  if (phoneKeywords.some(kw => combined.includes(kw))) return true;
-
-  const phonePatterns = [
-    /\b\d+mp\s*\+\s*\d+mp/i,
-    /\b\d+mp\s+(camera|rear|front|main)/i,
-    /\b\d+\s*gb\s*[\/+]\s*\d+\s*(gb|tb)\b/i,
-    /\b\d{4,5}\s*mah\b/i,
-    /\b[a-z]+\s+\d{1,3}\s*(pro|ultra|plus|max|lite|mini|se|gt|neo|note|prime|star|play|power|turbo|edge|fold|flip|zoom|fe)\b/i,
-  ];
-  return phonePatterns.some(p => p.test(combined));
-}
-
-function detectLinkType(url, text) {
-  if (url) {
-    const u = url.toLowerCase();
-    if (u.includes('coin-index') || u.includes('syicon') || u.includes('sourcetype=555') || u.includes('/p/coin')) return 'coin';
-    if (u.includes('sourcetype=620') || u.includes('channel=coin') || u.includes('point')) return 'point';
-    if (u.includes('sourcetype=562') || u.includes('super')) return 'super';
-    if (u.includes('sourcetype=570') || u.includes('limited') || u.includes('limit')) return 'limit';
-    if (u.includes('bundledeals') || u.includes('sourcetype=561') || u.includes('bundle')) return 'ther3';
-  }
-  if (text) {
-    const t = text.toLowerCase();
-    if (t.includes('🪙') || t.includes('coin') || t.includes('كوين')) return 'coin';
-    if (t.includes('⭐') || t.includes('point') || t.includes('بوينت') || t.includes('نقاط')) return 'point';
-    if (t.includes('🔥') || t.includes('super') || t.includes('سوبر')) return 'super';
-    if (t.includes('⚡') || t.includes('limited') || t.includes('محدود')) return 'limit';
-    if (t.includes('bundle') || t.includes('باندل') || t.includes('حزمة')) return 'ther3';
-  }
-  return null;
-}
-
 function extractAliExpressLinks(text) {
   if (!text) return [];
   const patterns = [
@@ -748,15 +639,15 @@ function extractPrice(text) {
   return null;
 }
 
-const SHARED_CREDS_FILE = path.join(__dirname, 'app_credentials.json');
-
-function loadSharedCredentials() {
+async function loadSharedCredentials() {
+  const credentials = {};
   try {
-    if (fs.existsSync(SHARED_CREDS_FILE)) {
-      return JSON.parse(fs.readFileSync(SHARED_CREDS_FILE, 'utf8'));
-    }
+    const botTokenDb = await db.getAppStorage('TELEGRAM_BOT_TOKEN');
+    const cookieDb = await db.getAppStorage('ALIEXPRESS_COOKIE');
+    if (botTokenDb) credentials.botToken = botTokenDb;
+    if (cookieDb) credentials.cook = cookieDb;
   } catch (e) {}
-  return {};
+  return credentials;
 }
 
 let cachedConfig = null;
@@ -785,7 +676,7 @@ function invalidateConfigCache() {
 async function getBotToken() {
   // Environment variables (Render) take priority
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN;
-  const shared = loadSharedCredentials();
+  const shared = await loadSharedCredentials();
   if (shared.botToken) return shared.botToken;
   const config = await getCachedConfig();
   return config.botToken || '';
@@ -794,7 +685,7 @@ async function getBotToken() {
 async function getCookie() {
   // Environment variables (Render) take priority
   if (process.env.cook) return process.env.cook;
-  const shared = loadSharedCredentials();
+  const shared = await loadSharedCredentials();
   if (shared.cook) return shared.cook;
   const config = await getCachedConfig();
   const cookie = config.cook || '';
@@ -1084,7 +975,7 @@ async function executePublish(review) {
   const logImage = imageUrlForLog || (typeof productImage === 'string' ? productImage : null);
 
   const config = await getCachedConfig();
-  if (isDailyLimitReached(config)) {
+  if (await isDailyLimitReached(config)) {
     console.log(`🚫 تم بلوغ الحد اليومي عند النشر (${config.dailyLimit}) — إلغاء`);
     addLogEntry({
       source: sourceName, originalLink, affiliateLink,
@@ -1138,8 +1029,8 @@ async function executePublish(review) {
 
   let finalStatus = publishedCount > 0 ? 'published' : 'publish_failed';
   if (publishedCount > 0) {
-    incrementDailyCount();
-    console.log(`📊 النشر اليومي: ${getDailyCount()}`);
+    const newCount = await incrementDailyCount();
+    console.log(`📊 النشر اليومي: ${newCount}`);
 
     if (config.facebookEnabled && config.facebookPageToken && config.facebookPageId) {
       try {
@@ -1366,33 +1257,6 @@ function shortenTitleFallback(title) {
   return short;
 }
 
-async function extractPhoneNameWithAI(text) {
-  return new Promise((resolve) => {
-    const postData = JSON.stringify({ text });
-    const options = {
-      hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
-      path: '/api/ai-extract-phone-name',
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
-    };
-    const req = http.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          resolve(parsed.success && parsed.phoneName ? parsed.phoneName : null);
-        } catch { resolve(null); }
-      });
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
-    req.write(postData);
-    req.end();
-  });
-}
-
 async function extractProductInfoWithAI(text, apiTitle) {
   return new Promise((resolve) => {
     const postData = JSON.stringify({ text, apiTitle });
@@ -1449,10 +1313,6 @@ async function extractSellerCouponWithAI(text) {
     req.write(postData);
     req.end();
   });
-}
-
-async function generateHook(title) {
-  return callAiRefine(title, true);
 }
 
 async function analyzePostFull(text) {
@@ -1542,14 +1402,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   for (const originalLink of aliLinks) {
-      reserveLink(originalLink);
-
       const dedupeEnabled = config.dedupeEnabled !== false;
       const dedupeHours = Math.max(1, Math.min(168, parseInt(config.dedupeHours) || 24));
       if (dedupeEnabled && await isLinkProcessed(originalLink, dedupeHours)) {
         console.log(`🔁 تخطي رابط مكرر ضمن ${dedupeHours} ساعة: ${originalLink.substring(0, 50)}...`);
         continue;
       }
+      reserveLink(originalLink);
 
     try {
       let affLink = null, resolvedProductId = null;
@@ -1926,7 +1785,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   const allOriginalLinks = convertedLinks.map(cl => cl.originalLink).join(', ');
   const firstAffLink = convertedLinks[0].affLink;
 
-  if (isDailyLimitReached(config)) {
+  if (await isDailyLimitReached(config)) {
     console.log(`🚫 تم بلوغ الحد اليومي (${config.dailyLimit}) — تخطي النشر`);
     addLogEntry({
       source: sourceName, originalLink: allOriginalLinks, affiliateLink: firstAffLink,
