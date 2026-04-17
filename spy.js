@@ -10,7 +10,9 @@ const { postToFacebookPage } = require('./facebook');
 const https = require('https');
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
+const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
 const SESSION_FILE = path.join(__dirname, 'spy_session.json');
+const PROCESSED_LINKS_FILE = path.join(__dirname, 'spy_processed.json');
 const AUTH_STATE_FILE = path.join(__dirname, 'spy_auth_state.json');
 
 const inFlightLinks = new Map(); // change to Map to track timeout
@@ -56,10 +58,9 @@ async function loadProcessedLinks() {
   }
 }
 
-async function isLinkProcessed(link, cooldownHours = 24) {
+async function isLinkProcessed(link) {
   const normalized = normalizeAliLink(link);
   const now = Date.now();
-  const cooldownMs = Math.max(1, Math.min(168, parseInt(cooldownHours) || 24)) * 60 * 60 * 1000;
   
   if (inFlightLinks.has(normalized)) {
     const timestamp = inFlightLinks.get(normalized);
@@ -72,7 +73,7 @@ async function isLinkProcessed(link, cooldownHours = 24) {
   }
   
   try {
-    return await db.isLinkProcessed(normalized, cooldownMs);
+    return await db.isLinkProcessed(normalized);
   } catch (e) {
     console.log('⚠️ Error checking link:', e.message);
     return false;
@@ -1534,6 +1535,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   // === المرحلة 1: تحويل كل الروابط إلى أفليت وجمعها ===
   const convertedLinks = [];
   const seenAffLinks = new Set();
+  const seenProductIdsInPost = new Set();
   let firstProductId = null, firstApiTitle = '', firstProductImage = '', firstProductPrice = priceFromPost || '';
   const cookie = await getCookie();
   if (!cookie) {
@@ -1542,14 +1544,12 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   for (const originalLink of aliLinks) {
-      reserveLink(originalLink);
+    if (await isLinkProcessed(originalLink)) {
+      console.log(`🔁 تم تخطي رابط مكرر: ${originalLink.substring(0, 50)}...`);
+      continue;
+    }
 
-      const dedupeEnabled = config.dedupeEnabled !== false;
-      const dedupeHours = Math.max(1, Math.min(168, parseInt(config.dedupeHours) || 24));
-      if (dedupeEnabled && await isLinkProcessed(originalLink, dedupeHours)) {
-        console.log(`🔁 تخطي رابط مكرر ضمن ${dedupeHours} ساعة: ${originalLink.substring(0, 50)}...`);
-        continue;
-      }
+    reserveLink(originalLink);
 
     try {
       let affLink = null, resolvedProductId = null;
@@ -1602,12 +1602,17 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
-      // السماح برابطين لنفس المنتج داخل نفس المنشور
+      // منع تكرار الرابط داخل نفس المنشور فقط
       if (seenAffLinks.has(affLink)) {
         console.log(`🔁 تخطي رابط أفليت مكرر داخل نفس المنشور`);
         continue;
       }
       seenAffLinks.add(affLink);
+
+      // مستوى واحد فقط: نفس الرابط لا يعاد نشره خلال 24 ساعة
+      if (resolvedProductId && !seenProductIdsInPost.has(resolvedProductId)) {
+        seenProductIdsInPost.add(resolvedProductId);
+      }
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
 
