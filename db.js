@@ -203,10 +203,10 @@ async function saveAuthState(state) {
 async function getProcessedLinks() {
   try {
     const now = Date.now();
-    const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
     
     // Delete old entries
-    await query('DELETE FROM spy_processed_links WHERE time < $1', [sevenDaysAgo]);
+    await query('DELETE FROM spy_processed_links WHERE time < $1', [twentyFourHoursAgo]);
     
     // Get remaining
     const result = await query('SELECT link, time FROM spy_processed_links ORDER BY time DESC LIMIT 10000');

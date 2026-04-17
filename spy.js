@@ -1602,29 +1602,16 @@ async function processPost(config, text, sourceImage, sourceName) {
 
       markLinkProcessed(originalLink);
 
-      // منع التكرار داخل نفس المنشور (نفس رابط الأفليت)
+      // منع تكرار الرابط داخل نفس المنشور فقط
       if (seenAffLinks.has(affLink)) {
         console.log(`🔁 تخطي رابط أفليت مكرر داخل نفس المنشور`);
         continue;
       }
       seenAffLinks.add(affLink);
 
-      // فحص التكرار العابر للمنشورات (عبر منتج ID) — لكن السماح بنفس المنتج داخل نفس المنشور
+      // مستوى واحد فقط: نفس الرابط لا يعاد نشره خلال 24 ساعة
       if (resolvedProductId && !seenProductIdsInPost.has(resolvedProductId)) {
-        const productKey = 'product:' + resolvedProductId;
-        try {
-          const isDuplicate = await db.isLinkProcessed(productKey);
-          if (isDuplicate) {
-            console.log(`🔁 تخطي منتج مكرر من منشور سابق (ID: ${resolvedProductId})`);
-            continue;
-          }
-          await db.addProcessedLink(productKey);
-          seenProductIdsInPost.add(resolvedProductId);
-        } catch (e) {
-          console.log(`⚠️ فشل التحقق/حفظ المنتج المعالج: ${e.message}`);
-        }
-      } else if (resolvedProductId) {
-        console.log(`✅ رابط إضافي لنفس المنتج داخل المنشور (ID: ${resolvedProductId}) — مقبول`);
+        seenProductIdsInPost.add(resolvedProductId);
       }
 
       convertedLinks.push({ affLink, originalLink, resolvedProductId });
