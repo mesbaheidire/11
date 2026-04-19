@@ -711,7 +711,7 @@
                 createdAt: new Date().toISOString()
             };
 
-            // 1) احفظ في الخادم أولاً (هو مصدر الحقيقة، يقبل صور base64 الكبيرة)
+            // الحفظ في قاعدة البيانات (المصدر الوحيد)
             try {
                 await fetch('/api/saved-posts', {
                     method: 'POST',
@@ -720,20 +720,6 @@
                 });
             } catch (e) {
                 console.error('Error saving post to server:', e);
-            }
-
-            // 2) احفظ نسخة خفيفة في localStorage (بدون base64 لتفادي تجاوز الحد 5MB)
-            try {
-                const lightPost = { ...postData };
-                if (lightPost.image && typeof lightPost.image === 'string' && lightPost.image.startsWith('data:')) {
-                    lightPost.image = null; // الخادم يحتفظ بالنسخة الكاملة
-                }
-                let localPosts = JSON.parse(localStorage.getItem('savedPosts') || '[]');
-                localPosts.unshift(lightPost);
-                if (localPosts.length > 50) localPosts = localPosts.slice(0, 50);
-                localStorage.setItem('savedPosts', JSON.stringify(localPosts));
-            } catch (e) {
-                console.warn('localStorage backup skipped:', e.message);
             }
         }
         

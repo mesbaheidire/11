@@ -120,42 +120,25 @@
         async function loadPosts() {
             document.getElementById('loadingState').style.display = 'none';
 
-            // Get posts from localStorage as fallback only
-            let localPosts = JSON.parse(localStorage.getItem('savedPosts') || '[]');
-
-            // الخادم هو مصدر الحقيقة (يحتفظ بالصور الكاملة بما فيها base64)
+            // قاعدة البيانات هي المصدر الوحيد
+            let posts = [];
             try {
                 const res = await fetch('/api/saved-posts');
                 const data = await res.json();
-
                 if (data.success && Array.isArray(data.posts)) {
-                    // ابدأ من الخادم، ثم أضف المحلية التي لم تُرفع بعد فقط
-                    const serverPosts = data.posts;
-                    const serverIds = new Set(serverPosts.map(p => p.id));
-                    const onlyLocal = localPosts.filter(p => !serverIds.has(p.id));
-                    localPosts = [...serverPosts, ...onlyLocal];
-                    localPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    // لا تحفظ base64 في localStorage
-                    try {
-                        const lightForLocal = localPosts.map(p => {
-                            if (p.image && typeof p.image === 'string' && p.image.startsWith('data:')) {
-                                return { ...p, image: null };
-                            }
-                            return p;
-                        }).slice(0, 50);
-                        localStorage.setItem('savedPosts', JSON.stringify(lightForLocal));
-                    } catch (e) { /* تجاوز حد التخزين */ }
+                    posts = data.posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                 }
             } catch (e) {
-                console.log('Server fetch failed, using localStorage');
+                console.error('فشل تحميل المنشورات من قاعدة البيانات:', e);
+                showToast('تعذر الاتصال بقاعدة البيانات', 'error');
             }
-            
-            if (localPosts.length > 0) {
-                savedPosts = localPosts;
-                document.getElementById('postsCount').textContent = localPosts.length;
+
+            if (posts.length > 0) {
+                savedPosts = posts;
+                document.getElementById('postsCount').textContent = posts.length;
                 document.getElementById('clearAllBtn').style.display = 'flex';
                 document.getElementById('emptyState').style.display = 'none';
-                renderPosts(localPosts);
+                renderPosts(posts);
             } else {
                 document.getElementById('emptyState').style.display = 'block';
                 document.getElementById('postsList').innerHTML = '';
@@ -292,34 +275,28 @@
 
         async function deletePost(id) {
             if (!confirm('هل تريد حذف هذا المنشور؟')) return;
-            
-            // Delete from localStorage
-            let localPosts = JSON.parse(localStorage.getItem('savedPosts') || '[]');
-            localPosts = localPosts.filter(p => p.id !== id);
-            localStorage.setItem('savedPosts', JSON.stringify(localPosts));
-            
-            // Delete from server too
             try {
-                await fetch(`/api/saved-posts/${id}`, { method: 'DELETE' });
-            } catch (e) {}
-            
-            showToast('تم حذف المنشور', 'success');
-            loadPosts();
+                const res = await fetch(`/api/saved-posts/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'فشل الحذف');
+                showToast('تم حذف المنشور', 'success');
+                loadPosts();
+            } catch (e) {
+                showToast(e.message || 'فشل الحذف', 'error');
+            }
         }
 
         document.getElementById('clearAllBtn').onclick = async () => {
             if (!confirm('هل تريد حذف جميع المنشورات المحفوظة؟')) return;
-            
-            // Clear localStorage
-            localStorage.removeItem('savedPosts');
-            
-            // Clear server too
             try {
-                await fetch('/api/saved-posts', { method: 'DELETE' });
-            } catch (e) {}
-            
-            showToast('تم حذف جميع المنشورات', 'success');
-            loadPosts();
+                const res = await fetch('/api/saved-posts', { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'فشل المسح');
+                showToast('تم حذف جميع المنشورات', 'success');
+                loadPosts();
+            } catch (e) {
+                showToast(e.message || 'فشل المسح', 'error');
+            }
         };
 
         document.getElementById('deleteBeforeBtn').onclick = async () => {
@@ -337,7 +314,6 @@
                 });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.error || 'فشل الحذف');
-                localStorage.removeItem('savedPosts');
                 showToast('تم حذف المنشورات الأقدم من التاريخ', 'success');
                 loadPosts();
             } catch (e) {
