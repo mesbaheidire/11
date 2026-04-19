@@ -119,24 +119,32 @@
 
         async function loadPosts() {
             document.getElementById('loadingState').style.display = 'none';
-            
-            // Get posts from localStorage first (always available)
+
+            // Get posts from localStorage as fallback only
             let localPosts = JSON.parse(localStorage.getItem('savedPosts') || '[]');
-            
-            // Try to get from server too and merge
+
+            // الخادم هو مصدر الحقيقة (يحتفظ بالصور الكاملة بما فيها base64)
             try {
                 const res = await fetch('/api/saved-posts');
                 const data = await res.json();
-                
-                if (data.success && data.posts.length > 0) {
-                    // Merge server posts with local (avoid duplicates by id)
-                    const localIds = new Set(localPosts.map(p => p.id));
-                    data.posts.forEach(p => {
-                        if (!localIds.has(p.id)) localPosts.push(p);
-                    });
-                    // Sort by date descending
+
+                if (data.success && Array.isArray(data.posts)) {
+                    // ابدأ من الخادم، ثم أضف المحلية التي لم تُرفع بعد فقط
+                    const serverPosts = data.posts;
+                    const serverIds = new Set(serverPosts.map(p => p.id));
+                    const onlyLocal = localPosts.filter(p => !serverIds.has(p.id));
+                    localPosts = [...serverPosts, ...onlyLocal];
                     localPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                    localStorage.setItem('savedPosts', JSON.stringify(localPosts));
+                    // لا تحفظ base64 في localStorage
+                    try {
+                        const lightForLocal = localPosts.map(p => {
+                            if (p.image && typeof p.image === 'string' && p.image.startsWith('data:')) {
+                                return { ...p, image: null };
+                            }
+                            return p;
+                        }).slice(0, 50);
+                        localStorage.setItem('savedPosts', JSON.stringify(lightForLocal));
+                    } catch (e) { /* تجاوز حد التخزين */ }
                 }
             } catch (e) {
                 console.log('Server fetch failed, using localStorage');
