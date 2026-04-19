@@ -263,14 +263,21 @@
         function editPost(id) {
             const post = savedPosts.find(p => p.id === id);
             if (!post) { showToast('لم يتم العثور على المنشور', 'error'); return; }
-            
-            const params = new URLSearchParams();
-            if (post.title) params.set('title', post.title);
-            if (post.price) params.set('price', post.price);
-            if (post.link) params.set('link', post.link);
-            if (post.image && !post.image.startsWith('data:')) params.set('image', post.image);
-            
-            window.location.href = '/telegram.html?' + params.toString();
+
+            // مرّر المنشور كاملاً (مع الصورة base64 إن وُجدت) عبر sessionStorage
+            try {
+                sessionStorage.setItem('editPost', JSON.stringify({
+                    title: post.title || '',
+                    price: post.price || '',
+                    link: post.link || '',
+                    coupon: post.coupon || '',
+                    image: post.image || '',
+                    message: post.message || '',
+                    hook: post.hook || ''
+                }));
+            } catch (e) { console.warn('sessionStorage failed:', e.message); }
+
+            window.location.href = '/telegram.html?edit=1';
         }
 
         async function deletePost(id) {

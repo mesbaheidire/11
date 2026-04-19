@@ -725,14 +725,42 @@
         
         // Auto-fill from URL params
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('title')) productTitle.value = urlParams.get('title');
-        if (urlParams.has('image')) {
-            productImage.value = urlParams.get('image');
-            imagePreview.src = productImage.value;
-            imagePreview.style.display = 'block';
+
+        // إن جاء من زر "تعديل" في صفحة المحفوظات → اقرأ المنشور الكامل من sessionStorage
+        if (urlParams.get('edit') === '1') {
+            try {
+                const raw = sessionStorage.getItem('editPost');
+                if (raw) {
+                    const ep = JSON.parse(raw);
+                    productTitle.value = ep.title || '';
+                    salePrice.value = ep.price || '';
+                    purchaseLink.value = ep.link || '';
+                    if (ep.coupon) couponCode.value = ep.coupon;
+                    if (ep.image) {
+                        if (ep.image.startsWith('data:')) {
+                            // صورة base64 (إطار/لوقو) → ضعها في الحقل المخفي حتى تُرسل عند النشر
+                            framedImageData.value = ep.image;
+                            isFramed = true;
+                            productImage.value = 'صورة محملة يدوياً';
+                        } else {
+                            productImage.value = ep.image;
+                        }
+                        imagePreview.src = ep.image;
+                        imagePreview.style.display = 'block';
+                    }
+                    sessionStorage.removeItem('editPost');
+                }
+            } catch (e) { console.warn('فشل قراءة المنشور للتعديل:', e.message); }
+        } else {
+            if (urlParams.has('title')) productTitle.value = urlParams.get('title');
+            if (urlParams.has('image')) {
+                productImage.value = urlParams.get('image');
+                imagePreview.src = productImage.value;
+                imagePreview.style.display = 'block';
+            }
+            if (urlParams.has('price')) salePrice.value = urlParams.get('price');
+            if (urlParams.has('link')) purchaseLink.value = urlParams.get('link');
         }
-        if (urlParams.has('price')) salePrice.value = urlParams.get('price');
-        if (urlParams.has('link')) purchaseLink.value = urlParams.get('link');
 
         updatePreview();
     </script>
