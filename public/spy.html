@@ -399,6 +399,13 @@
                         <input type="text" id="tmplSellerCouponCode" placeholder="مثال: SALE10" style="direction:ltr; text-align:left;">
                         <small style="color:#999; font-size:10px;">الكود يُضاف على سطر منفصل بعد قسيمة البائع</small>
                     </div>
+                    <div class="form-group" style="margin-bottom:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+                            <span>🎯 مقدمة جزائرية تلقائية (AI)</span>
+                            <input type="checkbox" id="tmplHookEnabled" style="width:20px; height:20px;">
+                        </label>
+                        <small style="color:#999; font-size:10px;">يضيف Gemini مقدمة حماسية بالدارجة فوق كل منشور (مثل: الحححححق لافـــــار مريييييقل 🔥😍)</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -583,7 +590,8 @@
                 sellerCouponCode: document.getElementById('tmplSellerCouponCode').value,
                 footer: mainSettings.footer || '',
                 botLink: mainSettings.botLink || '',
-                hashtags: mainSettings.hashtags || ''
+                hashtags: mainSettings.hashtags || '',
+                hookEnabled: document.getElementById('tmplHookEnabled').checked
             };
             return config;
         }
@@ -621,6 +629,7 @@
             document.getElementById('tmplCouponFilter').value = t.couponFilter || '';
             document.getElementById('tmplSellerCoupon').value = t.sellerCoupon || '';
             document.getElementById('tmplSellerCouponCode').value = t.sellerCouponCode || '';
+            document.getElementById('tmplHookEnabled').checked = t.hookEnabled !== false;
         }
 
         function updateStatusUI(running) {
