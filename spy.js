@@ -224,7 +224,8 @@ function getDefaultConfig() {
       sellerCouponCode: '',
       footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz',
       botLink: '@AffiliDz_bot',
-      hashtags: '#Aliexpress #تخفيضات'
+      hashtags: '#Aliexpress #تخفيضات',
+      hookEnabled: true
     }
   };
 }
@@ -1864,6 +1865,19 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   let message = '';
   if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n`;
+
+  if (t.hookEnabled !== false) {
+    try {
+      const hook = await generateHook(productTitle);
+      if (hook && hook.trim()) {
+        message += `${hook.trim()}\n\n`;
+        console.log(`🎯 Algerian hook: "${hook.trim()}"`);
+      }
+    } catch (e) {
+      console.log(`⚠️ Hook generation failed: ${e.message}`);
+    }
+  }
+
   if (t.prefix) message += `${t.prefix} ${productTitle}\n`;
   else if (productTitle) message += `${productTitle}\n`;
   if (productPrice && t.priceLabel) {
