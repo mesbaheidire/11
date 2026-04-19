@@ -527,6 +527,12 @@
                 const result = await res.json();
                 if (result.success) {
                     showToast('تم النشر بنجاح! ✅', 'success');
+                    // إن جلب الخادم صورة تلقائياً، استخدمها للحفظ
+                    if (!imageToSend && result.resolvedImage) {
+                        productImage.value = result.resolvedImage;
+                        imagePreview.src = result.resolvedImage;
+                        imagePreview.style.display = 'block';
+                    }
                     // Save post automatically after publishing
                     saveCurrentPost();
                 } else {

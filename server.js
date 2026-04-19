@@ -3,7 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const { portaffFunction } = require('./afflink');
+const { portaffFunction, fetchLinkPreview, idCatcher } = require('./afflink');
 const { searchHotProducts, searchProducts } = require('./aliexpress-api');
 const { Telegraf } = require('telegraf');
 const { PostScheduler } = require('./scheduler');
@@ -692,22 +692,39 @@ app.post('/api/publish-telegram', async (req, res) => {
     }
     
     if (channels.length === 0) return res.status(500).json({ success: false, error: 'الرجاء إدخال معرف القناة في الإعدادات' });
-    
+
+    // إن لم تُرسَل صورة لكن لدينا رابط، حاول جلب صورة المنتج تلقائياً
+    let resolvedImage = image;
+    if (!resolvedImage && link) {
+      try {
+        const idObj = await idCatcher(link);
+        if (idObj?.id) {
+          const previews = await fetchLinkPreview(idObj.id);
+          if (previews?.image_url && /^https?:\/\//i.test(previews.image_url)) {
+            resolvedImage = previews.image_url;
+            console.log('🖼️  جُلبت صورة تلقائياً:', resolvedImage.substring(0, 80));
+          }
+        }
+      } catch (e) {
+        console.log('⚠️ تعذّر جلب صورة المنتج تلقائياً:', e.message);
+      }
+    }
+
     for (const ch of channels) {
-      if (image) {
-        if (image.startsWith('data:image')) {
-          const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+      if (resolvedImage) {
+        if (resolvedImage.startsWith('data:image')) {
+          const base64Data = resolvedImage.replace(/^data:image\/\w+;base64,/, '');
           const imageBuffer = Buffer.from(base64Data, 'base64');
           await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: finalMessage });
         } else {
-          await bot.telegram.sendPhoto(ch, image, { caption: finalMessage });
+          await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage });
         }
       } else {
         await bot.telegram.sendMessage(ch, finalMessage);
       }
     }
-    
-    res.json({ success: true, message: `تم النشر في ${channels.length} قناة` });
+
+    res.json({ success: true, message: `تم النشر في ${channels.length} قناة`, resolvedImage: resolvedImage || null });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
