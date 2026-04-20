@@ -591,7 +591,9 @@
                 footer: mainSettings.footer || '',
                 botLink: mainSettings.botLink || '',
                 hashtags: mainSettings.hashtags || '',
-                hookEnabled: document.getElementById('tmplHookEnabled').checked
+                hookEnabled: document.getElementById('tmplHookEnabled').checked,
+                seasonOffer: mainSettings.seasonOffer || '',
+                seasonOfferEnabled: !!mainSettings.seasonOfferEnabled
             };
             return config;
         }

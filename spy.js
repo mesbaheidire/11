@@ -225,7 +225,9 @@ function getDefaultConfig() {
       footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz',
       botLink: '@AffiliDz_bot',
       hashtags: '#Aliexpress #تخفيضات',
-      hookEnabled: true
+      hookEnabled: true,
+      seasonOffer: '',
+      seasonOfferEnabled: false
     }
   };
 }
@@ -1864,6 +1866,9 @@ async function processPost(config, text, sourceImage, sourceName) {
   productTitle = cleanTitle(productTitle);
 
   let message = '';
+  if (t.seasonOfferEnabled && t.seasonOffer && t.seasonOffer.trim()) {
+    message += `${t.seasonOffer.trim()}\n\n`;
+  }
   if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n`;
 
   if (t.hookEnabled !== false) {

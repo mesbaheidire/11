@@ -326,6 +326,9 @@
             const hook = algerianHook.value;
 
             let message = '';
+            if (s.seasonOfferEnabled && s.seasonOffer && s.seasonOffer.trim()) {
+                message += `${s.seasonOffer.trim()}\n\n`;
+            }
             if (hook) message += `${hook}\n\n`;
             message += `${s.prefix} ${title}\n`;
             message += `${s.salePrice} ${salePriceVal}\n`;

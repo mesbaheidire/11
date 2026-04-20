@@ -328,6 +328,15 @@
             
             <div style="max-height: 60vh; overflow-y: auto; padding-right: 5px;">
                 <div class="form-group">
+                    <label style="display:flex; align-items:center; justify-content:space-between;">
+                        <span>🎉 عرض الموسم (نص ثابت أعلى كل منشور):</span>
+                        <input type="checkbox" id="settingSeasonOfferEnabled" style="width:18px; height:18px;">
+                    </label>
+                    <textarea id="settingSeasonOffer" placeholder="مثال: 🎉 عرض رمضان المبارك — تخفيضات تصل لـ 70%" style="min-height: 60px;"></textarea>
+                    <small style="color:#999; font-size:11px;">يظهر في أعلى كل منشور (يدوي + تجسس) طيلة الموسم. فعّل المربع لتشغيله.</small>
+                </div>
+
+                <div class="form-group">
                     <label>📢 نص بداية الرسالة:</label>
                     <input type="text" id="settingPrefix" placeholder="📢تخفيض لـ">
                 </div>
@@ -470,6 +479,8 @@
         }
 
         const defaultSettings = {
+            seasonOffer: '',
+            seasonOfferEnabled: false,
             prefix: '📢تخفيض لـ',
             salePrice: '✅السعر بعد التخفيض:',
             linkText: '📌رابط الشراء :',
@@ -488,6 +499,8 @@
         function getSettings() { return settings; }
 
         function openSettings() {
+            document.getElementById('settingSeasonOffer').value = settings.seasonOffer || '';
+            document.getElementById('settingSeasonOfferEnabled').checked = !!settings.seasonOfferEnabled;
             document.getElementById('settingPrefix').value = settings.prefix || '';
             document.getElementById('settingSalePrice').value = settings.salePrice || '';
             document.getElementById('settingLinkText').value = settings.linkText || '';
@@ -549,6 +562,8 @@
         function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
 
         function saveSettings() {
+            settings.seasonOffer = document.getElementById('settingSeasonOffer').value;
+            settings.seasonOfferEnabled = document.getElementById('settingSeasonOfferEnabled').checked;
             settings.prefix = document.getElementById('settingPrefix').value;
             settings.salePrice = document.getElementById('settingSalePrice').value;
             settings.linkText = document.getElementById('settingLinkText').value;
