@@ -1121,16 +1121,16 @@ async function executePublish(review) {
       }
       if (productImage) {
         try {
-          await publishBot.telegram.sendPhoto(target, productImage, { caption: captionMessage });
+          await publishBot.telegram.sendPhoto(target, productImage, { caption: captionMessage, parse_mode: 'HTML' });
           if (message.length > 1000) {
-            await publishBot.telegram.sendMessage(target, textMessage);
+            await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
           }
         } catch (photoErr) {
           console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — إرسال نص فقط`);
-          await publishBot.telegram.sendMessage(target, textMessage);
+          await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
         }
       } else {
-        await publishBot.telegram.sendMessage(target, textMessage);
+        await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
       }
       publishedCount++;
       console.log(`✅ تم النشر في ${target}`);
@@ -1865,17 +1865,19 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   productTitle = cleanTitle(productTitle);
 
+  const escH = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   let message = '';
+  const quoteParts = [];
   if (t.seasonOfferEnabled && t.seasonOffer && t.seasonOffer.trim()) {
-    message += `${t.seasonOffer.trim()}\n\n`;
+    quoteParts.push(t.seasonOffer.trim());
   }
-  if (t.headerText && t.headerText.trim()) message += `${t.headerText.trim()}\n`;
 
   if (t.hookEnabled !== false) {
     try {
       const hook = await generateHook(productTitle);
       if (hook && hook.trim()) {
-        message += `${hook.trim()}\n\n`;
+        quoteParts.push(hook.trim());
         console.log(`🎯 Algerian hook: "${hook.trim()}"`);
       }
     } catch (e) {
@@ -1883,15 +1885,20 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  if (t.prefix) message += `${t.prefix} ${productTitle}\n`;
-  else if (productTitle) message += `${productTitle}\n`;
+  if (quoteParts.length) {
+    message += `<blockquote>${escH(quoteParts.join('\n'))}</blockquote>\n\n`;
+  }
+
+  if (t.headerText && t.headerText.trim()) message += `${escH(t.headerText.trim())}\n`;
+  if (t.prefix) message += `${escH(t.prefix)} ${escH(productTitle)}\n`;
+  else if (productTitle) message += `${escH(productTitle)}\n`;
   if (productPrice && t.priceLabel) {
     const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
-    message += `${t.priceLabel} ${priceDisplay}\n`;
+    message += `${escH(t.priceLabel)} ${escH(priceDisplay)}\n`;
   }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
     let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
-    message += `${label}: ${extractedCoupon}\n`;
+    message += `${escH(label)}: ${escH(extractedCoupon)}\n`;
   }
 
   const platformCouponCodes = extractedCoupon
@@ -1938,17 +1945,17 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (sellerCouponLines.length > 0) {
     const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-    message += `🎁 إحجز قسيمة البائع: ${couponDisplay}\n`;
+    message += `🎁 إحجز قسيمة البائع: ${escH(couponDisplay)}\n`;
   }
 
   message += '\n';
-  if (t.linkLabel) message += `${t.linkLabel}\n`;
+  if (t.linkLabel) message += `${escH(t.linkLabel)}\n`;
   convertedLinks.forEach(cl => {
-    message += `${cl.affLink}\n`;
+    message += `${escH(cl.affLink)}\n`;
   });
-  if (t.footer) message += `\n${t.footer}\n`;
-  if (t.botLink) message += `🔗 ${t.botLink}\n`;
-  if (t.hashtags) message += `\n${t.hashtags}`;
+  if (t.footer) message += `\n${escH(t.footer)}\n`;
+  if (t.botLink) message += `🔗 ${escH(t.botLink)}\n`;
+  if (t.hashtags) message += `\n${escH(t.hashtags)}`;
 
   // === المرحلة 3: النشر ===
   const botToken = await getBotToken();

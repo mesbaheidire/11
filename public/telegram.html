@@ -326,10 +326,14 @@
             const hook = algerianHook.value;
 
             let message = '';
+            const quoteParts = [];
             if (s.seasonOfferEnabled && s.seasonOffer && s.seasonOffer.trim()) {
-                message += `${s.seasonOffer.trim()}\n\n`;
+                quoteParts.push(s.seasonOffer.trim());
             }
-            if (hook) message += `${hook}\n\n`;
+            if (hook) quoteParts.push(hook);
+            if (quoteParts.length) {
+                message += `<blockquote>${quoteParts.join('\n')}</blockquote>\n\n`;
+            }
             message += `${s.prefix} ${title}\n`;
             message += `${s.salePrice} ${salePriceVal}\n`;
             message += `${s.linkText}\n${link}\n`;
@@ -337,6 +341,14 @@
             message += `\n${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;
             
             return message;
+        }
+
+        function escapeHtmlPreserveBlockquote(text) {
+            const placeholder1 = '\u0001OPEN_BQ\u0001';
+            const placeholder2 = '\u0001CLOSE_BQ\u0001';
+            let s = text.replace(/<blockquote>/gi, placeholder1).replace(/<\/blockquote>/gi, placeholder2);
+            s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return s.replace(new RegExp(placeholder1, 'g'), '<blockquote>').replace(new RegExp(placeholder2, 'g'), '</blockquote>');
         }
 
         function updatePreview() {
@@ -523,7 +535,8 @@
                         image: imageToSend,
                         settings: settings,
                         credentials: credentials,
-                        customMessage: messagePreview.value // Send edited message
+                        customMessage: escapeHtmlPreserveBlockquote(messagePreview.value),
+                        parseMode: 'HTML'
                     })
                 });
 
