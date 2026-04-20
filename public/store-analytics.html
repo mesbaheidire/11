@@ -286,8 +286,66 @@
       </div>
     </div>
 
+    <div class="cleanup-card" id="popupSection" style="margin-top:15px">
+      <div class="cleanup-header">
+        <div class="title"><i class="fas fa-ad"></i> نافذة الإعلان المنبثقة</div>
+        <label class="cleanup-toggle">
+          <input type="checkbox" id="popupEnabled">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        نافذة منبثقة تظهر للزوار عند فتح المتجر، عند الضغط على الصورة يتم توجيههم للرابط.
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🖼️ صورة النافذة</label>
+        <input type="file" id="popupImgFile" accept="image/*" style="display:none" onchange="uploadPopupImage(event)">
+        <div id="popupImgPreview" style="width:100%;min-height:120px;background:var(--card2);border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin-bottom:8px" onclick="document.getElementById('popupImgFile').click()">
+          <div style="text-align:center;color:var(--muted);font-size:13px;padding:20px">
+            <i class="fas fa-image" style="font-size:28px;display:block;margin-bottom:8px;color:var(--orange)"></i>
+            اضغط لرفع صورة الإعلان
+          </div>
+        </div>
+        <input type="text" id="popupImgUrl" placeholder="أو الصق رابط صورة مباشر هنا" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px" oninput="refreshPopupPreview()">
+      </div>
+
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🔗 الرابط المستهدف (AliExpress)</label>
+        <input type="text" id="popupTargetUrl" placeholder="https://s.click.aliexpress.com/..." style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px;direction:ltr">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">⏱️ ظهور بعد (ثواني)</label>
+          <input type="number" id="popupDelay" min="0" max="60" value="3" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🔁 التكرار</label>
+          <select id="popupShowOnce" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+            <option value="false">في كل زيارة</option>
+            <option value="true">مرة واحدة فقط</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="cleanup-actions">
+        <button class="btn-save" onclick="savePopupConfig()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+        <button class="btn-delete" style="background:linear-gradient(135deg,var(--blue),#1565C0)" onclick="previewPopup()"><i class="fas fa-eye"></i> معاينة</button>
+      </div>
+    </div>
+
     <div id="mainContent">
       <div class="loading"><i class="fas fa-spinner"></i>جاري التحميل...</div>
+    </div>
+  </div>
+
+  <!-- POPUP PREVIEW MODAL -->
+  <div id="popupPreviewOv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:10000;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)" onclick="if(event.target===this)closePopupPreview()">
+    <div style="position:relative;max-width:360px;width:100%">
+      <button onclick="closePopupPreview()" style="position:absolute;top:-14px;left:-14px;width:36px;height:36px;border-radius:50%;background:#fff;border:none;color:#333;font-size:18px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:2"><i class="fas fa-times"></i></button>
+      <img id="popupPreviewImg" src="" style="width:100%;max-height:70vh;object-fit:contain;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.5)">
+      <div style="text-align:center;color:#fff;font-size:12px;margin-top:12px;opacity:.8">معاينة فقط — هكذا تظهر للزوار</div>
     </div>
   </div>
 
@@ -550,8 +608,89 @@
       setTimeout(() => t.classList.remove('show'), 3000);
     }
 
+    // ===== POPUP AD SETTINGS =====
+    async function loadPopupConfig(){
+      try{
+        const r=await fetch('/api/store/popup-config');
+        const d=await r.json();
+        if(d.success&&d.config){
+          const c=d.config;
+          document.getElementById('popupEnabled').checked=!!c.enabled;
+          document.getElementById('popupImgUrl').value=c.imageUrl||'';
+          document.getElementById('popupTargetUrl').value=c.targetUrl||'';
+          document.getElementById('popupDelay').value=c.delaySeconds||3;
+          document.getElementById('popupShowOnce').value=c.showOnce?'true':'false';
+          refreshPopupPreview();
+        }
+      }catch(e){}
+    }
+
+    function refreshPopupPreview(){
+      const url=document.getElementById('popupImgUrl').value.trim();
+      const box=document.getElementById('popupImgPreview');
+      if(url){
+        box.innerHTML=`<img src="${url}" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px" onerror="this.parentElement.innerHTML='<div style=&quot;padding:20px;color:var(--red)&quot;>فشل تحميل الصورة</div>'">`;
+      }else{
+        box.innerHTML=`<div style="text-align:center;color:var(--muted);font-size:13px;padding:20px"><i class="fas fa-image" style="font-size:28px;display:block;margin-bottom:8px;color:var(--orange)"></i>اضغط لرفع صورة الإعلان</div>`;
+      }
+    }
+
+    async function uploadPopupImage(e){
+      const file=e.target.files[0];
+      if(!file)return;
+      const fd=new FormData();
+      fd.append('image',file);
+      showCleanupToast('جاري رفع الصورة...','success');
+      try{
+        const r=await fetch('/api/upload-popup-image',{method:'POST',body:fd});
+        const d=await r.json();
+        if(d.success&&d.imageUrl){
+          document.getElementById('popupImgUrl').value=d.imageUrl;
+          refreshPopupPreview();
+          showCleanupToast('تم رفع الصورة بنجاح','success');
+        }else{
+          showCleanupToast('فشل رفع الصورة','error');
+        }
+      }catch(err){
+        showCleanupToast('خطأ في الاتصال','error');
+      }
+    }
+
+    async function savePopupConfig(){
+      const cfg={
+        enabled:document.getElementById('popupEnabled').checked,
+        imageUrl:document.getElementById('popupImgUrl').value.trim(),
+        targetUrl:document.getElementById('popupTargetUrl').value.trim(),
+        delaySeconds:parseInt(document.getElementById('popupDelay').value)||3,
+        showOnce:document.getElementById('popupShowOnce').value==='true'
+      };
+      if(cfg.enabled&&!cfg.imageUrl){
+        showCleanupToast('يجب إضافة صورة للنافذة','error');return;
+      }
+      if(cfg.enabled&&!cfg.targetUrl){
+        showCleanupToast('يجب إضافة رابط مستهدف','error');return;
+      }
+      try{
+        const r=await fetch('/api/store/popup-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)});
+        const d=await r.json();
+        if(d.success){showCleanupToast('تم حفظ إعدادات النافذة','success');}
+        else{showCleanupToast('فشل الحفظ','error');}
+      }catch(e){showCleanupToast('خطأ في الاتصال','error');}
+    }
+
+    function previewPopup(){
+      const url=document.getElementById('popupImgUrl').value.trim();
+      if(!url){showCleanupToast('أضف صورة أولاً','error');return;}
+      document.getElementById('popupPreviewImg').src=url;
+      document.getElementById('popupPreviewOv').style.display='flex';
+    }
+    function closePopupPreview(){
+      document.getElementById('popupPreviewOv').style.display='none';
+    }
+
     loadAnalytics();
     loadCleanupSettings();
+    loadPopupConfig();
   </script>
 </body>
 </html>

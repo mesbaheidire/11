@@ -518,6 +518,26 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 <div class="toast" id="toast"></div>
 
+<!-- POPUP AD MODAL -->
+<style>
+.popup-ad-ov{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;z-index:10000;padding:20px;backdrop-filter:blur(4px);animation:fadeIn .25s ease}
+.popup-ad-ov.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes popIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+.popup-ad-box{position:relative;max-width:360px;width:100%;animation:popIn .35s cubic-bezier(.2,1.2,.4,1)}
+.popup-ad-img{width:100%;height:auto;max-height:70vh;object-fit:contain;border-radius:20px;cursor:pointer;display:block;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.popup-ad-close{position:absolute;top:-14px;left:-14px;width:36px;height:36px;border-radius:50%;background:#fff;border:none;color:#333;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:2}
+.popup-ad-close:hover{background:#f0f0f0;transform:scale(1.08)}
+.popup-ad-hint{text-align:center;color:#fff;font-size:12px;margin-top:12px;opacity:.8}
+</style>
+<div class="popup-ad-ov" id="popupAdOverlay" onclick="if(event.target===this)closePopupAd()">
+  <div class="popup-ad-box">
+    <button class="popup-ad-close" onclick="closePopupAd()"><i class="fas fa-times"></i></button>
+    <img class="popup-ad-img" id="popupAdImg" src="" alt="عرض" onclick="clickPopupAd()">
+    <div class="popup-ad-hint"><i class="fas fa-hand-pointer"></i> اضغط على الصورة للانتقال للعرض</div>
+  </div>
+</div>
+
 <script>
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#ffffff')}catch(e){}}
@@ -527,6 +547,43 @@ let curProduct=null,curSort='orders',curCat='',curPage=1,curQ='',curProducts=[],
 const tgUserId=tg?.initDataUnsafe?.user?.id||'anon';
 function track(type,detail){fetch('/api/store/track',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,detail,userId:String(tgUserId)})}).catch(()=>{});}
 track('visit','store_open');
+
+// ===== POPUP AD =====
+let popupAdCfg=null;
+async function initPopupAd(){
+  try{
+    const r=await fetch('/api/store/popup-config');
+    const d=await r.json();
+    if(!d.success||!d.config||!d.config.enabled||!d.config.imageUrl)return;
+    popupAdCfg=d.config;
+    if(popupAdCfg.showOnce){
+      const seen=localStorage.getItem('popupAdSeen');
+      if(seen)return;
+    }
+    const delay=Math.max(0,(parseInt(popupAdCfg.delaySeconds)||3))*1000;
+    setTimeout(showPopupAd,delay);
+  }catch(e){}
+}
+function showPopupAd(){
+  if(!popupAdCfg||!popupAdCfg.imageUrl)return;
+  document.getElementById('popupAdImg').src=popupAdCfg.imageUrl;
+  document.getElementById('popupAdOverlay').classList.add('show');
+  track('popup_view',popupAdCfg.targetUrl||'');
+  if(popupAdCfg.showOnce)localStorage.setItem('popupAdSeen','1');
+}
+function closePopupAd(){
+  document.getElementById('popupAdOverlay').classList.remove('show');
+}
+function clickPopupAd(){
+  if(!popupAdCfg||!popupAdCfg.targetUrl)return;
+  track('popup_click',popupAdCfg.targetUrl);
+  try{
+    if(tg&&tg.openLink){tg.openLink(popupAdCfg.targetUrl);}
+    else{window.location.href=popupAdCfg.targetUrl;}
+  }catch(e){window.location.href=popupAdCfg.targetUrl;}
+  closePopupAd();
+}
+initPopupAd();
 
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const toDZD=u=>{if(!u)return'';const n=parseFloat(u);return isNaN(n)?'':(Math.round(n*DZD)).toLocaleString('ar-DZ')+' دج'};

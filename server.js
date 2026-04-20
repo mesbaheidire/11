@@ -267,6 +267,48 @@ app.post('/api/upload-logo', upload.single('logo'), (req, res) => {
   });
 });
 
+// ===== Store Popup (نافذة منبثقة في المتجر) =====
+app.post('/api/upload-popup-image', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+  const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+  const safeExt = ['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg';
+  const filename = `popup_${Date.now()}.${safeExt}`;
+  const targetPath = path.join(__dirname, 'public', 'uploads', filename);
+  const uploadsDir = path.join(__dirname, 'public', 'uploads');
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+  fs.rename(req.file.path, targetPath, (err) => {
+    if (err) return res.status(500).json({ success: false, error: err.message });
+    res.json({ success: true, imageUrl: `/uploads/${filename}` });
+  });
+});
+
+app.get('/api/store/popup-config', async (req, res) => {
+  try {
+    const raw = await db.getAppStorage('popup_config');
+    const cfg = raw ? JSON.parse(raw) : { enabled: false, imageUrl: '', targetUrl: '', delaySeconds: 3, showOnce: false };
+    res.json({ success: true, config: cfg });
+  } catch (e) {
+    res.json({ success: true, config: { enabled: false, imageUrl: '', targetUrl: '', delaySeconds: 3, showOnce: false } });
+  }
+});
+
+app.post('/api/store/popup-config', async (req, res) => {
+  try {
+    const { enabled, imageUrl, targetUrl, delaySeconds, showOnce } = req.body || {};
+    const cfg = {
+      enabled: !!enabled,
+      imageUrl: String(imageUrl || ''),
+      targetUrl: String(targetUrl || ''),
+      delaySeconds: Math.max(0, Math.min(60, parseInt(delaySeconds) || 3)),
+      showOnce: !!showOnce
+    };
+    await db.setAppStorage('popup_config', JSON.stringify(cfg));
+    res.json({ success: true, config: cfg });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Gemini Keys Management API
 app.post('/api/gemini-keys', (req, res) => {
   try {
