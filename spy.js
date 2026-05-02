@@ -1128,7 +1128,18 @@ async function executePublish(review) {
     return;
   }
 
-  const logImage = imageUrlForLog || (typeof productImage === 'string' ? productImage : null);
+  let logImage = imageUrlForLog || (typeof productImage === 'string' && !isLikelyVideoUrl(productImage) ? productImage : null);
+
+  // شبكة أمان: إذا لا يوجد URL لكن لدينا Buffer، احفظه محلياً للحصول على URL قابل للحفظ
+  if (!logImage && productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
+    try {
+      const cachedUrl = cacheImageBufferAsUrl(productImage.source);
+      if (cachedUrl) {
+        logImage = cachedUrl;
+        console.log(`💾 [executePublish] حُفظت الصورة محلياً للمنشورات المحفوظة: ${cachedUrl}`);
+      }
+    } catch (e) { console.log(`⚠️ فشل حفظ الصورة محلياً: ${e.message}`); }
+  }
 
   const config = await getCachedConfig();
   if (isDailyLimitReached(config)) {
