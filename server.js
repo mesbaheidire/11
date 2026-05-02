@@ -303,10 +303,31 @@ app.post('/api/excel/parse', excelUpload.single('file'), (req, res) => {
   }
 });
 
+// بناء الرسالة بنفس قالب الإعدادات المستخدم في /api/publish-telegram
+function buildMessageFromSettings(s, { title, price, link, coupon }) {
+  const tpl = s || {
+    prefix: '📢تخفيض لـ',
+    salePrice: '✅السعر بعد التخفيض:',
+    linkText: '📌رابط الشراء :',
+    couponText: '🎁كوبون:',
+    footer: '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
+    botLink: '@AffiliDz_bot',
+    hashtags: '#Aliexpress'
+  };
+  let msg = `${tpl.prefix} ${title || ''}\n\n`;
+  if (price) msg += `${tpl.salePrice} ${price}\n\n`;
+  msg += `${tpl.linkText}\n${link}\n\n`;
+  if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
+    msg += `${tpl.couponText} ${coupon}\n\n`;
+  }
+  msg += `${tpl.footer}\n🔗 ${tpl.botLink}\n\n${tpl.hashtags}`;
+  return msg;
+}
+
 // بدء معالجة الاستيراد (ينشر دفعة منتجات)
 app.post('/api/excel/start', async (req, res) => {
   try {
-    const { rows, mapping, template, credentials, settings, delaySeconds, autoConvert, saveToHistory } = req.body;
+    const { rows, mapping, credentials, settings, delaySeconds, autoConvert, saveToHistory } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ success: false, error: 'لا توجد صفوف' });
     if (!mapping || !mapping.link) return res.status(400).json({ success: false, error: 'يجب تحديد عمود الرابط على الأقل' });
 
@@ -357,14 +378,13 @@ app.post('/api/excel/start', async (req, res) => {
             } catch (convErr) { pushBounded(job.logs, { row: i + 1, status: 'convert_failed', reason: convErr.message }, EXCEL_JOB_MAX_LOGS); }
           }
 
-          // بناء الرسالة من القالب
-          const replacements = {};
-          for (const [k, v] of Object.entries(row)) replacements[`{${k}}`] = String(v == null ? '' : v);
-          replacements['{link}'] = finalLink;
-          replacements['{originalLink}'] = link;
-          let message = template || '🛍️ {' + (mapping.title || 'Title') + '}\n\n💰 {' + (mapping.price || 'Price') + '}\n\n🔗 {link}';
-          for (const [k, v] of Object.entries(replacements)) message = message.split(k).join(v);
-          message = message.replace(/\{[^}]+\}/g, ''); // إزالة أي placeholder غير متطابق
+          // بناء الرسالة بنفس قالب الإعدادات (prefix/salePrice/linkText/...)
+          const message = buildMessageFromSettings(settings, {
+            title: rawTitle,
+            price: rawPrice,
+            link: finalLink,
+            coupon: rawCoupon
+          });
 
           // النشر مباشرة عبر Telegraf
           if (!sharedBot) throw new Error('لا يوجد توكن بوت');

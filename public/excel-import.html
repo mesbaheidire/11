@@ -113,24 +113,14 @@
   </div>
 
   <div class="card" id="templateCard" style="display: none;">
-    <h2><span class="step-num">3</span> قالب الرسالة</h2>
-    <div class="field">
-      <label>نص الرسالة (استخدم <code>{اسم_العمود}</code> لإدراج القيمة)</label>
-      <textarea id="template">🛍️ {اسم المنتج}
-
-💰 السعر: {السعر}
-🎁 كوبون: {الكوبون}
-
-🔗 رابط الشراء:
-{link}
-
-#AliExpress #تخفيضات</textarea>
-      <div class="hint">المتغيرات الخاصة: <code>{link}</code> = الرابط بعد التحويل، <code>{originalLink}</code> = الرابط الأصلي</div>
-    </div>
-    <div class="field">
-      <button class="btn btn-primary" onclick="previewMessage()" type="button"><i class="fas fa-eye"></i> معاينة الرسالة (الصف الأول)</button>
-    </div>
-    <div id="messagePreview" style="display:none; background:#0f0f1e; padding:15px; border-radius:8px; white-space:pre-wrap; font-family:monospace; font-size:13px;"></div>
+    <h2><span class="step-num">3</span> معاينة الرسالة</h2>
+    <p style="color:#aaa; font-size:13px; margin:0 0 10px;">
+      <i class="fas fa-info-circle" style="color:#4CAF50"></i>
+      تُستخدم نفس قوالب الرسالة من <strong>الإعدادات</strong> (المقدمة، السعر، نص الرابط، الكوبون، التذييل، الهاشتاقات).
+      لتعديل التنسيق، اذهب إلى الصفحة الرئيسية ← الإعدادات.
+    </p>
+    <button class="btn btn-primary" onclick="previewMessage()" type="button"><i class="fas fa-eye"></i> معاينة رسالة الصف الأول</button>
+    <div id="messagePreview" style="display:none; margin-top:12px; background:#0f0f1e; padding:15px; border-radius:8px; white-space:pre-wrap; font-family:monospace; font-size:13px;"></div>
   </div>
 
   <div class="card" id="optionsCard" style="display: none;">
@@ -195,9 +185,12 @@ function showToast(msg, type = 'success') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+function getAppSettings() {
+  try { return JSON.parse(localStorage.getItem('appSettings') || '{}'); } catch (e) { return {}; }
+}
+
 function getCredentials() {
-  let s = {};
-  try { s = JSON.parse(localStorage.getItem('affilidz_settings') || '{}'); } catch (e) {}
+  const s = getAppSettings();
   return {
     cook: s.cook || '',
     telegramToken: s.telegramToken || '',
@@ -205,6 +198,35 @@ function getCredentials() {
     channelId2: s.channelId2 || '',
     channelChoice: document.getElementById('channelChoice').value
   };
+}
+
+function getMessageSettings() {
+  const s = getAppSettings();
+  return {
+    prefix: s.prefix || '📢تخفيض لـ',
+    salePrice: s.salePrice || '✅السعر بعد التخفيض:',
+    linkText: s.linkText || '📌رابط الشراء :',
+    couponText: s.couponText || '🎁كوبون:',
+    footer: s.footer || '⚠️ لا تنس استخدام البوت الرسمي لـ AffiliDz للحصول على أفضل العروض والتخفيضات من AliExpress 👇',
+    botLink: s.botLink || '@AffiliDz_bot',
+    hashtags: s.hashtags || '#Aliexpress'
+  };
+}
+
+function buildMessagePreview(row) {
+  const tpl = getMessageSettings();
+  const m = {
+    title: row[document.getElementById('mapTitle').value] || '',
+    price: row[document.getElementById('mapPrice').value] || '',
+    link: row[document.getElementById('mapLink').value] || '',
+    coupon: document.getElementById('mapCoupon').value ? (row[document.getElementById('mapCoupon').value] || '') : ''
+  };
+  let msg = `${tpl.prefix} ${m.title}\n\n`;
+  if (m.price) msg += `${tpl.salePrice} ${m.price}\n\n`;
+  msg += `${tpl.linkText}\n${m.link}\n\n`;
+  if (m.coupon && !/^(null|undefined|none)$/i.test(String(m.coupon).trim())) msg += `${tpl.couponText} ${m.coupon}\n\n`;
+  msg += `${tpl.footer}\n🔗 ${tpl.botLink}\n\n${tpl.hashtags}`;
+  return msg;
 }
 
 document.getElementById('excelFile').addEventListener('change', async (e) => {
@@ -227,7 +249,6 @@ document.getElementById('excelFile').addEventListener('change', async (e) => {
     document.getElementById('mappingCard').style.display = 'block';
     document.getElementById('templateCard').style.display = 'block';
     document.getElementById('optionsCard').style.display = 'block';
-    autoGuessTemplate(data.columns);
   } catch (err) {
     document.getElementById('uploadText').textContent = '❌ ' + err.message;
     showToast(err.message, 'error');
@@ -260,27 +281,10 @@ function buildPreviewTable(rows, columns) {
     '<tbody>' + rows.map(r => '<tr>' + columns.map(c => `<td>${escapeHtml(String(r[c] || '').substring(0, 40))}</td>`).join('') + '</tr>').join('') + '</tbody>';
 }
 
-function autoGuessTemplate(columns) {
-  const titleCol = document.getElementById('mapTitle').value;
-  const priceCol = document.getElementById('mapPrice').value;
-  const couponCol = document.getElementById('mapCoupon').value;
-  let tpl = '🛍️ {' + (titleCol || columns[0]) + '}\n\n';
-  if (priceCol) tpl += '💰 السعر: {' + priceCol + '}\n';
-  if (couponCol) tpl += '🎁 كوبون: {' + couponCol + '}\n';
-  tpl += '\n🔗 رابط الشراء:\n{link}\n\n#AliExpress #تخفيضات';
-  document.getElementById('template').value = tpl;
-}
-
 function previewMessage() {
   if (!parsedData || !parsedData.rows[0]) return;
-  const row = parsedData.rows[0];
-  let msg = document.getElementById('template').value;
-  for (const [k, v] of Object.entries(row)) msg = msg.split(`{${k}}`).join(String(v || ''));
-  msg = msg.split('{link}').join(row[document.getElementById('mapLink').value] || '');
-  msg = msg.split('{originalLink}').join(row[document.getElementById('mapLink').value] || '');
-  msg = msg.replace(/\{[^}]+\}/g, '');
   const p = document.getElementById('messagePreview');
-  p.textContent = msg;
+  p.textContent = buildMessagePreview(parsedData.rows[0]);
   p.style.display = 'block';
 }
 
@@ -311,7 +315,7 @@ async function startImport() {
       body: JSON.stringify({
         rows: parsedData.rows,
         mapping,
-        template: document.getElementById('template').value,
+        settings: getMessageSettings(),
         credentials: creds,
         delaySeconds: parseInt(document.getElementById('delaySeconds').value),
         autoConvert: document.getElementById('autoConvert').checked,
