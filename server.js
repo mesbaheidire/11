@@ -248,6 +248,200 @@ app.get('/ping', (req, res) => {
 
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const XLSX = require('xlsx');
+const excelUpload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } });
+
+// === حالة جلسة استيراد Excel (في الذاكرة، لكل عملية) ===
+const excelJobs = new Map(); // jobId -> job
+const EXCEL_JOB_MAX_LOGS = 200;
+const EXCEL_JOB_MAX_ERRORS = 100;
+const EXCEL_JOB_TTL_MS = 60 * 60 * 1000; // ساعة بعد الانتهاء
+const EXCEL_JOB_MAX_COUNT = 20;
+
+function newJobId() { return 'xls_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8); }
+
+// تنظيف المهام القديمة دورياً
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, j] of excelJobs.entries()) {
+    if (j.finishedAt && now - j.finishedAt > EXCEL_JOB_TTL_MS) excelJobs.delete(id);
+  }
+  // إن تجاوز العدد الحد، احذف الأقدم
+  if (excelJobs.size > EXCEL_JOB_MAX_COUNT) {
+    const sorted = [...excelJobs.entries()].sort((a, b) => (a[1].startedAt || 0) - (b[1].startedAt || 0));
+    while (excelJobs.size > EXCEL_JOB_MAX_COUNT && sorted.length) excelJobs.delete(sorted.shift()[0]);
+  }
+}, 5 * 60 * 1000).unref();
+
+function pushBounded(arr, item, max) { arr.push(item); if (arr.length > max) arr.splice(0, arr.length - max); }
+
+function formatChannelIdShared(id) {
+  if (!id) return null;
+  if (id.includes('t.me/')) {
+    const m = id.match(/t\.me\/([^\/\?]+)/);
+    if (m) return '@' + m[1];
+  }
+  if (!id.startsWith('@') && !id.startsWith('-')) return '@' + id;
+  return id;
+}
+
+// تحليل ملف Excel وإرجاع الأعمدة + الصفوف
+app.post('/api/excel/parse', excelUpload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: 'لم يتم رفع أي ملف' });
+    const wb = XLSX.readFile(req.file.path);
+    const sheetName = wb.SheetNames[0];
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    try { fs.unlinkSync(req.file.path); } catch (e) {}
+    if (!rows.length) return res.status(400).json({ success: false, error: 'الملف فارغ' });
+    const columns = Object.keys(rows[0]);
+    res.json({ success: true, columns, rows, sheetName, totalRows: rows.length });
+  } catch (e) {
+    try { if (req.file) fs.unlinkSync(req.file.path); } catch (er) {}
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// بدء معالجة الاستيراد (ينشر دفعة منتجات)
+app.post('/api/excel/start', async (req, res) => {
+  try {
+    const { rows, mapping, template, credentials, settings, delaySeconds, autoConvert, saveToHistory } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ success: false, error: 'لا توجد صفوف' });
+    if (!mapping || !mapping.link) return res.status(400).json({ success: false, error: 'يجب تحديد عمود الرابط على الأقل' });
+
+    const jobId = newJobId();
+    const job = {
+      id: jobId, status: 'running', total: rows.length, current: 0,
+      success: 0, failed: 0, skipped: 0, errors: [], logs: [],
+      paused: false, cancel: false, startedAt: Date.now()
+    };
+    excelJobs.set(jobId, job);
+
+    // معالجة في الخلفية
+    (async () => {
+      const delay = Math.max(5, parseInt(delaySeconds) || 30) * 1000;
+      // إنشاء البوت مرة واحدة لكل مهمة بدلاً من كل صف
+      const earlyBotToken = credentials?.telegramToken || await getSharedBotToken();
+      const sharedBot = earlyBotToken ? new Telegraf(earlyBotToken) : null;
+      for (let i = 0; i < rows.length; i++) {
+        if (job.cancel) { job.status = 'cancelled'; break; }
+        while (job.paused && !job.cancel) await new Promise(r => setTimeout(r, 500));
+        if (job.cancel) { job.status = 'cancelled'; break; }
+
+        const row = rows[i];
+        job.current = i + 1;
+        const rawTitle = String(row[mapping.title] || '').trim();
+        const rawPrice = String(row[mapping.price] || '').trim();
+        const rawCoupon = mapping.coupon ? String(row[mapping.coupon] || '').trim() : '';
+        const rawImage = mapping.image ? String(row[mapping.image] || '').trim() : '';
+        let link = String(row[mapping.link] || '').trim();
+
+        if (!link) {
+          job.skipped++;
+          pushBounded(job.logs, { row: i + 1, status: 'skipped', reason: 'لا يوجد رابط' }, EXCEL_JOB_MAX_LOGS);
+          continue;
+        }
+
+        try {
+          // تحويل لرابط أفليت إذا طُلب وكان رابط AliExpress
+          let finalLink = link;
+          if (autoConvert && /aliexpress\.com/i.test(link)) {
+            try {
+              const cookies = credentials?.cook || await getSharedCookie();
+              if (cookies) {
+                const result = await portaffFunction(cookies, link);
+                const aff = result?.aff?.coin || result?.aff?.super || result?.aff?.point || result?.aff?.limit;
+                if (aff && /^https?:\/\//i.test(aff)) finalLink = aff;
+              }
+            } catch (convErr) { pushBounded(job.logs, { row: i + 1, status: 'convert_failed', reason: convErr.message }, EXCEL_JOB_MAX_LOGS); }
+          }
+
+          // بناء الرسالة من القالب
+          const replacements = {};
+          for (const [k, v] of Object.entries(row)) replacements[`{${k}}`] = String(v == null ? '' : v);
+          replacements['{link}'] = finalLink;
+          replacements['{originalLink}'] = link;
+          let message = template || '🛍️ {' + (mapping.title || 'Title') + '}\n\n💰 {' + (mapping.price || 'Price') + '}\n\n🔗 {link}';
+          for (const [k, v] of Object.entries(replacements)) message = message.split(k).join(v);
+          message = message.replace(/\{[^}]+\}/g, ''); // إزالة أي placeholder غير متطابق
+
+          // النشر مباشرة عبر Telegraf
+          if (!sharedBot) throw new Error('لا يوجد توكن بوت');
+          const channels = [];
+          const ch1 = credentials?.channelId, ch2 = credentials?.channelId2;
+          const choice = credentials?.channelChoice || '1';
+          if ((choice === '1' || choice === 'both') && ch1) channels.push(formatChannelIdShared(ch1));
+          if ((choice === '2' || choice === 'both') && ch2) channels.push(formatChannelIdShared(ch2));
+          const validChannels = channels.filter(Boolean);
+          if (!validChannels.length) throw new Error('لا توجد قناة محددة');
+
+          for (const ch of validChannels) {
+            if (rawImage && /^https?:\/\//i.test(rawImage)) {
+              try {
+                await sharedBot.telegram.sendPhoto(ch, rawImage, { caption: message.substring(0, 1024) });
+              } catch (photoErr) {
+                await sharedBot.telegram.sendMessage(ch, message.substring(0, 4096));
+              }
+            } else {
+              await sharedBot.telegram.sendMessage(ch, message.substring(0, 4096));
+            }
+          }
+
+          if (saveToHistory) {
+            try {
+              await db.addSavedPost({
+                id: `excel_${Date.now()}_${i}`,
+                title: rawTitle || `صف ${i + 1}`,
+                price: rawPrice,
+                link: finalLink,
+                image: rawImage || '',
+                coupon: rawCoupon,
+                message,
+                createdAt: new Date().toISOString()
+              });
+            } catch (dbErr) { /* تجاهل */ }
+          }
+
+          job.success++;
+          pushBounded(job.logs, { row: i + 1, status: 'success', title: rawTitle.substring(0, 50) }, EXCEL_JOB_MAX_LOGS);
+        } catch (err) {
+          job.failed++;
+          pushBounded(job.errors, { row: i + 1, error: err.message }, EXCEL_JOB_MAX_ERRORS);
+          pushBounded(job.logs, { row: i + 1, status: 'failed', reason: err.message }, EXCEL_JOB_MAX_LOGS);
+        }
+
+        if (i < rows.length - 1) await new Promise(r => setTimeout(r, delay));
+      }
+      if (job.status === 'running') job.status = 'completed';
+      job.finishedAt = Date.now();
+    })().catch(e => { job.status = 'error'; job.fatal = e.message; });
+
+    res.json({ success: true, jobId });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// متابعة حالة المهمة
+app.get('/api/excel/status/:jobId', (req, res) => {
+  const job = excelJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, error: 'لم يتم العثور على المهمة' });
+  // إرجاع آخر 50 سجل + 10 أخطاء فقط لتقليل حجم الاستجابة
+  const { logs, errors, ...rest } = job;
+  res.json({ success: true, job: { ...rest, logs: logs.slice(-50), errors: errors.slice(-10), errorCount: errors.length } });
+});
+
+// إيقاف مؤقت / استئناف / إلغاء
+app.post('/api/excel/control/:jobId', (req, res) => {
+  const job = excelJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, error: 'لم يتم العثور على المهمة' });
+  const { action } = req.body;
+  if (action === 'pause') job.paused = true;
+  else if (action === 'resume') job.paused = false;
+  else if (action === 'cancel') job.cancel = true;
+  res.json({ success: true, job: { id: job.id, status: job.status, paused: job.paused, cancel: job.cancel } });
+});
 
 app.post('/api/upload-frame', upload.single('frame'), (req, res) => {
   if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });

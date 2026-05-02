@@ -176,3 +176,14 @@ The app is **fully compatible with Render** and uses:
 3. Tables are auto-created on first startup
 
 Set `DATABASE_URL` in Render Environment to your Neon connection string.
+
+## Excel Import Feature (May 2026)
+- Page: `public/excel-import.html` — upload .xlsx/csv, map columns, customize message template, batch publish to Telegram.
+- Endpoints in `server.js`:
+  - `POST /api/excel/parse` — parse uploaded file via `xlsx`, return columns + rows
+  - `POST /api/excel/start` — start background job (auto-convert AliExpress links via `portaffFunction`, publish to Telegram, optionally save to history)
+  - `GET /api/excel/status/:jobId` — poll progress (capped logs/errors)
+  - `POST /api/excel/control/:jobId` — pause/resume/cancel
+- In-memory `excelJobs` Map with TTL cleanup (1h) and max 20 jobs.
+- Reuses one `Telegraf` instance per job, shared `formatChannelIdShared()` for channel ID normalization.
+- Nav icon added in `public/index.html` (green Excel icon).
