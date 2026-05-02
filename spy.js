@@ -23,6 +23,16 @@ function detectImageExt(buffer) {
   return 'jpg';
 }
 
+// يفحص ما إذا كان الرابط على الأرجح فيديو وليس صورة (لتفادي حالة أن يكون أول عنصر منتج فيديو)
+function isLikelyVideoUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const u = url.toLowerCase();
+  if (/\.(mp4|webm|mov|avi|m3u8|mkv|flv|m4v|3gp|ts)(\?|$|#)/.test(u)) return true;
+  if (/(cloud\.video\.taobao\.com|video\.aliexpress|play\.aliexpress|alicdn-video|aliyun-video)/.test(u)) return true;
+  if (/[?&](videoid|video_id|playurl)=/.test(u)) return true;
+  return false;
+}
+
 function cacheImageBufferAsUrl(buffer) {
   try {
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;
@@ -599,6 +609,10 @@ function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
           const titleMatch = body.match(/"subject"\s*:\s*"([^"]+)"/) || body.match(/"title"\s*:\s*"([^"]+)"/);
           if (titleMatch && titleMatch[1]) {
             title = titleMatch[1].replace(/\\u[\dA-Fa-f]{4}/g, (m) => String.fromCharCode(parseInt(m.slice(2), 16)));
+          }
+          if (imageUrl && isLikelyVideoUrl(imageUrl)) {
+            console.log(`⛔ Mobile JSON: تم تجاهل رابط فيديو (${imageUrl.substring(0, 80)}...)`);
+            imageUrl = null;
           }
           if (imageUrl && /alicdn|aliexpress-media/.test(imageUrl)) {
             console.log(`✅ Mobile JSON وجد صورة: ${imageUrl.substring(0, 80)}...`);
@@ -1691,12 +1705,14 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`🖼 [1/9] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
-      if (lpResult && lpResult.image) {
+      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
         const lpBuffer = await downloadImageAsBuffer(lpResult.image);
         productImage = lpBuffer ? { source: lpBuffer } : lpResult.image;
         productImageUrl = lpResult.image;
         console.log(`✅ نجح LinkPreview.xyz`);
         if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
+      } else if (lpResult && lpResult.image) {
+        console.log(`⛔ LinkPreview تم تجاهل رابط فيديو`);
       }
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
@@ -1708,12 +1724,14 @@ async function processPost(config, text, sourceImage, sourceName) {
       console.log(`🖼 [2/9] محاولة Microlink.io...`);
       try {
         const mlResult = await fetchImageViaMicrolink(mlUrl);
-        if (mlResult && mlResult.image) {
+        if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
           const mlBuffer = await downloadImageAsBuffer(mlResult.image);
           productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
           productImageUrl = mlResult.image;
           console.log(`✅ نجح Microlink.io`);
           if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+        } else if (mlResult && mlResult.image) {
+          console.log(`⛔ Microlink تم تجاهل رابط فيديو`);
         }
       } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
     }
@@ -1724,7 +1742,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`🖼 [3/9] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
-      if (apiResult && apiResult.image_url) {
+      if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url)) {
         const apiBuffer = await downloadImageAsBuffer(apiResult.image_url);
         productImage = apiBuffer ? { source: apiBuffer } : apiResult.image_url;
         productImageUrl = apiResult.image_url;
@@ -1742,12 +1760,14 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`🖼 [4/9] محاولة Mobile Page JSON...`);
     try {
       const mjResult = await fetchImageFromMobilePageJson(firstProductId);
-      if (mjResult && mjResult.image) {
+      if (mjResult && mjResult.image && !isLikelyVideoUrl(mjResult.image)) {
         const mjBuffer = await downloadImageAsBuffer(mjResult.image);
         productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
         productImageUrl = mjResult.image;
         console.log(`✅ نجح Mobile Page JSON`);
         if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+      } else if (mjResult && mjResult.image) {
+        console.log(`⛔ Mobile Page JSON تم تجاهل رابط فيديو`);
       }
     } catch (e) { console.log(`⚠️ فشل Mobile Page JSON: ${e.message}`); }
   }
@@ -1757,20 +1777,24 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`🖼 [5/9] محاولة استخراج og:image...`);
     try {
       const ogImg = await fetchOgImage(convertedLinks[0].affLink);
-      if (ogImg) {
+      if (ogImg && !isLikelyVideoUrl(ogImg)) {
         const ogBuffer = await downloadImageAsBuffer(ogImg);
         productImage = ogBuffer ? { source: ogBuffer } : ogImg;
         productImageUrl = ogImg;
         console.log(`✅ نجح og:image`);
+      } else if (ogImg) {
+        console.log(`⛔ og:image تم تجاهل رابط فيديو`);
       }
     } catch (e) { console.log(`⚠️ فشل og:image: ${e.message}`); }
   }
 
   // 6) صورة من fetchLinkPreview() — السلسلة الكاملة في afflink
-  if (!productImage && firstProductImage && typeof firstProductImage === 'string') {
+  if (!productImage && firstProductImage && typeof firstProductImage === 'string' && !isLikelyVideoUrl(firstProductImage)) {
     console.log(`🖼 [6/9] استخدام صورة fetchLinkPreview...`);
     productImage = firstProductImage;
     productImageUrl = firstProductImage;
+  } else if (!productImage && firstProductImage && isLikelyVideoUrl(firstProductImage)) {
+    console.log(`⛔ fetchLinkPreview تم تجاهل رابط فيديو`);
   }
 
   // 7) صورة المنشور الأصلي كخيار مباشر قبل Bing
@@ -1780,6 +1804,12 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   // 8) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
+  if (productImage && typeof productImage === 'string') {
+    if (isLikelyVideoUrl(productImage)) {
+      console.log(`⛔ تم اكتشاف رابط فيديو في productImage — إلغاء`);
+      productImage = null;
+    }
+  }
   if (productImage && typeof productImage === 'string') {
     console.log(`🖼 [8/9] محاولة تحميل الصورة كـ Buffer...`);
     if (!productImageUrl) productImageUrl = productImage;
@@ -1799,13 +1829,15 @@ async function processPost(config, text, sourceImage, sourceName) {
       console.log(`🖼 [9/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
       try {
         const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
-        if (bingResult && bingResult.image) {
+        if (bingResult && bingResult.image && !isLikelyVideoUrl(bingResult.image)) {
           const bingBuffer = await downloadImageAsBuffer(bingResult.image);
           if (bingBuffer) {
             productImage = { source: bingBuffer };
             productImageUrl = bingResult.image;
             console.log(`✅ نجح Bing Images`);
           }
+        } else if (bingResult && bingResult.image) {
+          console.log(`⛔ Bing تم تجاهل رابط فيديو`);
         }
       } catch (e) { console.log(`⚠️ فشل Bing Images: ${e.message}`); }
     }
@@ -1826,9 +1858,15 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  const imageUrlForLog = (typeof productImage === 'string' ? productImage : null)
+  // حارس نهائي: لا تسمح أبداً بحفظ رابط فيديو في image_url
+  if (productImageUrl && isLikelyVideoUrl(productImageUrl)) {
+    console.log(`⛔ تم اكتشاف رابط فيديو في productImageUrl — تجاهل`);
+    productImageUrl = null;
+  }
+
+  let imageUrlForLog = (typeof productImage === 'string' && !isLikelyVideoUrl(productImage) ? productImage : null)
     || productImageUrl
-    || firstProductImage
+    || (firstProductImage && !isLikelyVideoUrl(firstProductImage) ? firstProductImage : null)
     || null;
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;

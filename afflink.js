@@ -303,7 +303,11 @@ async function fetchLinkPreview(productId) {
                             return {
                                 method: "Web Scraping (JSON)",
                                 title: itemDetail.subject || itemDetail.title || title,
-                                image_url: itemDetail.mainImage || itemDetail.image || (itemDetail.images && itemDetail.images[0]) || null,
+                                image_url: (function pickImg() {
+                                    const isVid = (u) => typeof u === 'string' && (/\.(mp4|webm|mov|avi|m3u8|ts|flv|mkv)(\?|$|#)/i.test(u) || /cloud\.video\.taobao\.com|video\.aliexpress|play\.aliexpress|videoid=|playerType=|movie\.aliexpress/i.test(u));
+                                    const candidates = [itemDetail.mainImage, itemDetail.image, ...(Array.isArray(itemDetail.images) ? itemDetail.images : [])].filter(Boolean);
+                                    return candidates.find(u => !isVid(u)) || null;
+                                })(),
                                 price: itemDetail.price || (itemDetail.priceList && itemDetail.priceList[0]?.amount?.value) || "راجع الرابط"
                             };
                         }
