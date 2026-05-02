@@ -15,7 +15,11 @@
   - `spy.html` - Channel spy management page
   - `collections.html` - Collections page
   - `telegram.html` - Telegram publishing page
-  - `video-generator.html` - Affiliate video generator page (AI-powered)
+  - `video-generator.html` - مولّد فيديوهات TikTok/Reels تلقائي (Canvas + MediaRecorder، client-side)
+    - يجلب بيانات المنتج من `/api/affiliate`، يحمّل الصورة عبر `/api/proxy-image` كـ fallback لتجاوز CORS
+    - 3 قوالب (burst/story/minimal)، 3 مدد (10/15/30 ثانية)، 9:16 بدقة 540×960، 30fps
+    - مخرج WebM (VP9/VP8 + Opus)، يدعم رفع موسيقى خلفية ودمجها عبر AudioContext
+    - معاينة حية على Canvas + شريط تقدم أثناء التسجيل + زر تحميل بعد الانتهاء
   - `store.html` - Telegram Mini App store (Yassir-inspired purple theme)
   - `store-analytics.html` - Store analytics dashboard for admin
   - `saved-posts.html` - Saved posts management page
