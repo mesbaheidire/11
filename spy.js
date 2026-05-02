@@ -1653,6 +1653,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // === المرحلة 2: بناء منشور واحد - جلب الصورة بالترتيب الجديد ===
   let productImage = null;
+  let productImageUrl = null;
   const previewLink = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
   const mobileProductUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : null;
 
@@ -1664,6 +1665,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (lpResult && lpResult.image) {
         const lpBuffer = await downloadImageAsBuffer(lpResult.image);
         productImage = lpBuffer ? { source: lpBuffer } : lpResult.image;
+        productImageUrl = lpResult.image;
         console.log(`✅ نجح LinkPreview.xyz`);
         if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
       }
@@ -1680,6 +1682,7 @@ async function processPost(config, text, sourceImage, sourceName) {
         if (mlResult && mlResult.image) {
           const mlBuffer = await downloadImageAsBuffer(mlResult.image);
           productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
+          productImageUrl = mlResult.image;
           console.log(`✅ نجح Microlink.io`);
           if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
         }
@@ -1695,6 +1698,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (apiResult && apiResult.image_url) {
         const apiBuffer = await downloadImageAsBuffer(apiResult.image_url);
         productImage = apiBuffer ? { source: apiBuffer } : apiResult.image_url;
+        productImageUrl = apiResult.image_url;
         console.log(`✅ نجح AliExpress API`);
         if (!firstApiTitle && apiResult.title) firstApiTitle = apiResult.title;
         if (!firstProductPrice && (apiResult.sale_price || apiResult.price)) {
@@ -1712,6 +1716,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (mjResult && mjResult.image) {
         const mjBuffer = await downloadImageAsBuffer(mjResult.image);
         productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
+        productImageUrl = mjResult.image;
         console.log(`✅ نجح Mobile Page JSON`);
         if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
       }
@@ -1726,6 +1731,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       if (ogImg) {
         const ogBuffer = await downloadImageAsBuffer(ogImg);
         productImage = ogBuffer ? { source: ogBuffer } : ogImg;
+        productImageUrl = ogImg;
         console.log(`✅ نجح og:image`);
       }
     } catch (e) { console.log(`⚠️ فشل og:image: ${e.message}`); }
@@ -1735,6 +1741,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (!productImage && firstProductImage && typeof firstProductImage === 'string') {
     console.log(`🖼 [6/9] استخدام صورة fetchLinkPreview...`);
     productImage = firstProductImage;
+    productImageUrl = firstProductImage;
   }
 
   // 7) صورة المنشور الأصلي كخيار مباشر قبل Bing
@@ -1746,6 +1753,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   // 8) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
   if (productImage && typeof productImage === 'string') {
     console.log(`🖼 [8/9] محاولة تحميل الصورة كـ Buffer...`);
+    if (!productImageUrl) productImageUrl = productImage;
     const buf = await downloadImageAsBuffer(productImage);
     if (buf) {
       productImage = { source: buf };
@@ -1766,6 +1774,7 @@ async function processPost(config, text, sourceImage, sourceName) {
           const bingBuffer = await downloadImageAsBuffer(bingResult.image);
           if (bingBuffer) {
             productImage = { source: bingBuffer };
+            productImageUrl = bingResult.image;
             console.log(`✅ نجح Bing Images`);
           }
         }
@@ -1778,7 +1787,10 @@ async function processPost(config, text, sourceImage, sourceName) {
     productImage = { source: sourceImage };
   }
 
-  const imageUrlForLog = typeof productImage === 'string' ? productImage : (firstProductImage || null);
+  const imageUrlForLog = (typeof productImage === 'string' ? productImage : null)
+    || productImageUrl
+    || firstProductImage
+    || null;
 
   let productTitle = (aiResult && aiResult.productName) ? aiResult.productName : firstApiTitle;
   if (!productTitle) {
