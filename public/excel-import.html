@@ -257,18 +257,24 @@ document.getElementById('excelFile').addEventListener('change', async (e) => {
 
 function populateColumnSelectors(columns) {
   const ids = ['mapLink', 'mapTitle', 'mapPrice', 'mapCoupon', 'mapImage'];
+  // أولوية الأعمدة: الأكثر تخصصاً أولاً (تنسيق AliExpress الرسمي)
   const guesses = {
-    mapLink: ['link', 'url', 'رابط'],
-    mapTitle: ['title', 'name', 'product', 'اسم', 'منتج', 'عنوان'],
-    mapPrice: ['price', 'cost', 'سعر', 'ثمن'],
-    mapCoupon: ['coupon', 'code', 'كوبون', 'كود'],
-    mapImage: ['image', 'photo', 'pic', 'صورة']
+    mapLink: ['promotion url', 'promotion_url', 'affiliate', 'link', 'url', 'رابط'],
+    mapTitle: ['product desc', 'product_desc', 'desc', 'title', 'name', 'product name', 'اسم', 'منتج', 'عنوان'],
+    mapPrice: ['discount price', 'discount_price', 'sale price', 'price', 'cost', 'سعر', 'ثمن'],
+    mapCoupon: ['code name', 'code_name', 'coupon code', 'coupon', 'كوبون'],
+    mapImage: ['image url', 'image_url', 'image', 'photo', 'pic', 'thumbnail', 'صورة']
   };
   ids.forEach(id => {
     const sel = document.getElementById(id);
     sel.innerHTML = (id === 'mapLink' ? '' : '<option value="">— لا شيء —</option>') +
       columns.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-    const guess = columns.find(c => guesses[id].some(k => c.toLowerCase().includes(k.toLowerCase())));
+    // ابحث بأولوية: نطابق كل كلمة دلالية بالترتيب على الأعمدة
+    let guess = null;
+    for (const keyword of guesses[id]) {
+      guess = columns.find(c => c.toLowerCase().includes(keyword.toLowerCase()));
+      if (guess) break;
+    }
     if (guess) sel.value = guess;
   });
 }

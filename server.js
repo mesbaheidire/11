@@ -365,9 +365,10 @@ app.post('/api/excel/start', async (req, res) => {
         }
 
         try {
-          // تحويل لرابط أفليت إذا طُلب وكان رابط AliExpress
+          // تحويل لرابط أفليت إذا طُلب وكان رابط AliExpress عادي (تجاهل روابط الأفليت الجاهزة)
           let finalLink = link;
-          if (autoConvert && /aliexpress\.com/i.test(link)) {
+          const isAlreadyAffiliate = /s\.click\.aliexpress\.com|a\.aliexpress\.com\/_/i.test(link);
+          if (autoConvert && /aliexpress\.com/i.test(link) && !isAlreadyAffiliate) {
             try {
               const cookies = credentials?.cook || await getSharedCookie();
               if (cookies) {
