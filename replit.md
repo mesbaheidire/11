@@ -124,6 +124,12 @@ When processing spy posts, images are fetched in this priority order:
 6. **Download as Buffer** — convert any URL-only image to buffer via `downloadImageAsBuffer()`
 7. **Source image** — original Telegram post image (last resort)
 
+### Local Image Cache (saved_posts thumbnails)
+- `cacheImageBufferAsUrl(buffer)` in spy.js writes any image Buffer (e.g. Telegram source channel image with no public URL) to `public/spy-cache/<sha1>.<ext>` and returns a stable `/spy-cache/...` URL
+- Used as a final fallback when `productImageUrl` is null but `productImage.source` is a Buffer — ensures `saved_posts.image_url` is never empty when we have image data
+- Detects format (jpg/png/gif/webp) from magic bytes; deduplicated via SHA1 hash
+- Directory `public/spy-cache/` is gitignored (kept via `.gitkeep`)
+
 ## Credential Loading Priority
 Environment variables (Render) always take priority over database and local file storage:
 1. **Environment variables** (Render / hosting platform) — always first

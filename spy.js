@@ -8,6 +8,35 @@ const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
 
 const https = require('https');
+const crypto = require('crypto');
+
+const SPY_CACHE_DIR = path.join(__dirname, 'public', 'spy-cache');
+try { if (!fs.existsSync(SPY_CACHE_DIR)) fs.mkdirSync(SPY_CACHE_DIR, { recursive: true }); } catch (e) {}
+
+function detectImageExt(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return 'jpg';
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8) return 'jpg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'png';
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'gif';
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46
+      && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return 'webp';
+  return 'jpg';
+}
+
+function cacheImageBufferAsUrl(buffer) {
+  try {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;
+    const hash = crypto.createHash('sha1').update(buffer).digest('hex').slice(0, 16);
+    const ext = detectImageExt(buffer);
+    const filename = `${hash}.${ext}`;
+    const filePath = path.join(SPY_CACHE_DIR, filename);
+    if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, buffer);
+    return `/spy-cache/${filename}`;
+  } catch (e) {
+    console.log('⚠️ فشل حفظ صورة محلية:', e.message);
+    return null;
+  }
+}
 
 const SPY_CONFIG_FILE = path.join(__dirname, 'spy_config.json');
 const SPY_LOG_FILE = path.join(__dirname, 'spy_log.json');
@@ -1785,6 +1814,16 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (!productImage && sourceImage) {
     console.log(`🖼 [10/9] استخدام صورة المنشور الأصلي`);
     productImage = { source: sourceImage };
+  }
+
+  // إذا انتهى بنا الأمر بـ Buffer فقط بدون URL (مثل صورة قناة المصدر)،
+  // نحفظ الـ Buffer محلياً كملف ونحصل على URL قابل للحفظ في قاعدة البيانات
+  if (!productImageUrl && productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
+    const cachedUrl = cacheImageBufferAsUrl(productImage.source);
+    if (cachedUrl) {
+      productImageUrl = cachedUrl;
+      console.log(`💾 تم حفظ الصورة محلياً: ${cachedUrl}`);
+    }
   }
 
   const imageUrlForLog = (typeof productImage === 'string' ? productImage : null)
