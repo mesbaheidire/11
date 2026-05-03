@@ -198,3 +198,8 @@ Set `DATABASE_URL` in Render Environment to your Neon connection string.
 Both Excel import (`server.js` `sendPostWithImage`) and Spy page (`spy.js` `smartSendPostSpy`) use the same 5-tier image fallback:
 1. Buffer download → 2. URL retry → 3. Preview image → 4. Original URL retry → 5. `link_preview` with `prefer_large_media: true` → 6. text-only (rare).
 This guarantees every post has visual content as long as the image URL is valid.
+
+## Product Stats Fix (May 3, 2026 — Root Cause)
+Rating/orders/discount in store.html product modal were "—" because `aliexpress.affiliate.productdetail.get` and `product.query` (with `product_ids`) often don't return these fields per-product.
+**Fix in `aliexpress-api.js`**: Added `_queryByKeywords()` 3rd-tier fallback inside `getProductDetails()`. When productdetail+queryById both miss rating/orders/discount, we search by the product **title** (first 8 words) and match the product by ID in results — search-result cards include full stats reliably.
+**Also fixed in `server.js`**: Added `getProductDetails` to require destructure (was missing). Replaced broken HTML scraper with cookie-jar-based search SSR scraper (`_aliFetchWithCookieJar` + `_extractProductCardFromSearch`) — but scraper is captcha-blocked from server IPs, so it's now just a final safety net. The reliable path is the API + keyword fallback.

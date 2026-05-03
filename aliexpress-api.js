@@ -112,6 +112,39 @@ async function _queryById(productId, options = {}) {
     return null;
 }
 
+// طريقة fallback ثانية: نبحث بـ keywords (عنوان المنتج) ثم نطابق المنتج بـ ID
+// هذه الطريقة تُرجع التقييم/الطلبات بشكل أكثر موثوقية لأن نتائج البحث تشمل بطاقات منتجات كاملة
+async function _queryByKeywords(productId, title, options = {}) {
+    if (!title) return null;
+    try {
+        // نُقصّر العنوان لأول 8 كلمات (AE يقبل بحث محدود)
+        const keywords = String(title).split(/\s+/).slice(0, 8).join(' ').slice(0, 100);
+        if (!keywords) return null;
+
+        // نجلب صفحتين بحد أقصى للعثور على المنتج بالـ ID المطلوب
+        for (let page = 1; page <= 2; page++) {
+            const data = await _callApi('aliexpress.affiliate.product.query', {
+                target_currency: options.currency || 'USD',
+                target_language: options.language || 'EN',
+                keywords,
+                fields: PRODUCT_FIELDS,
+                page_no: String(page),
+                page_size: '50',
+                sort: 'SALE_PRICE_ASC'
+            });
+            const r = data.aliexpress_affiliate_product_query_response?.resp_result;
+            const list = r?.result?.products?.product;
+            if (!list) continue;
+            const arr = Array.isArray(list) ? list : [list];
+            const match = arr.find(p => String(p.product_id) === String(productId));
+            if (match) return normalizeProduct(match);
+        }
+    } catch (e) {
+        console.log('  ↳ fallback query by keywords failed:', e.message);
+    }
+    return null;
+}
+
 async function getProductDetails(productId, options = {}) {
     if (!productId) return null;
     
@@ -153,13 +186,25 @@ async function getProductDetails(productId, options = {}) {
     }
 
     // إذا حصلنا على البيانات الأساسية لكن ينقصنا تقييم/طلبات → نستدعي product.query للتكميل
-    if (baseInfo && (!baseInfo.rating || !baseInfo.orders)) {
+    if (baseInfo && (!baseInfo.rating || !baseInfo.orders || !baseInfo.discount)) {
         const enriched = await _queryById(productId, options);
         if (enriched) {
             if (!baseInfo.rating && enriched.rating) baseInfo.rating = enriched.rating;
             if (!baseInfo.orders && enriched.orders) baseInfo.orders = enriched.orders;
             if (!baseInfo.discount && enriched.discount) baseInfo.discount = enriched.discount;
             if (!baseInfo.review_count && enriched.review_count) baseInfo.review_count = enriched.review_count;
+        }
+    }
+
+    // Fallback ثانٍ: إذا ما زالت ناقصة → ابحث بالعنوان (يُرجع بطاقات أكمل)
+    if (baseInfo && baseInfo.title && (!baseInfo.rating || !baseInfo.orders || !baseInfo.discount)) {
+        const byKw = await _queryByKeywords(productId, baseInfo.title, options);
+        if (byKw) {
+            if (!baseInfo.rating && byKw.rating) baseInfo.rating = byKw.rating;
+            if (!baseInfo.orders && byKw.orders) baseInfo.orders = byKw.orders;
+            if (!baseInfo.discount && byKw.discount) baseInfo.discount = byKw.discount;
+            if (!baseInfo.review_count && byKw.review_count) baseInfo.review_count = byKw.review_count;
+            console.log(`  ↳ enriched ${productId} via keywords search: rating=${baseInfo.rating} orders=${baseInfo.orders} discount=${baseInfo.discount}`);
         }
     }
 
