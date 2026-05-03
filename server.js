@@ -303,6 +303,33 @@ app.post('/api/excel/parse', excelUpload.single('file'), (req, res) => {
   }
 });
 
+// تلخيص عنوان طويل عبر Gemini (مع fallback لـ cleanupTitle)
+async function refineTitleAI(title) {
+  if (!title || String(title).length < 20) return title;
+  try {
+    if (getGeminiModel() === null) return cleanupTitle(title);
+    const prompt = `Refine this AliExpress product title to be short and attractive.
+Rules:
+1. English only, 3-6 words max.
+2. Remove junk (Global Version, 2024, Free Shipping, model numbers, dimensions, etc.).
+3. Focus on core product name.
+4. Start with a relevant emoji.
+5. Reply with ONLY the refined title text. No JSON, no markdown, no quotes.
+
+Title: ${title}`;
+    const raw = await runGeminiWithRotation(prompt);
+    let refined = String(raw || '')
+      .replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '')
+      .split('\n').map(l => l.trim()).filter(Boolean).join(' ')
+      .replace(/^(Refined Title|Result|json)[\s:]+/i, '')
+      .replace(/[*#"'{}[\]`]/g, '').trim();
+    if (!refined || refined.length < 2) return cleanupTitle(title);
+    return refined;
+  } catch (e) {
+    return cleanupTitle(title);
+  }
+}
+
 // بناء الرسالة بنفس قالب الإعدادات المستخدم في /api/publish-telegram
 function buildMessageFromSettings(s, { title, price, link, coupon }) {
   const tpl = s || {
@@ -327,7 +354,7 @@ function buildMessageFromSettings(s, { title, price, link, coupon }) {
 // بدء معالجة الاستيراد (ينشر دفعة منتجات)
 app.post('/api/excel/start', async (req, res) => {
   try {
-    const { rows, mapping, credentials, settings, delaySeconds, autoConvert, saveToHistory } = req.body;
+    const { rows, mapping, credentials, settings, delaySeconds, autoConvert, saveToHistory, aiRefineTitle } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ success: false, error: 'لا توجد صفوف' });
     if (!mapping || !mapping.link) return res.status(400).json({ success: false, error: 'يجب تحديد عمود الرابط على الأقل' });
 
@@ -379,9 +406,21 @@ app.post('/api/excel/start', async (req, res) => {
             } catch (convErr) { pushBounded(job.logs, { row: i + 1, status: 'convert_failed', reason: convErr.message }, EXCEL_JOB_MAX_LOGS); }
           }
 
+          // تلخيص العنوان بـ Gemini إن طُلب وكان طويلاً
+          let finalTitle = rawTitle;
+          if (aiRefineTitle && rawTitle && rawTitle.length > 40) {
+            try {
+              const refined = await refineTitleAI(rawTitle);
+              if (refined && refined.length > 2) {
+                finalTitle = refined;
+                pushBounded(job.logs, { row: i + 1, status: 'ai_title', reason: `AI: ${refined.substring(0, 40)}` }, EXCEL_JOB_MAX_LOGS);
+              }
+            } catch (aiErr) { /* تجاهل واستخدم العنوان الأصلي */ }
+          }
+
           // بناء الرسالة بنفس قالب الإعدادات (prefix/salePrice/linkText/...)
           const message = buildMessageFromSettings(settings, {
-            title: rawTitle,
+            title: finalTitle,
             price: rawPrice,
             link: finalLink,
             coupon: rawCoupon

@@ -144,6 +144,10 @@
       <label><input type="checkbox" id="autoConvert" checked> تحويل روابط AliExpress تلقائياً لروابط أفليت</label>
     </div>
     <div class="field">
+      <label><input type="checkbox" id="aiRefineTitle" checked> تلخيص العناوين الطويلة بـ Gemini AI ✨</label>
+      <div class="hint">يلخّص العناوين الأطول من 40 حرف لتصبح قصيرة وجذابة (يحتاج مفتاح Gemini في الإعدادات)</div>
+    </div>
+    <div class="field">
       <label><input type="checkbox" id="saveToHistory" checked> حفظ المنشورات في "المحفوظات"</label>
     </div>
     <button class="btn btn-primary" id="startBtn" onclick="startImport()" style="width:100%; padding:15px; font-size:16px;">
@@ -325,6 +329,7 @@ async function startImport() {
         credentials: creds,
         delaySeconds: parseInt(document.getElementById('delaySeconds').value),
         autoConvert: document.getElementById('autoConvert').checked,
+        aiRefineTitle: document.getElementById('aiRefineTitle').checked,
         saveToHistory: document.getElementById('saveToHistory').checked
       })
     });
@@ -359,8 +364,9 @@ async function pollStatus() {
 
     const lc = document.getElementById('logsContainer');
     lc.innerHTML = j.logs.slice().reverse().map(l => {
-      const icon = l.status === 'success' ? '✅' : l.status === 'failed' ? '❌' : '⏭️';
-      return `<div class="log-entry ${l.status}">${icon} <strong>صف ${l.row}</strong> ${escapeHtml(l.title || l.reason || '')}</div>`;
+      const icon = l.status === 'success' ? '✅' : l.status === 'failed' ? '❌' : l.status === 'ai_title' ? '✨' : '⏭️';
+      const cls = l.status === 'ai_title' ? 'success' : l.status;
+      return `<div class="log-entry ${cls}">${icon} <strong>صف ${l.row}</strong> ${escapeHtml(l.title || l.reason || '')}</div>`;
     }).join('');
 
     if (j.status === 'completed' || j.status === 'cancelled' || j.status === 'error') {
