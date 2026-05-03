@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const { portaffFunction, fetchLinkPreview, idCatcher } = require('./afflink');
-const { searchHotProducts, searchProducts } = require('./aliexpress-api');
+const { searchHotProducts, searchProducts, getProductDetails } = require('./aliexpress-api');
 const { Telegraf } = require('telegraf');
 const { PostScheduler } = require('./scheduler');
 const sharp = require('sharp');
@@ -2275,88 +2275,119 @@ function setCachedProduct(pid, data) {
   }
 }
 
-// Fallback: سحب التقييم/الطلبات/الخصم مباشرة من صفحة المنتج عند فشل API
-async function scrapeAliProductData(productId) {
-  if (!productId || !/^\d+$/.test(String(productId))) return null;
-  const urls = [
-    `https://www.aliexpress.com/item/${productId}.html`,
-    `https://m.aliexpress.com/item/${productId}.html`
-  ];
-  for (const url of urls) {
-    try {
-      const r = await axios.get(url, {
-        timeout: 12000,
-        maxRedirects: 5,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9'
-        },
-        validateStatus: s => s >= 200 && s < 400
-      });
-      const html = String(r.data || '');
-      if (!html || html.length < 500) continue;
-
-      const out = { rating: null, orders: null, discount: null, original_price: null, sale_price: null };
-
-      // التقييم: من JSON المضمن في الصفحة
-      const ratingPatterns = [
-        /"averageStar"\s*:\s*"?([\d.]+)"?/i,
-        /"avgStarRate"\s*:\s*"?([\d.]+)"?/i,
-        /"averageStarRate"\s*:\s*"?([\d.]+)"?/i,
-        /"ratingValue"\s*:\s*"?([\d.]+)"?/i
-      ];
-      for (const re of ratingPatterns) {
-        const m = html.match(re);
-        if (m) {
-          const v = parseFloat(m[1]);
-          if (!isNaN(v) && v > 0 && v <= 5) { out.rating = v.toFixed(1); break; }
-        }
+// جلب صفحة من AliExpress مع تتبع الكوكيز يدوياً (يحلّ مشكلة حلقة sync_cookie_read/write)
+async function _aliFetchWithCookieJar(startUrl, extraHeaders = {}, maxHops = 15) {
+  const cookies = new Map();
+  let cur = startUrl;
+  for (let i = 0; i < maxHops; i++) {
+    const cookieStr = Array.from(cookies.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+    const r = await axios.get(cur, {
+      timeout: 15000,
+      maxRedirects: 0,
+      validateStatus: () => true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        ...extraHeaders,
+        ...(cookieStr ? { Cookie: cookieStr } : {})
       }
+    });
+    const setCookies = r.headers['set-cookie'] || [];
+    for (const sc of setCookies) {
+      const [pair] = sc.split(';');
+      const eq = pair.indexOf('=');
+      if (eq > 0) cookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+    }
+    if (r.status >= 300 && r.status < 400 && r.headers.location) {
+      cur = r.headers.location.startsWith('http') ? r.headers.location : new URL(r.headers.location, cur).href;
+      continue;
+    }
+    return { status: r.status, html: String(r.data || ''), final: cur };
+  }
+  return { status: 0, html: '', final: cur };
+}
 
-      // الطلبات: tradeCount / orders / "X+ sold"
-      const ordersPatterns = [
-        /"tradeCount"\s*:\s*"?(\d+)"?/i,
-        /"orders"\s*:\s*"?(\d+)"?/i,
-        /"reviewCount"\s*:\s*"?(\d+)"?/i,
-        /(\d{1,3}(?:[,.]?\d{3})*)\+?\s*sold/i,
-        /(\d+)\s*orders?/i
-      ];
-      for (const re of ordersPatterns) {
-        const m = html.match(re);
-        if (m) {
-          const v = parseInt(String(m[1]).replace(/[^\d]/g, ''), 10);
-          if (!isNaN(v) && v > 0) { out.orders = v; break; }
-        }
-      }
+// استخراج بطاقة منتج معيّن من نتائج البحث SSR
+function _extractProductCardFromSearch(html, productId) {
+  if (!html) return null;
 
-      // الخصم: discount مباشرةً
-      const discMatch = html.match(/"discount"\s*:\s*"?(\d{1,3})"?/i)
-                     || html.match(/-(\d{1,2})%/);
-      if (discMatch) {
-        const v = parseInt(discMatch[1], 10);
-        if (!isNaN(v) && v > 0 && v <= 99) out.discount = v + '%';
-      }
+  // طريقة 1: الإطار حول productId المحدد (إن وُجد)
+  let ctx = '';
+  const idQuoted = `"${productId}"`;
+  let idIdx = html.indexOf(idQuoted, 50000); // تخطّي الهيدر
+  if (idIdx > 0) {
+    ctx = html.substring(Math.max(0, idIdx - 2500), idIdx + 2500);
+  } else {
+    // طريقة 2: أول بطاقة بها starRating (نتيجة بحث ID = أول منتج عادةً)
+    const sIdx = html.indexOf('"starRating"');
+    if (sIdx > 0) ctx = html.substring(Math.max(0, sIdx - 2000), sIdx + 1000);
+  }
+  if (!ctx) return null;
 
-      // الأسعار (لحساب الخصم لو لم يُستخرج)
-      const salePriceM = html.match(/"salePrice"\s*:\s*\{[^}]*?"value"\s*:\s*"?([\d.]+)"?/i)
-                       || html.match(/"minActivityAmount"[^}]*?"value"\s*:\s*"?([\d.]+)"?/i);
-      const origPriceM = html.match(/"originalPrice"\s*:\s*\{[^}]*?"value"\s*:\s*"?([\d.]+)"?/i)
-                       || html.match(/"maxAmount"[^}]*?"value"\s*:\s*"?([\d.]+)"?/i);
-      if (salePriceM) out.sale_price = parseFloat(salePriceM[1]);
-      if (origPriceM) out.original_price = parseFloat(origPriceM[1]);
-      if (!out.discount && out.sale_price && out.original_price && out.sale_price < out.original_price) {
-        out.discount = Math.round((1 - out.sale_price / out.original_price) * 100) + '%';
-      }
+  const out = { rating: null, orders: null, discount: null };
 
-      if (out.rating || out.orders || out.discount) {
-        return out;
-      }
-    } catch (e) {
-      console.log(`scrapeAliProductData(${productId}) فشل من ${url.substring(0, 40)}: ${e.message}`);
+  const star = ctx.match(/"starRating"\s*:\s*([\d.]+)/);
+  if (star) {
+    const v = parseFloat(star[1]);
+    if (!isNaN(v) && v > 0 && v <= 5) out.rating = v.toFixed(1);
+  }
+
+  const trade = ctx.match(/"tradeDesc"\s*:\s*"([^"]+)"/);
+  if (trade) {
+    const m = trade[1].match(/([\d,.]+)\s*\+?\s*sold/i);
+    if (m) {
+      const n = parseInt(m[1].replace(/[^\d]/g, ''), 10);
+      if (!isNaN(n) && n > 0) out.orders = n;
     }
   }
-  return null;
+
+  // الخصم: نبحث عن discount داخل البطاقة
+  const disc = ctx.match(/"discount"\s*:\s*"?-?(\d{1,2})%?"?/);
+  if (disc) {
+    const v = parseInt(disc[1], 10);
+    if (!isNaN(v) && v > 0 && v <= 99) out.discount = v + '%';
+  } else {
+    // حاول استنتاج من السعر الأصلي/الحالي
+    const sale = ctx.match(/"salePrice"\s*:\s*\{[^}]*?"formattedPrice"\s*:\s*"[^"]*?([\d.]+)/);
+    const orig = ctx.match(/"originalPrice"\s*:\s*\{[^}]*?"formattedPrice"\s*:\s*"[^"]*?([\d.]+)/);
+    if (sale && orig) {
+      const s = parseFloat(sale[1]), o = parseFloat(orig[1]);
+      if (s > 0 && o > s) out.discount = Math.round((1 - s / o) * 100) + '%';
+    }
+  }
+
+  return (out.rating || out.orders || out.discount) ? out : null;
+}
+
+// Fallback جذري: استخدام صفحة بحث AliExpress SSR (تحتوي بطاقات المنتجات الكاملة)
+// صفحة المنتج نفسها CSR (runParams فارغة) → لا يمكن سحبها بدون متصفح حقيقي.
+// لكن صفحة /w/wholesale-{id}.html تُرجع نفس المنتج في أول نتيجة مع starRating + tradeDesc
+async function scrapeAliProductData(productId) {
+  if (!productId || !/^\d+$/.test(String(productId))) return null;
+  try {
+    const url = `https://www.aliexpress.com/w/wholesale-${productId}.html`;
+    const r = await _aliFetchWithCookieJar(url);
+    if (!r.html || r.html.length < 5000) {
+      console.log(`scrapeAliProductData(${productId}): استجابة قصيرة len=${r.html.length}`);
+      return null;
+    }
+    // كشف صفحة الـ captcha
+    if (r.html.includes('punish?x5secdata') && r.html.length < 8000) {
+      console.log(`scrapeAliProductData(${productId}): تم حظر الطلب (captcha)`);
+      return null;
+    }
+    const data = _extractProductCardFromSearch(r.html, productId);
+    if (data) {
+      console.log(`scrapeAliProductData(${productId}): ✓ rating=${data.rating} orders=${data.orders} discount=${data.discount}`);
+      return data;
+    }
+    console.log(`scrapeAliProductData(${productId}): لم يتم العثور على بطاقة المنتج في نتائج البحث`);
+    return null;
+  } catch (e) {
+    console.log(`scrapeAliProductData(${productId}) فشل: ${e.message}`);
+    return null;
+  }
 }
 
 // Store: Get enriched product info (with cache + AliExpress API + scrape fallback)
