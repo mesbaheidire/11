@@ -2427,6 +2427,37 @@ app.post('/api/saved-posts', async (req, res) => {
   }
 });
 
+app.put('/api/saved-posts/:id', async (req, res) => {
+  try {
+    const ok = await db.updateSavedPost(req.params.id, req.body || {});
+    if (!ok) return res.status(500).json({ success: false, error: 'فشل التحديث' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/upload-saved-image', upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: 'لم يتم رفع أي ملف' });
+  try {
+    const stats = fs.statSync(req.file.path);
+    if (stats.size > 3 * 1024 * 1024) {
+      try { fs.unlinkSync(req.file.path); } catch(_) {}
+      return res.status(400).json({ success: false, error: 'حجم الصورة يجب أن يكون أقل من 3 ميجابايت' });
+    }
+    const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const safeExt = ['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg';
+    const mime = safeExt === 'jpg' ? 'image/jpeg' : `image/${safeExt}`;
+    const buf = fs.readFileSync(req.file.path);
+    const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
+    try { fs.unlinkSync(req.file.path); } catch(_) {}
+    res.json({ success: true, imageUrl: dataUri });
+  } catch (e) {
+    try { if (req.file) fs.unlinkSync(req.file.path); } catch(_) {}
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.delete('/api/saved-posts/:id', async (req, res) => {
   try {
     const ok = await db.deleteSavedPost(req.params.id);

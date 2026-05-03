@@ -423,6 +423,34 @@ async function getSavedPosts(limit = null) {
   }
 }
 
+async function updateSavedPost(postId, updates) {
+  try {
+    const fields = [];
+    const values = [];
+    let i = 1;
+    const map = {
+      title: 'title', price: 'price', link: 'link',
+      affiliateLink: 'affiliate_link', affiliate_link: 'affiliate_link',
+      image: 'image_url', imageUrl: 'image_url', image_url: 'image_url',
+      coupon: 'coupon', message: 'message', hook: 'hook'
+    };
+    for (const [k, col] of Object.entries(map)) {
+      if (updates[k] !== undefined) {
+        if (fields.find(f => f.startsWith(col + ' ='))) continue;
+        fields.push(`${col} = $${i++}`);
+        values.push(updates[k]);
+      }
+    }
+    if (fields.length === 0) return true;
+    values.push(postId);
+    await query(`UPDATE saved_posts SET ${fields.join(', ')} WHERE post_id = $${i}`, values);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to update saved post:', e.message);
+    return false;
+  }
+}
+
 async function deleteSavedPostsBefore(date) {
   try {
     await query('DELETE FROM saved_posts WHERE COALESCE(created_at, saved_at) < $1', [date]);
@@ -497,7 +525,9 @@ module.exports = {
   getGeminiKeys,
   addSavedPost,
   getSavedPosts,
+  updateSavedPost,
   deleteSavedPost,
+  deleteSavedPostsBefore,
   clearSavedPosts,
   setAppStorage,
   getAppStorage,

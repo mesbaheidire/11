@@ -106,6 +106,48 @@
 
     <div class="toast" id="toast"></div>
 
+    <div id="editOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:5000;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px)" onclick="if(event.target===this)closeEditModal()">
+      <div style="background:var(--bg-card);border-radius:18px;width:100%;max-width:520px;margin:auto;border:1px solid var(--border-subtle);box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#FF9800,#F57C00);padding:18px 20px;display:flex;align-items:center;justify-content:space-between">
+          <div style="color:#fff;font-weight:800;font-size:16px"><i class="fas fa-edit"></i> تعديل المنشور</div>
+          <button onclick="closeEditModal()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="padding:20px;max-height:75vh;overflow-y:auto">
+          <input type="hidden" id="ePostId">
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">📝 العنوان</label>
+          <input type="text" id="eTitle" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px">
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">💰 السعر</label>
+          <input type="text" id="ePrice" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px">
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">🎟️ الكوبون</label>
+          <input type="text" id="eCoupon" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px;direction:ltr;text-align:right">
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">🔗 الرابط</label>
+          <input type="text" id="eLink" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px;direction:ltr">
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">🪝 الجملة الافتتاحية (Hook)</label>
+          <textarea id="eHook" rows="2" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px;resize:vertical"></textarea>
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">💬 النص الكامل</label>
+          <textarea id="eMessage" rows="4" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-input);color:var(--text-primary);font-family:inherit;font-size:13px;margin-bottom:12px;resize:vertical"></textarea>
+
+          <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px">🖼️ الصورة</label>
+          <input type="file" id="eImageFile" accept="image/*" style="display:none" onchange="uploadEditImage(event)">
+          <div id="eImagePrev" style="width:100%;min-height:140px;background:var(--bg-input);border:2px dashed var(--border-subtle);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin-bottom:8px" onclick="document.getElementById('eImageFile').click()">
+            <div style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px"><i class="fas fa-camera" style="font-size:28px;display:block;margin-bottom:8px;color:#FF9800"></i>اضغط لاستبدال الصورة</div>
+          </div>
+          <input type="hidden" id="eImage">
+
+          <div style="display:flex;gap:10px;margin-top:18px">
+            <button onclick="saveEditPost()" id="eSaveBtn" class="action-btn" style="flex:1;background:linear-gradient(135deg,#10b981,#059669);padding:13px"><i class="fas fa-save"></i> حفظ التعديلات</button>
+            <button onclick="closeEditModal()" class="action-btn" style="background:linear-gradient(135deg,#6b7280,#4b5563);padding:13px 20px"><i class="fas fa-times"></i> إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
         let settings = JSON.parse(localStorage.getItem('appSettings')) || {};
         let savedPosts = [];
@@ -263,21 +305,84 @@
         function editPost(id) {
             const post = savedPosts.find(p => p.id === id);
             if (!post) { showToast('لم يتم العثور على المنشور', 'error'); return; }
+            document.getElementById('ePostId').value = post.id;
+            document.getElementById('eTitle').value = post.title || '';
+            document.getElementById('ePrice').value = post.price || '';
+            document.getElementById('eCoupon').value = post.coupon || '';
+            document.getElementById('eLink').value = post.link || '';
+            document.getElementById('eHook').value = post.hook || '';
+            document.getElementById('eMessage').value = post.message || '';
+            document.getElementById('eImage').value = post.image || '';
+            const prev = document.getElementById('eImagePrev');
+            if (post.image) {
+                prev.innerHTML = `<img src="${post.image}" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px">`;
+            } else {
+                prev.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px"><i class="fas fa-camera" style="font-size:28px;display:block;margin-bottom:8px;color:#FF9800"></i>اضغط لرفع صورة</div>';
+            }
+            document.getElementById('editOverlay').style.display = 'flex';
+        }
 
-            // مرّر المنشور كاملاً (مع الصورة base64 إن وُجدت) عبر sessionStorage
+        function closeEditModal() {
+            document.getElementById('editOverlay').style.display = 'none';
+        }
+
+        async function uploadEditImage(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('image', file);
+            const prev = document.getElementById('eImagePrev');
+            prev.innerHTML = '<div style="padding:30px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> جاري الرفع...</div>';
             try {
-                sessionStorage.setItem('editPost', JSON.stringify({
-                    title: post.title || '',
-                    price: post.price || '',
-                    link: post.link || '',
-                    coupon: post.coupon || '',
-                    image: post.image || '',
-                    message: post.message || '',
-                    hook: post.hook || ''
-                }));
-            } catch (e) { console.warn('sessionStorage failed:', e.message); }
+                const r = await fetch('/api/upload-saved-image', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.success && d.imageUrl) {
+                    document.getElementById('eImage').value = d.imageUrl;
+                    prev.innerHTML = `<img src="${d.imageUrl}" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px">`;
+                    showToast('تم رفع الصورة', 'success');
+                } else {
+                    prev.innerHTML = `<div style="padding:20px;color:#ef4444">${d.error || 'فشل الرفع'}</div>`;
+                }
+            } catch (err) {
+                prev.innerHTML = '<div style="padding:20px;color:#ef4444">خطأ في الاتصال</div>';
+            }
+        }
 
-            window.location.href = '/telegram.html?edit=1';
+        async function saveEditPost() {
+            const id = document.getElementById('ePostId').value;
+            const body = {
+                title: document.getElementById('eTitle').value.trim(),
+                price: document.getElementById('ePrice').value.trim(),
+                coupon: document.getElementById('eCoupon').value.trim(),
+                link: document.getElementById('eLink').value.trim(),
+                hook: document.getElementById('eHook').value.trim(),
+                message: document.getElementById('eMessage').value.trim(),
+                image: document.getElementById('eImage').value
+            };
+            const btn = document.getElementById('eSaveBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+            try {
+                const r = await fetch('/api/saved-posts/' + encodeURIComponent(id), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const d = await r.json();
+                if (d.success) {
+                    showToast('تم الحفظ بنجاح ✅', 'success');
+                    closeEditModal();
+                    loadPosts();
+                } else {
+                    showToast(d.error || 'فشل الحفظ', 'error');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
         }
 
         async function deletePost(id) {
