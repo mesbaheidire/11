@@ -12,29 +12,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google/genai": "^1.50.1",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.15.0",
-    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "drizzle-zod": "^0.8.3",
     "express": "^5.2.1",
-    "follow-redirects": "^1.16.0",
     "got": "^11.8.6",
-    "https": "^1.0.0",
-    "input": "^1.0.1",
-    "link-preview-js": "^3.2.0",
     "multer": "^2.1.1",
-    "p-limit": "^7.3.0",
-    "p-retry": "^7.1.1",
     "pg": "^8.20.0",
     "sharp": "^0.34.5",
     "telegraf": "^4.16.3",
     "telegram": "^2.26.22",
-    "url": "^0.11.4",
-    "xlsx": "^0.18.5",
-    "zod": "^4.3.6",
-    "zod-validation-error": "^5.0.0"
+    "xlsx": "^0.18.5"
   }
 }

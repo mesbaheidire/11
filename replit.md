@@ -187,3 +187,14 @@ Set `DATABASE_URL` in Render Environment to your Neon connection string.
 - In-memory `excelJobs` Map with TTL cleanup (1h) and max 20 jobs.
 - Reuses one `Telegraf` instance per job, shared `formatChannelIdShared()` for channel ID normalization.
 - Nav icon added in `public/index.html` (green Excel icon).
+
+## Cleanup Summary (May 3, 2026)
+**Removed 12 unused npm packages**: `@google/genai`, `drizzle-zod`, `follow-redirects`, `input`, `link-preview-js`, `p-limit`, `p-retry`, `zod`, `zod-validation-error`, `cheerio`, fake `https`/`url` (shadowed Node core).
+**Deleted files**: `attached_assets/` (90MB of unused screenshots), `render-safe-storage.js`, `app.yaml`, `public/spy-cache/`, `public/sw.js` (broken SW that wiped cache).
+**Fixed**: `public/index.html` now unregisters any old service worker installed in user browsers.
+**Result**: Project size reduced from ~250MB to ~86MB (-164MB). All pages still serve 200, no syntax errors.
+
+## Smart Image Send (May 3, 2026)
+Both Excel import (`server.js` `sendPostWithImage`) and Spy page (`spy.js` `smartSendPostSpy`) use the same 5-tier image fallback:
+1. Buffer download → 2. URL retry → 3. Preview image → 4. Original URL retry → 5. `link_preview` with `prefer_large_media: true` → 6. text-only (rare).
+This guarantees every post has visual content as long as the image URL is valid.

@@ -910,7 +910,10 @@
         if (settings.watermarkPosition) document.getElementById('logoPosition').value = settings.watermarkPosition;
         if (settings.watermarkSize) document.getElementById('logoSize').value = settings.watermarkSize;
 
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+        // إلغاء تسجيل أي service worker قديم (تم حذف sw.js)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+        }
     </script>
 </body>
 </html>
