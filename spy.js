@@ -443,6 +443,49 @@ function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
   });
 }
 
+// إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → URL retry → link_preview → نص فقط)
+async function smartSendPostSpy(bot, target, captionMessage, textMessage, productImage, imageUrl, opts = {}) {
+  const sendOpts = { parse_mode: 'HTML', ...opts };
+  // المحاولة 1: استخدم productImage الجاهز (Buffer أو URL)
+  if (productImage) {
+    try {
+      await bot.telegram.sendPhoto(target, productImage, { caption: captionMessage, ...sendOpts });
+      return { ok: true, via: 'primary' };
+    } catch (e) {
+      console.log(`⚠️ [smartSend] sendPhoto primary فشل (${target}): ${e.message}`);
+    }
+  }
+  // المحاولة 2: تحميل URL كـ Buffer إن لم تكن المحاولة الأولى Buffer
+  if (imageUrl && /^https?:\/\//i.test(imageUrl) && !(productImage && typeof productImage === 'object' && productImage.source)) {
+    const buf = await downloadImageAsBuffer(imageUrl);
+    if (buf) {
+      try {
+        await bot.telegram.sendPhoto(target, { source: buf }, { caption: captionMessage, ...sendOpts });
+        return { ok: true, via: 'buffer' };
+      } catch (e) { console.log(`⚠️ [smartSend] sendPhoto buffer فشل: ${e.message}`); }
+    }
+  }
+  // المحاولة 3: إرسال URL مباشرة (إعادة محاولة)
+  if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+    try {
+      await bot.telegram.sendPhoto(target, imageUrl, { caption: captionMessage, ...sendOpts });
+      return { ok: true, via: 'url_retry' };
+    } catch (e) { console.log(`⚠️ [smartSend] sendPhoto URL retry فشل: ${e.message}`); }
+    // المحاولة 4: ضع رابط الصورة في النص ليُعرض كمعاينة كبيرة
+    try {
+      const msgWithImage = imageUrl + '\n\n' + textMessage.substring(0, 4000);
+      await bot.telegram.sendMessage(target, msgWithImage, {
+        ...sendOpts,
+        link_preview_options: { is_disabled: false, url: imageUrl, prefer_large_media: true }
+      });
+      return { ok: true, via: 'link_preview' };
+    } catch (e) { console.log(`⚠️ [smartSend] link_preview فشل: ${e.message}`); }
+  }
+  // الأخير: نص فقط
+  await bot.telegram.sendMessage(target, textMessage, sendOpts);
+  return { ok: true, via: 'text_only' };
+}
+
 function extractOgImageFromHtml(html) {
   if (!html) return null;
   const ogMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
@@ -1173,21 +1216,14 @@ async function executePublish(review) {
         console.log('❌ معرف القناة فارغ');
         continue;
       }
-      if (productImage) {
-        try {
-          await publishBot.telegram.sendPhoto(target, productImage, { caption: captionMessage, parse_mode: 'HTML' });
-          if (message.length > 1000) {
-            await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
-          }
-        } catch (photoErr) {
-          console.log(`⚠️ فشل إرسال الصورة في ${target} (${photoErr.message}) — إرسال نص فقط`);
-          await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
-        }
-      } else {
-        await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' });
+      // النظام الذكي: 5 محاولات قبل اللجوء للنص فقط
+      const result = await smartSendPostSpy(publishBot, target, captionMessage, textMessage, productImage, logImage);
+      console.log(`✅ تم النشر في ${target} (via=${result.via})`);
+      // إن كانت الرسالة طويلة جداً وأُرسلت كصورة (caption < 1000)، أرسل النص الكامل في رسالة منفصلة
+      if (message.length > 1000 && ['primary', 'buffer', 'url_retry'].includes(result.via)) {
+        try { await publishBot.telegram.sendMessage(target, textMessage, { parse_mode: 'HTML' }); } catch (e) {}
       }
       publishedCount++;
-      console.log(`✅ تم النشر في ${target}`);
     } catch (pubErr) {
       console.log(`❌ فشل النشر في ${target}: ${pubErr.message}`);
       addLogEntry({ source: sourceName, target, originalLink, affiliateLink, status: 'publish_failed', error: pubErr.message });
