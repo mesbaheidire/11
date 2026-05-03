@@ -67,18 +67,44 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* COUPONS ENTRY (home) */
 .coupons-entry{
+  position:relative;
   margin:14px;padding:14px 16px;
   background:linear-gradient(135deg,#fee2e2,#fef3c7);
   border:1.5px dashed #ef4444;border-radius:16px;
   display:flex;align-items:center;gap:12px;cursor:pointer;
   transition:transform .15s;
+  animation:couponPulse 2s ease-in-out infinite;
 }
-.coupons-entry:active{transform:scale(.98)}
-.ce-icon{font-size:32px;line-height:1}
+.coupons-entry:active{transform:scale(.98);animation:none}
+.ce-icon{font-size:32px;line-height:1;animation:couponWiggle 2s ease-in-out infinite}
 .ce-text{flex:1;min-width:0}
 .ce-title{font-size:15px;font-weight:900;color:#991b1b}
 .ce-sub{font-size:11px;color:#7f1d1d;margin-top:2px;opacity:.85}
 .ce-arrow{color:#991b1b;font-size:14px}
+
+/* Pulse animation: نبض الظل لجذب الانتباه */
+@keyframes couponPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.55),0 4px 14px rgba(239,68,68,.18)}
+  50%{box-shadow:0 0 0 10px rgba(239,68,68,0),0 8px 22px rgba(239,68,68,.35)}
+}
+/* اهتزاز خفيف للأيقونة */
+@keyframes couponWiggle{
+  0%,100%{transform:rotate(0)}
+  20%{transform:rotate(-8deg) scale(1.05)}
+  40%{transform:rotate(8deg) scale(1.05)}
+  60%{transform:rotate(-4deg)}
+  80%{transform:rotate(4deg)}
+}
+/* نبض داخل تفاصيل المنتج */
+@keyframes couponBoxPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,.45)}
+  50%{box-shadow:0 0 0 8px rgba(124,58,237,0)}
+}
+.coupon-box{animation:couponBoxPulse 1.8s ease-in-out infinite}
+/* احترام تفضيلات المستخدم لتقليل الحركة */
+@media (prefers-reduced-motion: reduce){
+  .coupons-entry,.ce-icon,.coupon-box{animation:none !important}
+}
 
 /* COUPONS PAGE - AliExpress style */
 .coup-hero{
