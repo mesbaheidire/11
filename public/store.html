@@ -181,6 +181,57 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .coup-item-btn:active{background:#dc2626;color:#fff}
 .skel-coup{aspect-ratio:1/1.6;border-radius:10px}
 
+/* Coupon admin */
+.coup-fab{
+  position:fixed;bottom:20px;left:20px;z-index:50;
+  width:54px;height:54px;border-radius:50%;
+  background:linear-gradient(135deg,#dc2626,#991b1b);
+  color:#fff;border:none;font-size:22px;cursor:pointer;
+  box-shadow:0 6px 20px rgba(220,38,38,.4);
+  display:none;align-items:center;justify-content:center;
+}
+.coup-fab.show{display:flex}
+.coup-modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:14px;
+}
+.coup-modal-bg.show{display:flex}
+.coup-modal{
+  background:#fff;border-radius:18px;width:100%;max-width:440px;
+  max-height:90vh;overflow-y:auto;padding:20px;
+}
+.coup-modal h3{margin:0 0 14px;font-size:17px;color:#1f2937;display:flex;align-items:center;gap:8px}
+.coup-modal h3 i{color:#dc2626}
+.cm-row{margin-bottom:12px}
+.cm-row label{display:block;font-size:12px;font-weight:700;color:#374151;margin-bottom:5px}
+.cm-row input,.cm-row select,.cm-row textarea{
+  width:100%;border:1.5px solid #e5e7eb;border-radius:10px;
+  padding:9px 11px;font-family:'Cairo',sans-serif;font-size:13px;
+  outline:none;transition:border .15s;
+}
+.cm-row input:focus,.cm-row select:focus,.cm-row textarea:focus{border-color:#dc2626}
+.cm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cm-check{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#374151;cursor:pointer}
+.cm-check input{width:auto}
+.cm-actions{display:flex;gap:8px;margin-top:8px}
+.cm-btn{flex:1;border:none;border-radius:10px;padding:11px;font-family:'Cairo',sans-serif;font-weight:800;font-size:13px;cursor:pointer}
+.cm-btn-primary{background:#dc2626;color:#fff}
+.cm-btn-cancel{background:#f3f4f6;color:#374151}
+.cm-btn-del{background:#fee2e2;color:#dc2626;flex:0 0 auto;padding:11px 14px}
+.coup-item-admin{
+  position:absolute;top:4px;right:4px;z-index:2;
+  background:rgba(255,255,255,.95);border:none;border-radius:50%;
+  width:24px;height:24px;font-size:11px;cursor:pointer;
+  display:none;align-items:center;justify-content:center;color:#dc2626;
+}
+.admin-mode .coup-item-admin{display:flex}
+.coup-mega-admin{
+  position:absolute;top:2px;right:2px;background:#dc2626;color:#fff;
+  border:none;border-radius:50%;width:18px;height:18px;font-size:9px;
+  cursor:pointer;display:none;
+}
+.admin-mode .coup-mega-admin{display:block}
+
 /* ===== HOME PAGE ===== */
 .page{display:none}
 .page.active{display:block}
@@ -543,7 +594,8 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
   <div class="coup-section-title">كوبونات المتجر</div>
   <div class="coup-tabs" id="coupTabs">
-    <div class="coup-tab active" onclick="filterCoupTab(this,'all')">كوبونات ميجا</div>
+    <div class="coup-tab active" onclick="filterCoupTab(this,'all')">الكل</div>
+    <div class="coup-tab" onclick="filterCoupTab(this,'mega')">كوبونات ميجا</div>
     <div class="coup-tab" onclick="filterCoupTab(this,'tech')">التقنيات</div>
     <div class="coup-tab" onclick="filterCoupTab(this,'home')">البيت</div>
     <div class="coup-tab" onclick="filterCoupTab(this,'sport')">الرياضات والترفيه</div>
@@ -557,6 +609,72 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="skel skel-coup"></div>
     <div class="skel skel-coup"></div>
     <div class="skel skel-coup"></div>
+  </div>
+
+  <button class="coup-fab" id="coupFab" onclick="openCouponModal()" title="إضافة كوبون">
+    <i class="fas fa-plus"></i>
+  </button>
+</div>
+
+<!-- COUPON ADD/EDIT MODAL -->
+<div class="coup-modal-bg" id="coupModalBg" onclick="if(event.target===this)closeCouponModal()">
+  <div class="coup-modal">
+    <h3><i class="fas fa-ticket-alt"></i> <span id="cmTitle">إضافة كوبون جديد</span></h3>
+    <input type="hidden" id="cmId">
+    <div class="cm-row">
+      <label>اسم المنتج / الكوبون *</label>
+      <input id="cmName" placeholder="مثال: سماعات بلوتوث لاسلكية">
+    </div>
+    <div class="cm-row">
+      <label>رابط المنتج (AliExpress) *</label>
+      <input id="cmUrl" placeholder="https://aliexpress.com/item/...">
+    </div>
+    <div class="cm-row">
+      <label>رابط الصورة</label>
+      <input id="cmImg" placeholder="https://...">
+    </div>
+    <div class="cm-grid2">
+      <div class="cm-row">
+        <label>السعر بعد الخصم ($)</label>
+        <input id="cmSale" type="number" step="0.01" placeholder="9.99">
+      </div>
+      <div class="cm-row">
+        <label>السعر الأصلي ($)</label>
+        <input id="cmOrig" type="number" step="0.01" placeholder="29.99">
+      </div>
+    </div>
+    <div class="cm-grid2">
+      <div class="cm-row">
+        <label>نسبة الخصم (%)</label>
+        <input id="cmDisc" type="number" placeholder="50">
+      </div>
+      <div class="cm-row">
+        <label>التصنيف</label>
+        <select id="cmCat">
+          <option value="other">عام</option>
+          <option value="tech">التقنيات</option>
+          <option value="home">البيت</option>
+          <option value="sport">الرياضات والترفيه</option>
+          <option value="fashion">الأزياء</option>
+        </select>
+      </div>
+    </div>
+    <div class="cm-row">
+      <label>اسم المتجر</label>
+      <input id="cmShop" placeholder="مثال: AliExpress Official Store">
+    </div>
+    <div class="cm-row">
+      <label class="cm-check">
+        <input type="checkbox" id="cmMega"> عرض في "كوبونات ميجا" (الشريط العلوي)
+      </label>
+    </div>
+    <div class="cm-actions">
+      <button class="cm-btn cm-btn-del" id="cmDelBtn" onclick="deleteCouponFromModal()" style="display:none">
+        <i class="fas fa-trash"></i>
+      </button>
+      <button class="cm-btn cm-btn-cancel" onclick="closeCouponModal()">إلغاء</button>
+      <button class="cm-btn cm-btn-primary" onclick="saveCoupon()">حفظ</button>
+    </div>
   </div>
 </div>
 
@@ -925,12 +1043,33 @@ function goSearch(){
 }
 
 let coupAllItems=[],coupCurTab='all',coupLoaded=false;
+let coupAdmin=(()=>{
+  try{
+    const u=new URLSearchParams(location.search);
+    if(u.get('admin')==='1'){localStorage.setItem('coup_admin','1');return true}
+    if(u.get('admin')==='0'){localStorage.setItem('coup_admin','0');return false}
+    return localStorage.getItem('coup_admin')==='1';
+  }catch(e){return false}
+})();
+
+function toggleCouponAdmin(){
+  coupAdmin=!coupAdmin;
+  try{localStorage.setItem('coup_admin',coupAdmin?'1':'0')}catch(e){}
+  applyAdminUI();
+  toast(coupAdmin?'وضع الإدارة مفعّل':'وضع الإدارة معطّل','ok');
+}
+function applyAdminUI(){
+  document.body.classList.toggle('admin-mode',coupAdmin);
+  const fab=document.getElementById('coupFab');
+  if(fab)fab.classList.toggle('show',coupAdmin && document.getElementById('couponsPage').classList.contains('active'));
+}
 
 function openCouponsPage(){
   track('click','coupons_center');
   showPage('couponsPage');
   startCoupCountdown();
-  if(!coupLoaded){fetchCouponsPage();coupLoaded=true}
+  fetchCouponsPage();
+  applyAdminUI();
 }
 
 function startCoupCountdown(){
@@ -958,8 +1097,10 @@ async function fetchCouponsPage(){
     const r=await fetch('/api/store/coupons');
     const data=await r.json();
     coupAllItems=data.products||[];
+    coupLoaded=true;
     if(coupAllItems.length===0){
-      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted)"><i class="fas fa-ticket-alt" style="font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:#dc2626"></i><p style="font-size:13px">لا توجد كوبونات متاحة حالياً</p></div>';
+      const adminHint=coupAdmin?'<p style="font-size:12px;margin-top:8px;color:#dc2626">اضغط زر + لإضافة أول كوبون</p>':'';
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted)"><i class="fas fa-ticket-alt" style="font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:#dc2626"></i><p style="font-size:13px">لا توجد كوبونات متاحة حالياً</p>'+adminHint+'</div>';
       mega.innerHTML='';
       return;
     }
@@ -972,30 +1113,26 @@ async function fetchCouponsPage(){
 
 function renderMegaCoupons(){
   const mega=document.getElementById('coupMegaScroll');
-  const top=coupAllItems
-    .filter(p=>p.original_price&&p.sale_price)
-    .map(p=>({...p,saving:parseFloat(p.original_price)-parseFloat(p.sale_price)}))
-    .sort((a,b)=>b.saving-a.saving)
-    .slice(0,6);
+  let top=coupAllItems.filter(p=>p.is_mega);
+  if(top.length===0){
+    top=coupAllItems
+      .filter(p=>p.original_price&&p.sale_price)
+      .map(p=>({...p,_sav:parseFloat(p.original_price)-parseFloat(p.sale_price)}))
+      .sort((a,b)=>b._sav-a._sav)
+      .slice(0,6);
+  }
   if(top.length===0){mega.innerHTML='';return}
   mega.innerHTML=top.map(p=>{
-    const sav=p.saving.toFixed(p.saving>=10?0:2);
+    const sav=(p.original_price&&p.sale_price)?(parseFloat(p.original_price)-parseFloat(p.sale_price)).toFixed(2):(p.discount||'?');
+    const adminBtn=`<button class="coup-mega-admin" onclick="event.stopPropagation();editCoupon('${esc(p.id)}')"><i class="fas fa-pen"></i></button>`;
     return `<div class="coup-mega" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
+      ${adminBtn}
       <div class="coup-mega-disc">خصم US</div>
       <div class="coup-mega-amt">$${sav}</div>
-      <div class="coup-mega-cond">طلبات +US$${p.original_price}</div>
+      <div class="coup-mega-cond">${p.original_price?('طلبات +US$'+p.original_price):(p.shop_name||'عرض حصري')}</div>
       <button class="coup-mega-btn">تذكير</button>
     </div>`;
   }).join('');
-}
-
-function categorizeCoup(title){
-  const t=(title||'').toLowerCase();
-  if(/phone|laptop|tablet|earbud|headphone|tv|camera|electronic|gadget|bluetooth|usb|cable|charger/.test(t))return'tech';
-  if(/dress|shirt|pant|shoe|fashion|hoodie|jacket|bag|jean|sneaker/.test(t))return'fashion';
-  if(/sport|gym|fitness|bike|yoga|running|outdoor/.test(t))return'sport';
-  if(/home|kitchen|living|bedroom|sofa|lamp|decor|furniture/.test(t))return'home';
-  return'other';
 }
 
 function filterCoupTab(el,tab){
@@ -1008,9 +1145,8 @@ function filterCoupTab(el,tab){
 function renderCoupGrid(){
   const grid=document.getElementById('coupGrid');
   let items=coupAllItems;
-  if(coupCurTab!=='all'){
-    items=items.filter(p=>categorizeCoup(p.title)===coupCurTab);
-  }
+  if(coupCurTab==='mega'){items=items.filter(p=>p.is_mega)}
+  else if(coupCurTab!=='all'){items=items.filter(p=>(p.category||'other')===coupCurTab)}
   if(items.length===0){
     grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted);font-size:12px">لا توجد كوبونات في هذا التصنيف</div>';
     return;
@@ -1020,14 +1156,16 @@ function renderCoupGrid(){
     const disc=p.discount?String(p.discount).replace(/[^\d]/g,''):'';
     const img=p.image_url?`<img class="coup-item-img" src="${esc(p.image_url)}" onerror="this.style.display='none'">`:'';
     const store=p.shop_name||'AliExpress Store';
+    const adminBtn=`<button class="coup-item-admin" onclick="event.stopPropagation();editCoupon('${esc(p.id)}')"><i class="fas fa-pen"></i></button>`;
     return `<div class="coup-item" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
+      ${adminBtn}
       <div class="coup-item-imgwrap">
         ${img}
-        <div class="coup-item-price">US $${p.sale_price||p.price||'?'}</div>
+        <div class="coup-item-price">US $${p.sale_price||'?'}</div>
       </div>
       <div class="coup-item-store"><i class="fas fa-chevron-left"></i> ${esc(store.length>16?store.substring(0,16)+'...':store)}</div>
       <div class="coup-item-disc">US <span>$${sav||disc||'?'}</span><small>خصم</small></div>
-      <div class="coup-item-cond">${sav?'الطلبات أكثر من $'+(parseFloat(p.original_price)).toFixed(2):'عرض حصري'}</div>
+      <div class="coup-item-cond">${sav?'الطلبات أكثر من $'+(parseFloat(p.original_price)).toFixed(2):(p.discount?'-'+p.discount+'%':'عرض حصري')}</div>
       <button class="coup-item-btn">تم تحصيل الـ...</button>
     </div>`;
   }).join('');
@@ -1036,6 +1174,67 @@ function renderCoupGrid(){
 function openCouponProduct(id,url){
   track('click','coupon:'+id);
   if(url)window.open(url,'_blank');
+}
+
+// ==== Coupon Admin Modal ====
+function openCouponModal(coupon){
+  const isEdit=!!coupon;
+  document.getElementById('cmTitle').textContent=isEdit?'تعديل الكوبون':'إضافة كوبون جديد';
+  document.getElementById('cmId').value=coupon?.id||'';
+  document.getElementById('cmName').value=coupon?.title||'';
+  document.getElementById('cmUrl').value=coupon?.product_url||'';
+  document.getElementById('cmImg').value=coupon?.image_url||'';
+  document.getElementById('cmSale').value=coupon?.sale_price||'';
+  document.getElementById('cmOrig').value=coupon?.original_price||'';
+  document.getElementById('cmDisc').value=coupon?.discount||'';
+  document.getElementById('cmCat').value=coupon?.category||'other';
+  document.getElementById('cmShop').value=coupon?.shop_name||'';
+  document.getElementById('cmMega').checked=!!coupon?.is_mega;
+  document.getElementById('cmDelBtn').style.display=isEdit?'block':'none';
+  document.getElementById('coupModalBg').classList.add('show');
+}
+function closeCouponModal(){
+  document.getElementById('coupModalBg').classList.remove('show');
+}
+function editCoupon(id){
+  const c=coupAllItems.find(x=>x.id===id);
+  if(c)openCouponModal(c);
+}
+async function saveCoupon(){
+  const id=document.getElementById('cmId').value;
+  const body={
+    title:document.getElementById('cmName').value.trim(),
+    product_url:document.getElementById('cmUrl').value.trim(),
+    image_url:document.getElementById('cmImg').value.trim(),
+    sale_price:document.getElementById('cmSale').value,
+    original_price:document.getElementById('cmOrig').value,
+    discount:document.getElementById('cmDisc').value,
+    category:document.getElementById('cmCat').value,
+    shop_name:document.getElementById('cmShop').value.trim(),
+    is_mega:document.getElementById('cmMega').checked
+  };
+  if(!body.title||!body.product_url){toast('الاسم ورابط المنتج مطلوبان','err');return}
+  try{
+    const url=id?('/api/store/coupons/'+encodeURIComponent(id)):'/api/store/coupons';
+    const r=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json();
+    if(!data.success){toast(data.error||'فشل الحفظ','err');return}
+    toast(id?'تم تحديث الكوبون':'تمت إضافة الكوبون','ok');
+    closeCouponModal();
+    fetchCouponsPage();
+  }catch(e){toast('خطأ في الاتصال','err')}
+}
+async function deleteCouponFromModal(){
+  const id=document.getElementById('cmId').value;
+  if(!id||!confirm('هل تريد حذف هذا الكوبون؟'))return;
+  try{
+    const r=await fetch('/api/store/coupons/'+encodeURIComponent(id),{method:'DELETE'});
+    const data=await r.json();
+    if(!data.success){toast('فشل الحذف','err');return}
+    toast('تم الحذف','ok');
+    closeCouponModal();
+    fetchCouponsPage();
+  }catch(e){toast('خطأ في الاتصال','err')}
 }
 
 function setFlt(s,el){
@@ -1175,6 +1374,7 @@ async function doImgSearch(){
 }
 
 loadSaved();
+applyAdminUI();
 </script>
 </body>
 </html>

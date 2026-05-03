@@ -2248,32 +2248,81 @@ app.get('/api/store/product-info', async (req, res) => {
   }
 });
 
-// Coupons / hot deals endpoint — cached 30min
-let couponsCache = { data: null, time: 0 };
+// === Manual Coupons Management ===
+// Coupons are stored as JSON in app_storage under key 'manual_coupons'
+async function loadManualCoupons() {
+  const raw = await db.getAppStorage('manual_coupons');
+  if (!raw) return [];
+  try { return JSON.parse(raw) || []; } catch { return []; }
+}
+async function saveManualCoupons(list) {
+  await db.setAppStorage('manual_coupons', JSON.stringify(list));
+}
+
+// Public: list coupons
 app.get('/api/store/coupons', async (req, res) => {
   try {
-    const now = Date.now();
-    if (couponsCache.data && (now - couponsCache.time) < 30 * 60 * 1000) {
-      return res.json({ success: true, products: couponsCache.data, cached: true });
-    }
-    const result = await searchHotProducts({ page: '1', limit: '20' });
-    if (!result.success) return res.json({ success: false, products: [] });
-    const withDiscount = (result.products || [])
-      .filter(p => {
-        const d = p.discount ? parseInt(String(p.discount).replace(/[^\d]/g, '')) : 0;
-        return d >= 30 || (p.original_price && p.sale_price && parseFloat(p.original_price) > parseFloat(p.sale_price) * 1.3);
-      })
-      .sort((a, b) => {
-        const da = parseInt(String(a.discount || '0').replace(/[^\d]/g, '')) || 0;
-        const db = parseInt(String(b.discount || '0').replace(/[^\d]/g, '')) || 0;
-        return db - da;
-      })
-      .slice(0, 12);
-    const finalList = withDiscount.length > 0 ? withDiscount : (result.products || []).slice(0, 8);
-    couponsCache = { data: finalList, time: now };
-    res.json({ success: true, products: finalList });
+    const list = await loadManualCoupons();
+    res.json({ success: true, products: list });
   } catch (e) {
     res.json({ success: false, products: [], error: e.message });
+  }
+});
+
+// Admin: add coupon
+app.post('/api/store/coupons', async (req, res) => {
+  try {
+    const c = req.body || {};
+    if (!c.title || !c.product_url) {
+      return res.status(400).json({ success: false, error: 'title و product_url مطلوبان' });
+    }
+    const list = await loadManualCoupons();
+    const newCoupon = {
+      id: c.id || ('mc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      title: String(c.title).trim(),
+      image_url: c.image_url || '',
+      product_url: c.product_url,
+      promotion_link: c.promotion_link || c.product_url,
+      sale_price: c.sale_price || '',
+      original_price: c.original_price || '',
+      discount: c.discount || '',
+      shop_name: c.shop_name || '',
+      category: c.category || 'other',
+      is_mega: !!c.is_mega,
+      created_at: Date.now()
+    };
+    list.unshift(newCoupon);
+    await saveManualCoupons(list);
+    res.json({ success: true, coupon: newCoupon });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Admin: update coupon
+app.put('/api/store/coupons/:id', async (req, res) => {
+  try {
+    const list = await loadManualCoupons();
+    const idx = list.findIndex(c => c.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'الكوبون غير موجود' });
+    const updates = req.body || {};
+    list[idx] = { ...list[idx], ...updates, id: list[idx].id };
+    await saveManualCoupons(list);
+    res.json({ success: true, coupon: list[idx] });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Admin: delete coupon
+app.delete('/api/store/coupons/:id', async (req, res) => {
+  try {
+    const list = await loadManualCoupons();
+    const filtered = list.filter(c => c.id !== req.params.id);
+    await saveManualCoupons(filtered);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
