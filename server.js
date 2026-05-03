@@ -2223,36 +2223,61 @@ Query: "${query}"`
   return { keywords: expanded.keywords, categoryId: expanded.categoryId || detectedCat, language: 'EN' };
 }
 
-// Store: Search products
+// كاش في الذاكرة لمعلومات المنتجات (TTL = 6 ساعات)
+const productInfoCache = new Map();
+const PRODUCT_CACHE_TTL = 6 * 60 * 60 * 1000;
+function getCachedProduct(pid) {
+  const c = productInfoCache.get(pid);
+  if (c && (Date.now() - c.t) < PRODUCT_CACHE_TTL) return c.data;
+  return null;
+}
+function setCachedProduct(pid, data) {
+  productInfoCache.set(pid, { t: Date.now(), data });
+  if (productInfoCache.size > 500) {
+    const firstKey = productInfoCache.keys().next().value;
+    productInfoCache.delete(firstKey);
+  }
+}
+
+// Store: Get enriched product info (with cache + AliExpress API fallback chain)
 app.get('/api/store/product-info', async (req, res) => {
   try {
-    const { ids } = req.query;
+    const { ids, refresh } = req.query;
     if (!ids) return res.json({ success: false, products: [] });
     const idList = ids.split(',').filter(id => /^\d+$/.test(id.trim())).slice(0, 10);
     if (!idList.length) return res.json({ success: false, products: [] });
     const results = [];
     for (const pid of idList) {
       try {
-        const info = await getProductDetails(pid);
+        let info = refresh === '1' ? null : getCachedProduct(pid);
+        if (!info) {
+          info = await getProductDetails(pid);
+          if (info) setCachedProduct(pid, info);
+        }
         if (info) {
-          const rating = info.rating || info.evaluate_rate || info.evaluateRate || null;
-          const orders = info.orders || info.lastest_volume || info.lastestVolume || info.volume || info.sales || null;
-          const discount = info.discount || info.discount_rate || info.discountRate || null;
           results.push({
             id: pid,
             price: info.sale_price || info.price || null,
             original_price: info.original_price || null,
-            rating,
-            orders,
-            discount,
-            shop_name: info.shop_name || null
+            rating: info.rating || null,
+            orders: info.orders || null,
+            review_count: info.review_count || null,
+            discount: info.discount || null,
+            shop_name: info.shop_name || null,
+            commission_rate: info.commission_rate || null,
+            category_name: info.category_name || null
           });
+        } else {
+          results.push({ id: pid, error: 'not_found' });
         }
-      } catch (e) {}
+      } catch (e) {
+        console.log(`product-info error for ${pid}:`, e.message);
+        results.push({ id: pid, error: e.message });
+      }
     }
     res.json({ success: true, products: results });
   } catch (e) {
-    res.json({ success: false, products: [] });
+    res.json({ success: false, products: [], error: e.message });
   }
 });
 

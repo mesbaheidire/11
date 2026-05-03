@@ -24,90 +24,151 @@ function signRequest(params, appSecret) {
         .toUpperCase();
 }
 
+// قائمة كاملة بكل الحقول المهمة - نطلبها صراحةً من API
+const PRODUCT_FIELDS = [
+    'product_id','product_title','product_main_image_url','product_small_image_urls',
+    'product_detail_url','promotion_link','shop_title','shop_url','shop_id',
+    'target_sale_price','target_sale_price_currency','target_original_price','target_original_price_currency',
+    'sale_price','original_price','discount','commission_rate','hot_product_commission_rate',
+    'evaluate_rate','avg_evaluation_rate','rating_weighted','review_count',
+    'lastest_volume','volume','30days_commission','first_level_category_id','first_level_category_name',
+    'second_level_category_id','second_level_category_name','original_price_currency','sale_price_currency',
+    'product_video_url'
+].join(',');
+
+// استخراج الحقول من المنتج بأسماء متعددة محتملة
+function normalizeProduct(p) {
+    if (!p) return null;
+    const rating = p.evaluate_rate || p.avg_evaluation_rate || p.rating_weighted || p.evaluation_rate || null;
+    const orders = p.lastest_volume || p.volume || p.sales || p.last_30days_volume || null;
+    return {
+        id: p.product_id,
+        title: p.product_title || '',
+        image_url: p.product_main_image_url || p.product_small_image_urls?.string?.[0] || null,
+        price: p.target_sale_price || p.sale_price || p.target_original_price || null,
+        original_price: p.target_original_price || p.original_price || null,
+        sale_price: p.target_sale_price || p.sale_price || null,
+        discount: p.discount || null,
+        currency: p.target_sale_price_currency || p.sale_price_currency || 'USD',
+        product_url: p.product_detail_url || null,
+        promotion_link: p.promotion_link || null,
+        shop_name: p.shop_title || null,
+        shop_id: p.shop_id || null,
+        rating: rating ? String(rating).replace('%','') : null,
+        orders: orders != null ? Number(orders) : null,
+        review_count: p.review_count || null,
+        commission_rate: p.commission_rate || p.hot_product_commission_rate || null,
+        category_id: p.first_level_category_id || null,
+        category_name: p.first_level_category_name || null,
+        video_url: p.product_video_url || null
+    };
+}
+
+async function _callApi(method, extraParams = {}, timeout = 15000) {
+    const appKey = process.env.ALIEXPRESS_APP_KEY;
+    const appSecret = process.env.ALIEXPRESS_APP_SECRET;
+    if (!appKey || !appSecret) throw new Error('Missing AliExpress API credentials');
+
+    const params = {
+        method,
+        app_key: appKey,
+        sign_method: 'md5',
+        timestamp: Date.now().toString(),
+        format: 'json',
+        v: '2.0',
+        tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default',
+        ...extraParams
+    };
+    params.sign = signRequest(params, appSecret);
+
+    const response = await got(API_URL, {
+        searchParams: params,
+        timeout: { request: timeout },
+        responseType: 'json'
+    });
+    return response.body;
+}
+
+// طريقة fallback: نبحث عن المنتج بالـ ID عبر product.query (يُرجع تقييم/طلبات بشكل أفضل)
+async function _queryById(productId, options = {}) {
+    try {
+        const data = await _callApi('aliexpress.affiliate.product.query', {
+            target_currency: options.currency || 'USD',
+            target_language: options.language || 'EN',
+            product_ids: String(productId),
+            fields: PRODUCT_FIELDS,
+            page_no: '1',
+            page_size: '1'
+        });
+        const r = data.aliexpress_affiliate_product_query_response?.resp_result;
+        const list = r?.result?.products?.product;
+        if (list) {
+            const p = Array.isArray(list) ? list[0] : list;
+            return normalizeProduct(p);
+        }
+    } catch (e) {
+        console.log('  ↳ fallback query.product by ID failed:', e.message);
+    }
+    return null;
+}
+
 async function getProductDetails(productId, options = {}) {
     if (!productId) return null;
     
-    // Retry logic
     const maxRetries = 2;
     let lastError = null;
+    let baseInfo = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            // تأخير فقط قبل المحاولات اللاحقة (وليس الأولى)
             if (attempt > 1) {
                 await new Promise(resolve => setTimeout(resolve, 1100 * (attempt - 1)));
             }
 
-            const appKey = process.env.ALIEXPRESS_APP_KEY;
-            const appSecret = process.env.ALIEXPRESS_APP_SECRET;
-
-            if (!appKey || !appSecret) {
-                console.error('Missing AliExpress API credentials');
-                return null;
-            }
-
-            const params = {
-                method: 'aliexpress.affiliate.productdetail.get',
-                app_key: appKey,
-                sign_method: 'md5',
-                timestamp: Date.now().toString(),
-                format: 'json',
-                v: '2.0',
+            const data = await _callApi('aliexpress.affiliate.productdetail.get', {
                 product_ids: String(productId),
                 target_currency: options.currency || 'USD',
                 target_language: options.language || 'EN',
-                tracking_id: process.env.ALIEXPRESS_TRACK_ID || 'default'
-            };
-
-            params.sign = signRequest(params, appSecret);
-
-            const response = await got(API_URL, {
-                searchParams: params,
-                timeout: { request: 15000 },
-                responseType: 'json'
+                fields: PRODUCT_FIELDS
             });
 
-            const data = response.body;
-            
             if (data.aliexpress_affiliate_productdetail_get_response) {
                 const result = data.aliexpress_affiliate_productdetail_get_response.resp_result;
-                if (result && result.result && result.result.products && result.result.products.product) {
-                    const products = result.result.products.product;
+                const products = result?.result?.products?.product;
+                if (products) {
                     const product = Array.isArray(products) ? products[0] : products;
-                    
-                    return {
-                        title: product.product_title || '',
-                        image_url: product.product_main_image_url || product.product_small_image_urls?.string?.[0] || null,
-                        price: product.target_sale_price || product.target_original_price || null,
-                        original_price: product.target_original_price || null,
-                        sale_price: product.target_sale_price || null,
-                        discount: product.discount || null,
-                        currency: product.target_sale_price_currency || 'USD',
-                        product_url: product.product_detail_url || null,
-                        promotion_link: product.promotion_link || null,
-                        shop_name: product.shop_title || null,
-                        rating: product.evaluate_rate || null,
-                        orders: product.lastest_volume || null
-                    };
+                    baseInfo = normalizeProduct(product);
+                    break;
                 }
             }
 
             if (data.error_response) {
                 lastError = data.error_response.msg || JSON.stringify(data.error_response);
-                console.error(`AliExpress API Attempt ${attempt} Error:`, lastError);
+                console.error(`AliExpress productdetail attempt ${attempt}:`, lastError);
             }
-
         } catch (err) {
             lastError = err.message;
-            console.error(`AliExpress API request attempt ${attempt} error:`, lastError);
-        }
-        
-        if (attempt < maxRetries) {
-            console.log(`Retrying AliExpress API... (${attempt}/${maxRetries})`);
+            console.error(`AliExpress productdetail attempt ${attempt} error:`, lastError);
         }
     }
 
-    return null;
+    // إذا حصلنا على البيانات الأساسية لكن ينقصنا تقييم/طلبات → نستدعي product.query للتكميل
+    if (baseInfo && (!baseInfo.rating || !baseInfo.orders)) {
+        const enriched = await _queryById(productId, options);
+        if (enriched) {
+            if (!baseInfo.rating && enriched.rating) baseInfo.rating = enriched.rating;
+            if (!baseInfo.orders && enriched.orders) baseInfo.orders = enriched.orders;
+            if (!baseInfo.discount && enriched.discount) baseInfo.discount = enriched.discount;
+            if (!baseInfo.review_count && enriched.review_count) baseInfo.review_count = enriched.review_count;
+        }
+    }
+
+    // إذا فشلت productdetail تماماً → نجرب product.query كملاذ أخير
+    if (!baseInfo) {
+        baseInfo = await _queryById(productId, options);
+    }
+
+    return baseInfo;
 }
 
 async function searchHotProducts(options = {}) {

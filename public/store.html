@@ -1229,8 +1229,74 @@ async function fetchSearch(reset=true){
 
 function loadMore(){curPage++;fetchSearch(false)}
 
+// ===== Helpers: format rating/orders/discount intelligently =====
+function fmtRating(r){
+  if(r==null||r==='')return '—';
+  let n=parseFloat(String(r).replace('%',''));
+  if(isNaN(n))return '—';
+  // قد يأتي التقييم بصيغة % (0-100) أو مقياس 5 نجوم مباشرة
+  if(n>5) n=n/20; // % to 5-star
+  if(n>5) n=5;
+  return n.toFixed(1)+' ★';
+}
+function fmtOrders(o){
+  if(o==null||o==='')return '—';
+  const n=Number(o);
+  if(isNaN(n)||n===0)return '—';
+  if(n>=1000) return (n/1000).toFixed(n>=10000?0:1)+'k';
+  return n.toLocaleString('en-US');
+}
+function fmtDiscount(d,orig,sale){
+  // 1) إذا الـ API أعطى نسبة → استخدمها
+  if(d!=null&&d!==''){
+    const s=String(d);
+    if(/%/.test(s))return s;
+    const n=parseInt(s);
+    if(!isNaN(n)&&n>0)return n+'%';
+  }
+  // 2) احسب من السعرين إذا كانا متوفرين
+  const o=parseFloat(String(orig||'').replace(/[^\d.]/g,''));
+  const sv=parseFloat(String(sale||'').replace(/[^\d.]/g,''));
+  if(o>0&&sv>0&&sv<o){
+    return Math.round((1-sv/o)*100)+'%';
+  }
+  return '—';
+}
+
 // ===== DETAIL =====
-function openDet(p){curProduct=p;track('click',p?.title||p?.id||'product');showDet()}
+function openDet(p){
+  curProduct=p;
+  track('click',p?.title||p?.id||'product');
+  showDet();
+  // إذا فُتح من بطاقة بحث وحقول التقييم/الطلبات ناقصة → جلب من API + تحديث
+  if(p&&p.id&&(!p.rating||!p.orders)){
+    enrichProductInfo(p.id);
+  }
+}
+
+async function enrichProductInfo(pid){
+  try{
+    const r=await fetch('/api/store/product-info?ids='+encodeURIComponent(pid));
+    const d=await r.json();
+    const info=d.products&&d.products[0];
+    if(!info||!curProduct||String(curProduct.id)!==String(pid))return;
+    if(info.rating&&!curProduct.rating)curProduct.rating=info.rating;
+    if(info.orders&&!curProduct.orders)curProduct.orders=info.orders;
+    if(info.discount&&!curProduct.discount)curProduct.discount=info.discount;
+    if(info.original_price&&!curProduct.original_price)curProduct.original_price=info.original_price;
+    if(info.shop_name&&!curProduct.shop_name)curProduct.shop_name=info.shop_name;
+    // حدّث الواجهة فقط إذا النافذة لا تزال مفتوحة على نفس المنتج
+    if(document.getElementById('detOverlay').classList.contains('show')){
+      document.getElementById('dRating').textContent=fmtRating(curProduct.rating);
+      document.getElementById('dOrders').textContent=fmtOrders(curProduct.orders);
+      document.getElementById('dDisc').textContent=fmtDiscount(curProduct.discount,curProduct.original_price,curProduct.price||curProduct.sale_price);
+      if(curProduct.shop_name){
+        document.getElementById('detShop').style.display='flex';
+        document.getElementById('detShopName').textContent=curProduct.shop_name;
+      }
+    }
+  }catch(e){}
+}
 function showDet(){
   const p=curProduct;if(!p)return;
   const img=document.getElementById('detImg');
@@ -1239,12 +1305,9 @@ function showDet(){
   const price=p.price||p.sale_price||'';
   document.getElementById('detPrice').innerHTML=price?`<span class="cur">USD</span> ${esc(price)}`:'';
   document.getElementById('detOrig').textContent=p.original_price&&p.original_price!==price?('الأصلي: '+p.original_price+' USD'):'';
-  const ratingVal=p.rating!=null&&p.rating!==''?(Math.round(parseFloat(p.rating)/20*10)/10):null;
-  const ordersVal=p.orders!=null&&p.orders!==''?Number(p.orders).toLocaleString():'—';
-  const discVal=p.discount!=null&&p.discount!==''?(/%/.test(String(p.discount))?String(p.discount):parseInt(p.discount)+'%'):'—';
-  document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
-  document.getElementById('dOrders').textContent=ordersVal;
-  document.getElementById('dDisc').textContent=discVal;
+  document.getElementById('dRating').textContent=fmtRating(p.rating);
+  document.getElementById('dOrders').textContent=fmtOrders(p.orders);
+  document.getElementById('dDisc').textContent=fmtDiscount(p.discount,p.original_price,p.price||p.sale_price);
   const shop=document.getElementById('detShop');
   if(p.shop_name){shop.style.display='flex';document.getElementById('detShopName').textContent=p.shop_name}else{shop.style.display='none'}
   const couponEl=document.getElementById('detCoupon');
