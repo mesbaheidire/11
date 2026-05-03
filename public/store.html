@@ -1004,12 +1004,11 @@ async function openSaved(p){track('click',p?.title||'saved_product');
           if(info.shop_name)curProduct.shop_name=info.shop_name;
           if(info.original_price&&!curProduct.original_price)curProduct.original_price=info.original_price;
           if(info.price&&(!curProduct.price||curProduct.price==='0'))curProduct.price=info.price;
-          // تحديث الواجهة المعروضة حالياً
+          // تحديث الواجهة المعروضة حالياً (نستخدم fmt الذكية)
           if(document.getElementById('detOverlay').classList.contains('show')){
-            const ratingVal=curProduct.rating?(Math.round(parseFloat(curProduct.rating)/20*10)/10):null;
-            document.getElementById('dRating').textContent=ratingVal?(ratingVal.toFixed(1)):'—';
-            document.getElementById('dOrders').textContent=curProduct.orders!=null&&curProduct.orders!==''?Number(curProduct.orders).toLocaleString():'—';
-            document.getElementById('dDisc').textContent=curProduct.discount!=null&&curProduct.discount!==''?(/%/.test(String(curProduct.discount))?String(curProduct.discount):parseInt(curProduct.discount)+'%'):'—';
+            document.getElementById('dRating').textContent=fmtRating(curProduct.rating);
+            document.getElementById('dOrders').textContent=fmtOrders(curProduct.orders);
+            document.getElementById('dDisc').textContent=fmtDiscount(curProduct.discount,curProduct.original_price,curProduct.price||curProduct.sale_price);
             if(curProduct.shop_name){document.getElementById('detShop').style.display='flex';document.getElementById('detShopName').textContent=curProduct.shop_name}
           }
         }

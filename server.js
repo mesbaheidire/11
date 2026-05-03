@@ -2327,7 +2327,91 @@ function setCachedProduct(pid, data) {
   }
 }
 
-// Store: Get enriched product info (with cache + AliExpress API fallback chain)
+// Fallback: سحب التقييم/الطلبات/الخصم مباشرة من صفحة المنتج عند فشل API
+async function scrapeAliProductData(productId) {
+  if (!productId || !/^\d+$/.test(String(productId))) return null;
+  const urls = [
+    `https://www.aliexpress.com/item/${productId}.html`,
+    `https://m.aliexpress.com/item/${productId}.html`
+  ];
+  for (const url of urls) {
+    try {
+      const r = await axios.get(url, {
+        timeout: 12000,
+        maxRedirects: 5,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9'
+        },
+        validateStatus: s => s >= 200 && s < 400
+      });
+      const html = String(r.data || '');
+      if (!html || html.length < 500) continue;
+
+      const out = { rating: null, orders: null, discount: null, original_price: null, sale_price: null };
+
+      // التقييم: من JSON المضمن في الصفحة
+      const ratingPatterns = [
+        /"averageStar"\s*:\s*"?([\d.]+)"?/i,
+        /"avgStarRate"\s*:\s*"?([\d.]+)"?/i,
+        /"averageStarRate"\s*:\s*"?([\d.]+)"?/i,
+        /"ratingValue"\s*:\s*"?([\d.]+)"?/i
+      ];
+      for (const re of ratingPatterns) {
+        const m = html.match(re);
+        if (m) {
+          const v = parseFloat(m[1]);
+          if (!isNaN(v) && v > 0 && v <= 5) { out.rating = v.toFixed(1); break; }
+        }
+      }
+
+      // الطلبات: tradeCount / orders / "X+ sold"
+      const ordersPatterns = [
+        /"tradeCount"\s*:\s*"?(\d+)"?/i,
+        /"orders"\s*:\s*"?(\d+)"?/i,
+        /"reviewCount"\s*:\s*"?(\d+)"?/i,
+        /(\d{1,3}(?:[,.]?\d{3})*)\+?\s*sold/i,
+        /(\d+)\s*orders?/i
+      ];
+      for (const re of ordersPatterns) {
+        const m = html.match(re);
+        if (m) {
+          const v = parseInt(String(m[1]).replace(/[^\d]/g, ''), 10);
+          if (!isNaN(v) && v > 0) { out.orders = v; break; }
+        }
+      }
+
+      // الخصم: discount مباشرةً
+      const discMatch = html.match(/"discount"\s*:\s*"?(\d{1,3})"?/i)
+                     || html.match(/-(\d{1,2})%/);
+      if (discMatch) {
+        const v = parseInt(discMatch[1], 10);
+        if (!isNaN(v) && v > 0 && v <= 99) out.discount = v + '%';
+      }
+
+      // الأسعار (لحساب الخصم لو لم يُستخرج)
+      const salePriceM = html.match(/"salePrice"\s*:\s*\{[^}]*?"value"\s*:\s*"?([\d.]+)"?/i)
+                       || html.match(/"minActivityAmount"[^}]*?"value"\s*:\s*"?([\d.]+)"?/i);
+      const origPriceM = html.match(/"originalPrice"\s*:\s*\{[^}]*?"value"\s*:\s*"?([\d.]+)"?/i)
+                       || html.match(/"maxAmount"[^}]*?"value"\s*:\s*"?([\d.]+)"?/i);
+      if (salePriceM) out.sale_price = parseFloat(salePriceM[1]);
+      if (origPriceM) out.original_price = parseFloat(origPriceM[1]);
+      if (!out.discount && out.sale_price && out.original_price && out.sale_price < out.original_price) {
+        out.discount = Math.round((1 - out.sale_price / out.original_price) * 100) + '%';
+      }
+
+      if (out.rating || out.orders || out.discount) {
+        return out;
+      }
+    } catch (e) {
+      console.log(`scrapeAliProductData(${productId}) فشل من ${url.substring(0, 40)}: ${e.message}`);
+    }
+  }
+  return null;
+}
+
+// Store: Get enriched product info (with cache + AliExpress API + scrape fallback)
 app.get('/api/store/product-info', async (req, res) => {
   try {
     const { ids, refresh } = req.query;
@@ -2342,7 +2426,24 @@ app.get('/api/store/product-info', async (req, res) => {
           info = await getProductDetails(pid);
           if (info) setCachedProduct(pid, info);
         }
-        if (info) {
+        info = info || {};
+
+        // Fallback: إذا API لم يُرجع تقييم/طلبات/خصم → سحب من صفحة المنتج
+        const needsScrape = !info.rating || !info.orders || !info.discount;
+        if (needsScrape) {
+          const scraped = await scrapeAliProductData(pid);
+          if (scraped) {
+            if (!info.rating && scraped.rating) info.rating = scraped.rating;
+            if (!info.orders && scraped.orders) info.orders = scraped.orders;
+            if (!info.discount && scraped.discount) info.discount = scraped.discount;
+            if (!info.original_price && scraped.original_price) info.original_price = scraped.original_price;
+            if (!info.sale_price && scraped.sale_price) info.sale_price = scraped.sale_price;
+            // حدّث الكاش بالبيانات المُكمّلة
+            if (info.id || info.title) setCachedProduct(pid, info);
+          }
+        }
+
+        if (info && (info.id || info.title || info.rating || info.orders || info.discount)) {
           results.push({
             id: pid,
             price: info.sale_price || info.price || null,
