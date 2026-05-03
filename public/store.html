@@ -65,20 +65,51 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   display:flex;align-items:center;flex-shrink:0;
 }
 
-/* CATS */
-.cats-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 2px 14px}
-.cats-scroll::-webkit-scrollbar{display:none}
-.cat-chip{
-  flex-shrink:0;border:1.5px solid var(--border);
-  border-radius:22px;padding:6px 16px;
-  font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;
-  color:var(--muted);background:#fff;cursor:pointer;
-  white-space:nowrap;transition:all .2s;
+/* COUPONS */
+.coupons-list{display:flex;flex-direction:column;gap:10px;padding:0 14px}
+.coupon-card{
+  background:#fff;border-radius:14px;
+  border:1.5px dashed var(--pri);
+  padding:12px;display:flex;gap:12px;
+  cursor:pointer;transition:transform .15s, box-shadow .15s;
+  position:relative;overflow:hidden;
 }
-.cat-chip.active{
-  background:var(--pri);border-color:var(--pri);
-  color:#fff;
+.coupon-card::before{
+  content:'';position:absolute;left:-8px;top:50%;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--bg);transform:translateY(-50%);
 }
+.coupon-card::after{
+  content:'';position:absolute;right:-8px;top:50%;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--bg);transform:translateY(-50%);
+}
+.coupon-card:active{transform:scale(.98);box-shadow:var(--shadow)}
+.coupon-img{
+  width:80px;height:80px;border-radius:10px;
+  object-fit:cover;flex-shrink:0;
+  background:var(--pri-pale);
+}
+.coupon-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+.coupon-title{
+  font-size:12px;font-weight:700;line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;color:var(--text);
+}
+.coupon-meta{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.coupon-discount{
+  background:linear-gradient(135deg,#ef4444,#dc2626);
+  color:#fff;font-size:11px;font-weight:900;
+  padding:3px 8px;border-radius:6px;
+}
+.coupon-price{
+  font-size:14px;font-weight:900;color:var(--pri-dark);
+}
+.coupon-orig{
+  font-size:11px;color:var(--muted);
+  text-decoration:line-through;
+}
+.skel-coupon{height:104px;border-radius:14px;margin:0 14px}
 
 /* ===== HOME PAGE ===== */
 .page{display:none}
@@ -384,15 +415,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <button class="s-btn" onclick="goSearch()"><i class="fas fa-search"></i></button>
     </div>
   </div>
-  <div class="cats-scroll" id="catsBar">
-    <div class="cat-chip active" onclick="selectCat('',this)">🏠 الكل</div>
-    <div class="cat-chip" onclick="selectCat('electronics',this)">📱 إلكترونيات</div>
-    <div class="cat-chip" onclick="selectCat('fashion',this)">👗 أزياء</div>
-    <div class="cat-chip" onclick="selectCat('home',this)">🏠 منزل</div>
-    <div class="cat-chip" onclick="selectCat('beauty',this)">💄 جمال</div>
-    <div class="cat-chip" onclick="selectCat('kids',this)">🧸 أطفال</div>
-    <div class="cat-chip" onclick="selectCat('sports',this)">⚽ رياضة</div>
-  </div>
 </div>
 
 <!-- HOME PAGE -->
@@ -418,6 +440,18 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
       <div class="skel skel-card"></div>
       <div class="skel skel-card"></div>
       <div class="skel skel-card"></div>
+    </div>
+  </div>
+
+  <div class="sec" id="couponsSec">
+    <div class="sec-header">
+      <div class="sec-title"><i class="fas fa-ticket-alt"></i> كوبونات وعروض حصرية</div>
+      <span class="sec-badge" id="couponsBadge">جاري التحميل...</span>
+    </div>
+    <div id="couponsList" class="coupons-list">
+      <div class="skel skel-coupon"></div>
+      <div class="skel skel-coupon"></div>
+      <div class="skel skel-coupon"></div>
     </div>
   </div>
 
@@ -787,16 +821,45 @@ function goSearch(){
   fetchSearch(true);
 }
 
-function selectCat(cat,el){
-  curCat=cat;
-  document.querySelectorAll('.cat-chip').forEach(b=>b.classList.remove('active'));
-  el.classList.add('active');
-  if(cat)track('category',cat);
-  if(curQ||cat){
-    curPage=1;curProducts=[];
-    showPage(cat?'searchPage':'homePage');
-    if(cat){fetchSearch(true)}
-  }else{showPage('homePage')}
+async function fetchCoupons(){
+  const list=document.getElementById('couponsList');
+  const badge=document.getElementById('couponsBadge');
+  try{
+    const r=await fetch('/api/store/coupons');
+    const data=await r.json();
+    const items=data.products||[];
+    if(items.length===0){
+      list.innerHTML='<div style="text-align:center;padding:30px 20px;color:var(--muted)"><i class="fas fa-ticket-alt" style="font-size:36px;display:block;margin-bottom:8px;opacity:.2;color:var(--pri)"></i><p style="font-size:13px">لا توجد كوبونات متاحة حالياً</p></div>';
+      badge.textContent='0 عرض';
+      return;
+    }
+    badge.textContent=items.length+' عرض';
+    list.innerHTML=items.map(p=>{
+      const disc=p.discount?String(p.discount).replace(/[^\d]/g,''):'';
+      const discBadge=disc?`<span class="coupon-discount">-${disc}%</span>`:'';
+      const orig=p.original_price&&p.original_price!==p.sale_price?`<span class="coupon-orig">$${p.original_price}</span>`:'';
+      const img=p.image_url?`<img class="coupon-img" src="${esc(p.image_url)}" onerror="this.style.background='var(--pri-pale)';this.removeAttribute('src')">`:'<div class="coupon-img"></div>';
+      return `<div class="coupon-card" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
+        ${img}
+        <div class="coupon-body">
+          <div class="coupon-title">${esc(p.title||'')}</div>
+          <div class="coupon-meta">
+            ${discBadge}
+            <span class="coupon-price">$${p.sale_price||p.price||'?'}</span>
+            ${orig}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    list.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">تعذّر تحميل الكوبونات</div>';
+    badge.textContent='—';
+  }
+}
+
+function openCouponProduct(id,url){
+  track('click','coupon:'+id);
+  if(url)window.open(url,'_blank');
 }
 
 function setFlt(s,el){
@@ -936,6 +999,7 @@ async function doImgSearch(){
 }
 
 loadSaved();
+fetchCoupons();
 </script>
 </body>
 </html>

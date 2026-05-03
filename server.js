@@ -2248,6 +2248,35 @@ app.get('/api/store/product-info', async (req, res) => {
   }
 });
 
+// Coupons / hot deals endpoint — cached 30min
+let couponsCache = { data: null, time: 0 };
+app.get('/api/store/coupons', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (couponsCache.data && (now - couponsCache.time) < 30 * 60 * 1000) {
+      return res.json({ success: true, products: couponsCache.data, cached: true });
+    }
+    const result = await searchHotProducts({ page: '1', limit: '20' });
+    if (!result.success) return res.json({ success: false, products: [] });
+    const withDiscount = (result.products || [])
+      .filter(p => {
+        const d = p.discount ? parseInt(String(p.discount).replace(/[^\d]/g, '')) : 0;
+        return d >= 30 || (p.original_price && p.sale_price && parseFloat(p.original_price) > parseFloat(p.sale_price) * 1.3);
+      })
+      .sort((a, b) => {
+        const da = parseInt(String(a.discount || '0').replace(/[^\d]/g, '')) || 0;
+        const db = parseInt(String(b.discount || '0').replace(/[^\d]/g, '')) || 0;
+        return db - da;
+      })
+      .slice(0, 12);
+    const finalList = withDiscount.length > 0 ? withDiscount : (result.products || []).slice(0, 8);
+    couponsCache = { data: finalList, time: now };
+    res.json({ success: true, products: finalList });
+  } catch (e) {
+    res.json({ success: false, products: [], error: e.message });
+  }
+});
+
 app.get('/api/store/search', async (req, res) => {
   try {
     const { q, category, minPrice, maxPrice, sort, page } = req.query;
