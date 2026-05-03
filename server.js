@@ -366,7 +366,27 @@ async function sendPostWithImage(bot, channel, message, imageUrl, productLink) {
     } catch (e) { console.log('⚠️ fetchLinkPreview failed:', e.message); }
   }
 
-  // الأخير: نص فقط
+  // المحاولة 4 (الأخيرة قبل النص): استخدم رابط الصورة الأصلي كما هو
+  // إن لم يتمكّن تيليغرام من جلبه كصورة، يضمّنه في معاينة الرابط داخل الرسالة
+  if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+    try {
+      // إعادة محاولة sendPhoto مع timeout أطول مرة أخيرة
+      await bot.telegram.sendPhoto(channel, imageUrl, { caption });
+      return { ok: true, via: 'url_retry' };
+    } catch (e) {
+      console.log('⚠️ sendPhoto URL retry failed:', e.message);
+    }
+    // كحل أخير: ضع رابط الصورة في بداية الرسالة لتظهر كمعاينة رابط
+    try {
+      const msgWithImage = imageUrl + '\n\n' + message.substring(0, 4000);
+      await bot.telegram.sendMessage(channel, msgWithImage, { link_preview_options: { is_disabled: false, url: imageUrl, prefer_large_media: true } });
+      return { ok: true, via: 'link_preview' };
+    } catch (e) {
+      console.log('⚠️ link_preview send failed:', e.message);
+    }
+  }
+
+  // الأخير المطلق: نص فقط
   await bot.telegram.sendMessage(channel, message.substring(0, 4096));
   return { ok: true, via: 'text_only' };
 }
