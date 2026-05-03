@@ -102,20 +102,28 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .coup-mega-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 2px 4px}
 .coup-mega-scroll::-webkit-scrollbar{display:none}
 .coup-mega{
-  flex-shrink:0;background:#fff;border-radius:8px;
-  padding:8px 10px;min-width:90px;text-align:center;
-  border:1px solid #fecaca;position:relative;
+  flex-shrink:0;background:#fff;border-radius:12px;
+  padding:14px 12px 10px;min-width:130px;text-align:center;
+  border:1px solid #fee2e2;position:relative;
+  box-shadow:0 2px 8px rgba(0,0,0,.04);
+  display:flex;flex-direction:column;align-items:stretch;
 }
-.coup-mega-disc{font-size:10px;color:#dc2626;font-weight:700;margin-bottom:2px}
-.coup-mega-amt{font-size:16px;font-weight:900;color:#dc2626;line-height:1}
-.coup-mega-cond{font-size:9px;color:#6b7280;margin-top:4px}
+.coup-mega-amt{font-size:13px;color:#dc2626;font-weight:700;letter-spacing:.5px}
+.coup-mega-amt b{font-size:22px;font-weight:900;letter-spacing:0}
+.coup-mega-amt span{font-size:13px;font-weight:700}
+.coup-mega-cond{font-size:11px;color:#fca5a5;margin-top:6px;font-weight:600}
+.coup-mega-code{
+  font-size:14px;font-weight:900;color:#374151;
+  letter-spacing:1.5px;margin:8px 0 10px;direction:ltr;
+  padding-top:8px;border-top:1px dashed #fde68a;
+}
 .coup-mega-btn{
-  margin-top:6px;background:#fff;border:1.2px solid #dc2626;
-  color:#dc2626;border-radius:14px;padding:3px 10px;
-  font-size:10px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;
+  background:#dc2626;border:none;color:#fff;
+  border-radius:24px;padding:8px 0;
+  font-size:13px;font-weight:800;font-family:'Cairo',sans-serif;cursor:pointer;
   width:100%;
 }
-.coup-mega-btn.active{background:#dc2626;color:#fff;border-color:#dc2626}
+.coup-mega-btn:active{transform:scale(.97)}
 
 .coup-section-title{
   text-align:center;font-size:16px;font-weight:900;
@@ -1068,31 +1076,38 @@ async function fetchCouponsPage(){
 function renderMegaCoupons(){
   const mega=document.getElementById('coupMegaScroll');
   if(!mega)return;
-  let items=coupAllItems.filter(p=>p.is_mega);
-  if(items.length===0)items=coupAllItems;
-  if(items.length===0){
-    mega.innerHTML=coupAdmin
-      ?'<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center">اضغط + لإضافة أول كوبون</div>'
-      :'<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center;opacity:.7">لا توجد كوبونات حالياً</div>';
+  if(coupAllItems.length===0){
+    mega.innerHTML='<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center;opacity:.7">لا توجد كوبونات حالياً</div>';
     return;
   }
-  mega.innerHTML=items.map(p=>{
-    const sav=(p.original_price&&p.sale_price)?(parseFloat(p.original_price)-parseFloat(p.sale_price)).toFixed(2):(p.discount||'?');
-    const cond=p.original_price?('طلبات +US$'+p.original_price):(p.shop_name||(p.discount?'-'+p.discount+'%':'عرض حصري'));
-    const adminBtn=`<button class="coup-mega-admin" onclick="event.stopPropagation();editCoupon('${esc(p.id)}')"><i class="fas fa-pen"></i></button>`;
-    return `<div class="coup-mega" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
-      ${adminBtn}
-      <div class="coup-mega-disc">خصم US</div>
-      <div class="coup-mega-amt">$${sav}</div>
-      <div class="coup-mega-cond">${esc(cond)}</div>
-      <button class="coup-mega-btn">تذكير</button>
+  mega.innerHTML=coupAllItems.map(p=>{
+    return `<div class="coup-mega">
+      <div class="coup-mega-amt">US <b>$${p.amount_off||0}</b> <span>OFF</span></div>
+      <div class="coup-mega-cond">orders US $${p.min_order||0}+</div>
+      <div class="coup-mega-code">${esc(p.code||'')}</div>
+      <button class="coup-mega-btn" onclick="copyCouponCode('${esc(p.code||'')}','${esc(p.id)}',this)">Copy</button>
     </div>`;
   }).join('');
 }
 
-function openCouponProduct(id,url){
-  track('click','coupon:'+id);
-  if(url)window.open(url,'_blank');
+function copyCouponCode(code,id,btn){
+  if(!code)return;
+  try{
+    navigator.clipboard.writeText(code).then(()=>{
+      track('click','coupon:'+id);
+      const orig=btn.textContent;
+      btn.textContent='✓ تم النسخ';
+      btn.style.background='#16a34a';
+      setTimeout(()=>{btn.textContent=orig;btn.style.background=''},1500);
+    });
+  }catch(e){
+    const t=document.createElement('input');
+    t.value=code;document.body.appendChild(t);t.select();
+    try{document.execCommand('copy')}catch(e){}
+    document.body.removeChild(t);
+    btn.textContent='✓ تم النسخ';
+    setTimeout(()=>{btn.textContent='Copy'},1500);
+  }
 }
 
 // ==== Coupon Admin Modal ====

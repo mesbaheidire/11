@@ -2273,22 +2273,15 @@ app.get('/api/store/coupons', async (req, res) => {
 app.post('/api/store/coupons', async (req, res) => {
   try {
     const c = req.body || {};
-    if (!c.title || !c.product_url) {
-      return res.status(400).json({ success: false, error: 'title و product_url مطلوبان' });
+    if (!c.code || !c.amount_off) {
+      return res.status(400).json({ success: false, error: 'كود الكوبون وقيمة الخصم مطلوبان' });
     }
     const list = await loadManualCoupons();
     const newCoupon = {
       id: c.id || ('mc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
-      title: String(c.title).trim(),
-      image_url: c.image_url || '',
-      product_url: c.product_url,
-      promotion_link: c.promotion_link || c.product_url,
-      sale_price: c.sale_price || '',
-      original_price: c.original_price || '',
-      discount: c.discount || '',
-      shop_name: c.shop_name || '',
-      category: c.category || 'other',
-      is_mega: !!c.is_mega,
+      code: String(c.code).trim().toUpperCase(),
+      amount_off: parseFloat(c.amount_off) || 0,
+      min_order: parseFloat(c.min_order) || 0,
       created_at: Date.now()
     };
     list.unshift(newCoupon);
@@ -2306,6 +2299,9 @@ app.put('/api/store/coupons/:id', async (req, res) => {
     const idx = list.findIndex(c => c.id === req.params.id);
     if (idx === -1) return res.status(404).json({ success: false, error: 'الكوبون غير موجود' });
     const updates = req.body || {};
+    if (updates.code) updates.code = String(updates.code).trim().toUpperCase();
+    if (updates.amount_off !== undefined) updates.amount_off = parseFloat(updates.amount_off) || 0;
+    if (updates.min_order !== undefined) updates.min_order = parseFloat(updates.min_order) || 0;
     list[idx] = { ...list[idx], ...updates, id: list[idx].id };
     await saveManualCoupons(list);
     res.json({ success: true, coupon: list[idx] });
