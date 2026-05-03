@@ -750,6 +750,7 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     </div>
     <div class="det-message" id="detMessage" style="display:none">
       <div class="message-box">
+        <div class="message-label"><i class="fas fa-comment-dots"></i> وصف المنتج</div>
         <div class="message-text" id="detMessageText"></div>
       </div>
     </div>
@@ -986,7 +987,7 @@ async function openSaved(p){track('click',p?.title||'saved_product');
   let usdPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
   if(isDZD&&usdPrice){usdPrice=(parseFloat(usdPrice)/DZD).toFixed(2)}
   if(p.apiPrice&&(!usdPrice||usdPrice==='0'||usdPrice==='NaN'))usdPrice=p.apiPrice;
-  curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:p.rating||null,orders:p.orders||null,discount:p.discount||null,shop_name:null,_coupon:p.coupon||null,_message:null,_saved:true};
+  curProduct={title:p.title,image_url:p.image,price:usdPrice,currency:'USD',promotion_link:p.link,product_url:p.link,rating:p.rating||null,orders:p.orders||null,discount:p.discount||null,shop_name:null,_coupon:p.coupon||null,_message:p.message||p.hook||null,_saved:true};
   showDet();
   // جلب فوري للبيانات المفقودة (تقييم/طلب/خصم) من AliExpress API
   if(!curProduct.rating||!curProduct.orders||!curProduct.discount){
@@ -1287,20 +1288,6 @@ function fmtDiscount(d,orig,sale){
   return '—';
 }
 
-// تصفية الوصف: إبقاء فقط الأسطر التي تبدأ بـ 📢 / 📌 / ✅ / 🎁
-function filterMessage(msg){
-  if(!msg)return '';
-  const allowed=['📢','📌','✅','🎁'];
-  const lines=String(msg).split(/\r?\n/);
-  const kept=[];
-  for(const ln of lines){
-    const t=ln.trim();
-    if(!t)continue;
-    if(allowed.some(e=>t.startsWith(e)))kept.push(t);
-  }
-  return kept.join('\n');
-}
-
 // ===== DETAIL =====
 function openDet(p){
   curProduct=p;
@@ -1351,13 +1338,7 @@ function showDet(){
   const couponEl=document.getElementById('detCoupon');
   if(p._coupon){couponEl.style.display='block';document.getElementById('detCouponCode').textContent=p._coupon}else{couponEl.style.display='none'}
   const msgEl=document.getElementById('detMessage');
-  const filtered=filterMessage(p._message);
-  if(filtered){
-    msgEl.style.display='block';
-    document.getElementById('detMessageText').textContent=filtered;
-  }else{
-    msgEl.style.display='none';
-  }
+  if(p._message){msgEl.style.display='block';document.getElementById('detMessageText').textContent=p._message}else{msgEl.style.display='none'}
   document.getElementById('detOverlay').classList.add('show');
   if(tg){tg.BackButton.show();tg.BackButton.onClick(closeDet)}
 }
