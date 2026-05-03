@@ -335,6 +335,86 @@
       </div>
     </div>
 
+    <div class="cleanup-card" id="couponsSection" style="margin-top:15px">
+      <div class="cleanup-header">
+        <div class="title"><i class="fas fa-ticket-alt"></i> إدارة كوبونات مركز القسائم</div>
+        <span id="coupCountBadge" style="background:var(--card2);color:var(--muted);padding:4px 10px;border-radius:12px;font-size:12px">0</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+        أضف وعدّل كوبونات الخصم التي تظهر في "مركز القسائم" بالصفحة الرئيسية للمتجر.
+      </div>
+
+      <div id="coupAdminList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <div style="text-align:center;color:var(--muted);font-size:12px;padding:18px">جاري التحميل...</div>
+      </div>
+
+      <div style="border-top:1px dashed var(--border);padding-top:14px;margin-top:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <i class="fas fa-plus-circle" style="color:var(--orange)"></i>
+          <span id="coupFormTitle">إضافة كوبون جديد</span>
+        </div>
+        <input type="hidden" id="caId">
+
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">📝 اسم المنتج / الكوبون *</label>
+          <input type="text" id="caName" placeholder="مثال: سماعات بلوتوث لاسلكية" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🔗 رابط المنتج (AliExpress) *</label>
+          <input type="text" id="caUrl" placeholder="https://aliexpress.com/item/..." style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px;direction:ltr">
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🖼️ رابط الصورة</label>
+          <input type="text" id="caImg" placeholder="https://..." style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px;direction:ltr">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">💰 السعر بعد الخصم ($)</label>
+            <input type="number" step="0.01" id="caSale" placeholder="9.99" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🏷️ السعر الأصلي ($)</label>
+            <input type="number" step="0.01" id="caOrig" placeholder="29.99" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">📊 نسبة الخصم (%)</label>
+            <input type="number" id="caDisc" placeholder="50" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🗂️ التصنيف</label>
+            <select id="caCat" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+              <option value="other">عام</option>
+              <option value="tech">التقنيات</option>
+              <option value="home">البيت</option>
+              <option value="sport">الرياضات والترفيه</option>
+              <option value="fashion">الأزياء</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:6px">🏪 اسم المتجر</label>
+          <input type="text" id="caShop" placeholder="AliExpress Official Store" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-family:inherit;font-size:13px">
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:14px;cursor:pointer">
+          <input type="checkbox" id="caMega" style="width:18px;height:18px;cursor:pointer">
+          ⭐ عرض في "كوبونات ميجا" (الشريط المميّز)
+        </label>
+
+        <div class="cleanup-actions">
+          <button class="btn-save" onclick="saveCouponAdmin()"><i class="fas fa-save"></i> <span id="caSaveLbl">إضافة الكوبون</span></button>
+          <button class="btn-delete" id="caCancelBtn" style="display:none;background:linear-gradient(135deg,#6b7280,#4b5563)" onclick="resetCouponForm()"><i class="fas fa-times"></i> إلغاء</button>
+        </div>
+      </div>
+    </div>
+
     <div id="mainContent">
       <div class="loading"><i class="fas fa-spinner"></i>جاري التحميل...</div>
     </div>
@@ -688,9 +768,120 @@
       document.getElementById('popupPreviewOv').style.display='none';
     }
 
+    // ===== COUPONS ADMIN =====
+    let coupAdminList=[];
+
+    async function loadCouponsAdmin(){
+      try{
+        const r=await fetch('/api/store/coupons');
+        const d=await r.json();
+        coupAdminList=d.products||[];
+        renderCouponsAdmin();
+      }catch(e){
+        document.getElementById('coupAdminList').innerHTML='<div style="text-align:center;color:var(--red);font-size:12px;padding:14px">تعذّر تحميل الكوبونات</div>';
+      }
+    }
+
+    function renderCouponsAdmin(){
+      const box=document.getElementById('coupAdminList');
+      const badge=document.getElementById('coupCountBadge');
+      badge.textContent=coupAdminList.length;
+      if(coupAdminList.length===0){
+        box.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:18px"><i class="fas fa-ticket-alt" style="display:block;font-size:30px;opacity:.25;margin-bottom:6px"></i>لا توجد كوبونات بعد. أضف أول واحد بالأسفل.</div>';
+        return;
+      }
+      box.innerHTML=coupAdminList.map(c=>{
+        const sav=(c.original_price&&c.sale_price)?(parseFloat(c.original_price)-parseFloat(c.sale_price)).toFixed(2):null;
+        const img=c.image_url?`<img src="${escAttr(c.image_url)}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--card2)" onerror="this.style.display='none'">`:'<div style="width:50px;height:50px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted)"><i class="fas fa-image"></i></div>';
+        const mega=c.is_mega?'<span style="background:var(--orange);color:#fff;font-size:9px;padding:2px 6px;border-radius:6px;margin-right:4px">⭐ ميجا</span>':'';
+        const discTxt=sav?('خصم $'+sav):(c.discount?('-'+c.discount+'%'):'');
+        return `<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;display:flex;align-items:center;gap:10px">
+          ${img}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.title||'')}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+              ${mega}
+              <span style="color:#ef4444;font-weight:700">${discTxt}</span>
+              ${c.shop_name?'<span>· '+escHtml(c.shop_name)+'</span>':''}
+            </div>
+          </div>
+          <button onclick="editCouponAdmin('${escAttr(c.id)}')" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:11px;cursor:pointer" title="تعديل"><i class="fas fa-pen"></i></button>
+          <button onclick="deleteCouponAdmin('${escAttr(c.id)}')" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:11px;cursor:pointer" title="حذف"><i class="fas fa-trash"></i></button>
+        </div>`;
+      }).join('');
+    }
+
+    function escHtml(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+    function escAttr(s){return escHtml(s)}
+
+    function editCouponAdmin(id){
+      const c=coupAdminList.find(x=>x.id===id);
+      if(!c)return;
+      document.getElementById('caId').value=c.id;
+      document.getElementById('caName').value=c.title||'';
+      document.getElementById('caUrl').value=c.product_url||'';
+      document.getElementById('caImg').value=c.image_url||'';
+      document.getElementById('caSale').value=c.sale_price||'';
+      document.getElementById('caOrig').value=c.original_price||'';
+      document.getElementById('caDisc').value=c.discount||'';
+      document.getElementById('caCat').value=c.category||'other';
+      document.getElementById('caShop').value=c.shop_name||'';
+      document.getElementById('caMega').checked=!!c.is_mega;
+      document.getElementById('coupFormTitle').textContent='تعديل الكوبون';
+      document.getElementById('caSaveLbl').textContent='حفظ التعديلات';
+      document.getElementById('caCancelBtn').style.display='inline-flex';
+      document.getElementById('couponsSection').scrollIntoView({behavior:'smooth',block:'end'});
+    }
+
+    function resetCouponForm(){
+      ['caId','caName','caUrl','caImg','caSale','caOrig','caDisc','caShop'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('caCat').value='other';
+      document.getElementById('caMega').checked=false;
+      document.getElementById('coupFormTitle').textContent='إضافة كوبون جديد';
+      document.getElementById('caSaveLbl').textContent='إضافة الكوبون';
+      document.getElementById('caCancelBtn').style.display='none';
+    }
+
+    async function saveCouponAdmin(){
+      const id=document.getElementById('caId').value;
+      const body={
+        title:document.getElementById('caName').value.trim(),
+        product_url:document.getElementById('caUrl').value.trim(),
+        image_url:document.getElementById('caImg').value.trim(),
+        sale_price:document.getElementById('caSale').value,
+        original_price:document.getElementById('caOrig').value,
+        discount:document.getElementById('caDisc').value,
+        category:document.getElementById('caCat').value,
+        shop_name:document.getElementById('caShop').value.trim(),
+        is_mega:document.getElementById('caMega').checked
+      };
+      if(!body.title||!body.product_url){showCleanupToast('الاسم ورابط المنتج مطلوبان','error');return}
+      try{
+        const url=id?('/api/store/coupons/'+encodeURIComponent(id)):'/api/store/coupons';
+        const r=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const d=await r.json();
+        if(!d.success){showCleanupToast(d.error||'فشل الحفظ','error');return}
+        showCleanupToast(id?'تم تحديث الكوبون':'تمت إضافة الكوبون','success');
+        resetCouponForm();
+        loadCouponsAdmin();
+      }catch(e){showCleanupToast('خطأ في الاتصال','error')}
+    }
+
+    async function deleteCouponAdmin(id){
+      if(!confirm('هل تريد حذف هذا الكوبون؟'))return;
+      try{
+        const r=await fetch('/api/store/coupons/'+encodeURIComponent(id),{method:'DELETE'});
+        const d=await r.json();
+        if(!d.success){showCleanupToast('فشل الحذف','error');return}
+        showCleanupToast('تم الحذف','success');
+        loadCouponsAdmin();
+      }catch(e){showCleanupToast('خطأ في الاتصال','error')}
+    }
+
     loadAnalytics();
     loadCleanupSettings();
     loadPopupConfig();
+    loadCouponsAdmin();
   </script>
 </body>
 </html>
