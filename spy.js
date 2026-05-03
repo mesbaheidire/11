@@ -443,9 +443,24 @@ function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
   });
 }
 
+// تنظيف رابط صور AliExpress من لاحقات .avif/.webp غير المدعومة في تيليغرام
+function sanitizeAliImageUrlSpy(url) {
+  if (!url || typeof url !== 'string' || url.startsWith('data:')) return url;
+  try {
+    let u = url.trim();
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.(avif|webp)$/i, '$1');
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.\2_?$/i, '$1');
+    u = u.replace(/_+$/, '');
+    return u;
+  } catch (e) { return url; }
+}
+
 // إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → URL retry → link_preview → نص فقط)
 async function smartSendPostSpy(bot, target, captionMessage, textMessage, productImage, imageUrl, opts = {}) {
   const sendOpts = { parse_mode: 'HTML', ...opts };
+  // تنظيف الرابط من لاحقات avif/webp
+  imageUrl = sanitizeAliImageUrlSpy(imageUrl);
+  if (typeof productImage === 'string') productImage = sanitizeAliImageUrlSpy(productImage);
   // المحاولة 1: استخدم productImage الجاهز (Buffer أو URL)
   if (productImage) {
     try {

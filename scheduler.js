@@ -4,6 +4,18 @@ const { Telegraf } = require('telegraf');
 
 const SCHEDULED_FILE = path.join(__dirname, 'scheduled_posts.json');
 
+// تنظيف رابط صور AliExpress من لاحقات .avif/.webp غير المدعومة في تيليغرام
+function sanitizeAliImg(url) {
+  if (!url || typeof url !== 'string' || url.startsWith('data:')) return url;
+  try {
+    let u = url.trim();
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.(avif|webp)$/i, '$1');
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.\2_?$/i, '$1');
+    u = u.replace(/_+$/, '');
+    return u;
+  } catch (e) { return url; }
+}
+
 class PostScheduler {
   constructor() {
     this.scheduledPosts = this.loadScheduledPosts();
@@ -116,7 +128,7 @@ class PostScheduler {
           const imageBuffer = Buffer.from(base64Data, 'base64');
           await bot.telegram.sendPhoto(envChannelId, { source: imageBuffer }, { caption: message });
         } else {
-          await bot.telegram.sendPhoto(envChannelId, image, { caption: message });
+          await bot.telegram.sendPhoto(envChannelId, sanitizeAliImg(image), { caption: message });
         }
       } else {
         await bot.telegram.sendMessage(envChannelId, message);
@@ -146,7 +158,7 @@ class PostScheduler {
           const imageBuffer = Buffer.from(base64Data, 'base64');
           await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: message });
         } else {
-          await bot.telegram.sendPhoto(ch, image, { caption: message });
+          await bot.telegram.sendPhoto(ch, sanitizeAliImg(image), { caption: message });
         }
       } else {
         await bot.telegram.sendMessage(ch, message);

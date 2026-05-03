@@ -303,17 +303,40 @@ app.post('/api/excel/parse', excelUpload.single('file'), (req, res) => {
   }
 });
 
+// تنظيف رابط صور AliExpress: إزالة لاحقات avif/webp وتعديل الجودة → رابط .jpg نقي يدعمه تيليغرام
+// أمثلة:
+//   xxx.jpg_960x960q75.jpg_.avif      → xxx.jpg
+//   xxx.jpg_640x640q90.jpg_.webp      → xxx.jpg
+//   xxx.png_Q75.png_.webp             → xxx.png
+function sanitizeAliImageUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  if (url.startsWith('data:')) return url;
+  try {
+    let u = url.trim();
+    // إزالة لاحقة AVIF أو WEBP بعد .jpg_/.png_
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.(avif|webp)$/i, '$1');
+    // إزالة لاحقات الجودة (_960x960q75.jpg_) أو (_Q75.jpg_) إلخ
+    u = u.replace(/(\.(jpe?g|png))_[^/]*?\.\2_?$/i, '$1');
+    // إزالة شرطة سفلية أخيرة شاذة
+    u = u.replace(/_+$/, '');
+    return u;
+  } catch (e) {
+    return url;
+  }
+}
+
 // تحميل صورة كـ Buffer لتجاوز قيود تيليغرام في جلب URL مباشرة
 async function downloadImageBuffer(url, timeoutMs = 15000) {
   try {
-    const r = await axios.get(url, {
+    const cleanUrl = sanitizeAliImageUrl(url);
+    const r = await axios.get(cleanUrl, {
       responseType: 'arraybuffer',
       timeout: timeoutMs,
       maxContentLength: 10 * 1024 * 1024,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0',
         'Referer': 'https://www.aliexpress.com/',
-        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+        'Accept': 'image/jpeg,image/png,image/*;q=0.8'
       }
     });
     if (r.status >= 200 && r.status < 300 && r.data && r.data.byteLength > 200) {
@@ -328,6 +351,8 @@ async function downloadImageBuffer(url, timeoutMs = 15000) {
 // إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → نص فقط)
 async function sendPostWithImage(bot, channel, message, imageUrl, productLink) {
   const caption = message.substring(0, 1024);
+  // تنظيف الرابط من لاحقات avif/webp غير المدعومة
+  imageUrl = sanitizeAliImageUrl(imageUrl);
 
   // المحاولة 1: تحميل الصورة كـ Buffer
   if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
@@ -1100,6 +1125,10 @@ app.post('/api/publish-telegram', async (req, res) => {
       }
     }
 
+    // تنظيف رابط الصورة قبل الإرسال (إزالة .avif/.webp اللواحق)
+    if (resolvedImage && !resolvedImage.startsWith('data:')) {
+      resolvedImage = sanitizeAliImageUrl(resolvedImage);
+    }
     for (const ch of channels) {
       if (resolvedImage) {
         if (resolvedImage.startsWith('data:image')) {
@@ -1107,7 +1136,14 @@ app.post('/api/publish-telegram', async (req, res) => {
           const imageBuffer = Buffer.from(base64Data, 'base64');
           await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: finalMessage, ...sendOpts });
         } else {
-          await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage, ...sendOpts });
+          // محاولة 1: تحميل كـ Buffer (الأكثر موثوقية)
+          const buf = await downloadImageBuffer(resolvedImage);
+          if (buf) {
+            await bot.telegram.sendPhoto(ch, { source: buf }, { caption: finalMessage, ...sendOpts });
+          } else {
+            // fallback: تيليغرام يجلب الرابط مباشرة
+            await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage, ...sendOpts });
+          }
         }
       } else {
         await bot.telegram.sendMessage(ch, finalMessage, sendOpts);
