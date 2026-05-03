@@ -346,11 +346,13 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 .pcard-orders{font-size:10px;color:var(--muted)}
 .pcard-buy{
   width:100%;background:var(--pri);
-  border:none;border-radius:10px;padding:8px;
+  border:none;border-radius:10px;padding:8px 6px;
   color:#fff;font-family:'Cairo',sans-serif;font-size:11px;font-weight:700;
   cursor:pointer;margin-top:4px;
   display:flex;align-items:center;justify-content:center;gap:4px;
+  white-space:nowrap;line-height:1.2;
 }
+.pcard-buy i{font-size:11px;flex-shrink:0}
 .pcard-buy:active{opacity:.85}
 
 /* ===== SEARCH PAGE ===== */
