@@ -551,13 +551,23 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
     <div class="hero-emoji">🎁</div>
   </div>
 
-  <div class="coupons-entry" onclick="openCouponsPage()">
-    <div class="ce-icon">🎟</div>
-    <div class="ce-text">
-      <div class="ce-title">مركز القسائم</div>
-      <div class="ce-sub">اكتشف كوبونات وعروض حصرية من أفضل المتاجر</div>
+  <div class="coup-hero" id="coupHeroHome">
+    <div class="coup-hero-top">
+      <button class="coup-back" onclick="openCouponModal()" title="إضافة كوبون" id="coupHeroAdd" style="display:none">
+        <i class="fas fa-plus"></i>
+      </button>
+      <div class="coup-hero-title">مركز القسائم</div>
+      <div style="width:32px;display:flex;align-items:center;justify-content:center;color:#064e3b">
+        <i class="fas fa-chevron-left"></i>
+      </div>
     </div>
-    <div class="ce-arrow"><i class="fas fa-chevron-left"></i></div>
+    <div class="coup-countdown">إستعداد الصيف ينتهي في:<b id="coupCountdown">—</b></div>
+    <div class="coup-mega-scroll" id="coupMegaScroll">
+      <div class="skel skel-coup" style="min-width:90px"></div>
+      <div class="skel skel-coup" style="min-width:90px"></div>
+      <div class="skel skel-coup" style="min-width:90px"></div>
+      <div class="skel skel-coup" style="min-width:90px"></div>
+    </div>
   </div>
 
   <div class="sec" id="savedSec">
@@ -575,46 +585,6 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 
 </div>
 
-<!-- COUPONS PAGE -->
-<div class="page" id="couponsPage">
-  <div class="coup-hero">
-    <div class="coup-hero-top">
-      <button class="coup-back" onclick="showPage('homePage')"><i class="fas fa-chevron-right"></i></button>
-      <div class="coup-hero-title">مركز القسائم</div>
-      <div style="width:32px"></div>
-    </div>
-    <div class="coup-countdown">إستعداد الصيف ينتهي في:<b id="coupCountdown">—</b></div>
-    <div class="coup-mega-scroll" id="coupMegaScroll">
-      <div class="skel skel-coup" style="min-width:90px"></div>
-      <div class="skel skel-coup" style="min-width:90px"></div>
-      <div class="skel skel-coup" style="min-width:90px"></div>
-      <div class="skel skel-coup" style="min-width:90px"></div>
-    </div>
-  </div>
-
-  <div class="coup-section-title">كوبونات المتجر</div>
-  <div class="coup-tabs" id="coupTabs">
-    <div class="coup-tab active" onclick="filterCoupTab(this,'all')">الكل</div>
-    <div class="coup-tab" onclick="filterCoupTab(this,'mega')">كوبونات ميجا</div>
-    <div class="coup-tab" onclick="filterCoupTab(this,'tech')">التقنيات</div>
-    <div class="coup-tab" onclick="filterCoupTab(this,'home')">البيت</div>
-    <div class="coup-tab" onclick="filterCoupTab(this,'sport')">الرياضات والترفيه</div>
-    <div class="coup-tab" onclick="filterCoupTab(this,'fashion')">الأزياء</div>
-  </div>
-
-  <div class="coup-grid" id="coupGrid">
-    <div class="skel skel-coup"></div>
-    <div class="skel skel-coup"></div>
-    <div class="skel skel-coup"></div>
-    <div class="skel skel-coup"></div>
-    <div class="skel skel-coup"></div>
-    <div class="skel skel-coup"></div>
-  </div>
-
-  <button class="coup-fab" id="coupFab" onclick="openCouponModal()" title="إضافة كوبون">
-    <i class="fas fa-plus"></i>
-  </button>
-</div>
 
 <!-- COUPON ADD/EDIT MODAL -->
 <div class="coup-modal-bg" id="coupModalBg" onclick="if(event.target===this)closeCouponModal()">
@@ -1060,16 +1030,8 @@ function toggleCouponAdmin(){
 }
 function applyAdminUI(){
   document.body.classList.toggle('admin-mode',coupAdmin);
-  const fab=document.getElementById('coupFab');
-  if(fab)fab.classList.toggle('show',coupAdmin && document.getElementById('couponsPage').classList.contains('active'));
-}
-
-function openCouponsPage(){
-  track('click','coupons_center');
-  showPage('couponsPage');
-  startCoupCountdown();
-  fetchCouponsPage();
-  applyAdminUI();
+  const addBtn=document.getElementById('coupHeroAdd');
+  if(addBtn)addBtn.style.display=coupAdmin?'flex':'none';
 }
 
 function startCoupCountdown(){
@@ -1091,82 +1053,39 @@ function startCoupCountdown(){
 }
 
 async function fetchCouponsPage(){
-  const grid=document.getElementById('coupGrid');
   const mega=document.getElementById('coupMegaScroll');
   try{
     const r=await fetch('/api/store/coupons');
     const data=await r.json();
     coupAllItems=data.products||[];
     coupLoaded=true;
-    if(coupAllItems.length===0){
-      const adminHint=coupAdmin?'<p style="font-size:12px;margin-top:8px;color:#dc2626">اضغط زر + لإضافة أول كوبون</p>':'';
-      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--muted)"><i class="fas fa-ticket-alt" style="font-size:40px;display:block;margin-bottom:10px;opacity:.2;color:#dc2626"></i><p style="font-size:13px">لا توجد كوبونات متاحة حالياً</p>'+adminHint+'</div>';
-      mega.innerHTML='';
-      return;
-    }
     renderMegaCoupons();
-    renderCoupGrid();
   }catch(e){
-    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted);font-size:12px">تعذّر تحميل الكوبونات</div>';
+    if(mega)mega.innerHTML='<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center">تعذّر تحميل الكوبونات</div>';
   }
 }
 
 function renderMegaCoupons(){
   const mega=document.getElementById('coupMegaScroll');
-  let top=coupAllItems.filter(p=>p.is_mega);
-  if(top.length===0){
-    top=coupAllItems
-      .filter(p=>p.original_price&&p.sale_price)
-      .map(p=>({...p,_sav:parseFloat(p.original_price)-parseFloat(p.sale_price)}))
-      .sort((a,b)=>b._sav-a._sav)
-      .slice(0,6);
+  if(!mega)return;
+  let items=coupAllItems.filter(p=>p.is_mega);
+  if(items.length===0)items=coupAllItems;
+  if(items.length===0){
+    mega.innerHTML=coupAdmin
+      ?'<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center">اضغط + لإضافة أول كوبون</div>'
+      :'<div style="padding:14px;color:#065f46;font-size:12px;width:100%;text-align:center;opacity:.7">لا توجد كوبونات حالياً</div>';
+    return;
   }
-  if(top.length===0){mega.innerHTML='';return}
-  mega.innerHTML=top.map(p=>{
+  mega.innerHTML=items.map(p=>{
     const sav=(p.original_price&&p.sale_price)?(parseFloat(p.original_price)-parseFloat(p.sale_price)).toFixed(2):(p.discount||'?');
+    const cond=p.original_price?('طلبات +US$'+p.original_price):(p.shop_name||(p.discount?'-'+p.discount+'%':'عرض حصري'));
     const adminBtn=`<button class="coup-mega-admin" onclick="event.stopPropagation();editCoupon('${esc(p.id)}')"><i class="fas fa-pen"></i></button>`;
     return `<div class="coup-mega" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
       ${adminBtn}
       <div class="coup-mega-disc">خصم US</div>
       <div class="coup-mega-amt">$${sav}</div>
-      <div class="coup-mega-cond">${p.original_price?('طلبات +US$'+p.original_price):(p.shop_name||'عرض حصري')}</div>
+      <div class="coup-mega-cond">${esc(cond)}</div>
       <button class="coup-mega-btn">تذكير</button>
-    </div>`;
-  }).join('');
-}
-
-function filterCoupTab(el,tab){
-  document.querySelectorAll('.coup-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  coupCurTab=tab;
-  renderCoupGrid();
-}
-
-function renderCoupGrid(){
-  const grid=document.getElementById('coupGrid');
-  let items=coupAllItems;
-  if(coupCurTab==='mega'){items=items.filter(p=>p.is_mega)}
-  else if(coupCurTab!=='all'){items=items.filter(p=>(p.category||'other')===coupCurTab)}
-  if(items.length===0){
-    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted);font-size:12px">لا توجد كوبونات في هذا التصنيف</div>';
-    return;
-  }
-  grid.innerHTML=items.map(p=>{
-    const sav=(p.original_price&&p.sale_price)?(parseFloat(p.original_price)-parseFloat(p.sale_price)).toFixed(2):null;
-    const disc=p.discount?String(p.discount).replace(/[^\d]/g,''):'';
-    const img=p.image_url?`<img class="coup-item-img" src="${esc(p.image_url)}" onerror="this.style.display='none'">`:'';
-    const store=p.shop_name||'AliExpress Store';
-    const adminBtn=`<button class="coup-item-admin" onclick="event.stopPropagation();editCoupon('${esc(p.id)}')"><i class="fas fa-pen"></i></button>`;
-    return `<div class="coup-item" onclick="openCouponProduct('${esc(p.id)}','${esc(p.product_url||p.promotion_link||'')}')">
-      ${adminBtn}
-      <div class="coup-item-imgwrap">
-        ${img}
-        <div class="coup-item-price">US $${p.sale_price||'?'}</div>
-      </div>
-      <div class="coup-item-store"><i class="fas fa-chevron-left"></i> ${esc(store.length>16?store.substring(0,16)+'...':store)}</div>
-      <div class="coup-item-disc">US <span>$${sav||disc||'?'}</span><small>خصم</small></div>
-      <div class="coup-item-cond">${sav?'الطلبات أكثر من $'+(parseFloat(p.original_price)).toFixed(2):(p.discount?'-'+p.discount+'%':'عرض حصري')}</div>
-      <button class="coup-item-btn">تم تحصيل الـ...</button>
     </div>`;
   }).join('');
 }
@@ -1375,6 +1294,8 @@ async function doImgSearch(){
 
 loadSaved();
 applyAdminUI();
+startCoupCountdown();
+fetchCouponsPage();
 </script>
 </body>
 </html>
