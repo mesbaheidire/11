@@ -1880,58 +1880,6 @@ const algerianCategories = {
   'sports': { id: '18', nameAr: 'رياضة', keywords: ['fitness', 'outdoor', 'camping', 'cycling'] }
 };
 
-// كاش بسيط للمنتجات الساخنة (60 دقيقة) لتجنّب استنزاف حصة API
-const hotProductsCache = new Map(); // key: category|sort|page → { ts, data }
-const HOT_CACHE_TTL = 60 * 60 * 1000;
-
-app.get('/api/hot-products', async (req, res) => {
-  try {
-    const category = (req.query.category || 'all').toString();
-    const sort = (req.query.sort || 'orders').toString(); // orders | discount | rating | commission
-    const page = parseInt(req.query.page) || 1;
-    const refresh = req.query.refresh === '1';
-    const cacheKey = `${category}|${sort}|${page}`;
-
-    if (!refresh) {
-      const cached = hotProductsCache.get(cacheKey);
-      if (cached && (Date.now() - cached.ts) < HOT_CACHE_TTL) {
-        return res.json({ success: true, cached: true, ...cached.data });
-      }
-    }
-
-    const opts = { limit: '20', page: String(page), minPrice: '1', maxPrice: '200' };
-    if (category !== 'all' && algerianCategories[category]) {
-      opts.category = algerianCategories[category].id;
-    }
-
-    const result = await searchHotProducts(opts);
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error || 'فشل جلب المنتجات الساخنة' });
-    }
-
-    let products = result.products || [];
-
-    // فرز محلي حسب الخيار
-    const num = (v) => {
-      if (v === null || v === undefined || v === '') return 0;
-      const n = parseFloat(String(v).replace(/[^\d.]/g, ''));
-      return isNaN(n) ? 0 : n;
-    };
-    if (sort === 'discount') products.sort((a, b) => num(b.discount) - num(a.discount));
-    else if (sort === 'rating') products.sort((a, b) => num(b.rating) - num(a.rating));
-    else if (sort === 'commission') products.sort((a, b) => num(b.commission_rate) - num(a.commission_rate));
-    else products.sort((a, b) => num(b.orders) - num(a.orders)); // orders (افتراضي)
-
-    const payload = { total: result.total || products.length, products, category, sort, page };
-    hotProductsCache.set(cacheKey, { ts: Date.now(), data: payload });
-
-    res.json({ success: true, cached: false, ...payload });
-  } catch (e) {
-    console.error('hot-products error:', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 app.post('/api/discover-products', async (req, res) => {
   try {
     const { category, keywords, minPrice, maxPrice, limit, useAI } = req.body;
