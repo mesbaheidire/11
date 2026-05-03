@@ -1287,6 +1287,20 @@ function fmtDiscount(d,orig,sale){
   return '—';
 }
 
+// تصفية الوصف: إبقاء فقط الأسطر التي تبدأ بـ 📢 / 📌 / ✅ / 🎁
+function filterMessage(msg){
+  if(!msg)return '';
+  const allowed=['📢','📌','✅','🎁'];
+  const lines=String(msg).split(/\r?\n/);
+  const kept=[];
+  for(const ln of lines){
+    const t=ln.trim();
+    if(!t)continue;
+    if(allowed.some(e=>t.startsWith(e)))kept.push(t);
+  }
+  return kept.join('\n');
+}
+
 // ===== DETAIL =====
 function openDet(p){
   curProduct=p;
@@ -1337,9 +1351,10 @@ function showDet(){
   const couponEl=document.getElementById('detCoupon');
   if(p._coupon){couponEl.style.display='block';document.getElementById('detCouponCode').textContent=p._coupon}else{couponEl.style.display='none'}
   const msgEl=document.getElementById('detMessage');
-  if(p._message){
+  const filtered=filterMessage(p._message);
+  if(filtered){
     msgEl.style.display='block';
-    document.getElementById('detMessageText').textContent=p._message;
+    document.getElementById('detMessageText').textContent=filtered;
   }else{
     msgEl.style.display='none';
   }
