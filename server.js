@@ -303,6 +303,74 @@ app.post('/api/excel/parse', excelUpload.single('file'), (req, res) => {
   }
 });
 
+// تحميل صورة كـ Buffer لتجاوز قيود تيليغرام في جلب URL مباشرة
+async function downloadImageBuffer(url, timeoutMs = 15000) {
+  try {
+    const r = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: timeoutMs,
+      maxContentLength: 10 * 1024 * 1024,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0',
+        'Referer': 'https://www.aliexpress.com/',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8'
+      }
+    });
+    if (r.status >= 200 && r.status < 300 && r.data && r.data.byteLength > 200) {
+      return Buffer.from(r.data);
+    }
+  } catch (e) {
+    console.log('⚠️ downloadImageBuffer failed:', url.substring(0, 80), '→', e.message);
+  }
+  return null;
+}
+
+// إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → نص فقط)
+async function sendPostWithImage(bot, channel, message, imageUrl, productLink) {
+  const caption = message.substring(0, 1024);
+
+  // المحاولة 1: تحميل الصورة كـ Buffer
+  if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+    const buf = await downloadImageBuffer(imageUrl);
+    if (buf) {
+      try {
+        await bot.telegram.sendPhoto(channel, { source: buf }, { caption });
+        return { ok: true, via: 'buffer' };
+      } catch (e) { console.log('⚠️ sendPhoto buffer failed:', e.message); }
+    }
+    // المحاولة 2: تيليغرام يجلب URL مباشرة
+    try {
+      await bot.telegram.sendPhoto(channel, imageUrl, { caption });
+      return { ok: true, via: 'url' };
+    } catch (e) { console.log('⚠️ sendPhoto URL failed:', e.message); }
+  }
+
+  // المحاولة 3: جلب صورة بديلة من preview الرابط
+  if (productLink) {
+    try {
+      const idObj = await idCatcher(productLink);
+      if (idObj?.id) {
+        const previews = await fetchLinkPreview(idObj.id);
+        if (previews?.image_url && /^https?:\/\//i.test(previews.image_url)) {
+          const buf = await downloadImageBuffer(previews.image_url);
+          if (buf) {
+            await bot.telegram.sendPhoto(channel, { source: buf }, { caption });
+            return { ok: true, via: 'preview' };
+          }
+          try {
+            await bot.telegram.sendPhoto(channel, previews.image_url, { caption });
+            return { ok: true, via: 'preview_url' };
+          } catch (e) {}
+        }
+      }
+    } catch (e) { console.log('⚠️ fetchLinkPreview failed:', e.message); }
+  }
+
+  // الأخير: نص فقط
+  await bot.telegram.sendMessage(channel, message.substring(0, 4096));
+  return { ok: true, via: 'text_only' };
+}
+
 // تلخيص عنوان طويل عبر Gemini (مع fallback لـ cleanupTitle)
 async function refineTitleAI(title) {
   if (!title || String(title).length < 20) return title;
@@ -436,16 +504,13 @@ app.post('/api/excel/start', async (req, res) => {
           const validChannels = channels.filter(Boolean);
           if (!validChannels.length) throw new Error('لا توجد قناة محددة');
 
+          let sendVia = null;
           for (const ch of validChannels) {
-            if (rawImage && /^https?:\/\//i.test(rawImage)) {
-              try {
-                await sharedBot.telegram.sendPhoto(ch, rawImage, { caption: message.substring(0, 1024) });
-              } catch (photoErr) {
-                await sharedBot.telegram.sendMessage(ch, message.substring(0, 4096));
-              }
-            } else {
-              await sharedBot.telegram.sendMessage(ch, message.substring(0, 4096));
-            }
+            const r = await sendPostWithImage(sharedBot, ch, message, rawImage, finalLink);
+            sendVia = r.via;
+          }
+          if (sendVia === 'text_only' && rawImage) {
+            pushBounded(job.logs, { row: i + 1, status: 'no_image', reason: 'تعذّر إرسال الصورة، نُشر نصاً فقط' }, EXCEL_JOB_MAX_LOGS);
           }
 
           if (saveToHistory) {

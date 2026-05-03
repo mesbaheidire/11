@@ -364,8 +364,8 @@ async function pollStatus() {
 
     const lc = document.getElementById('logsContainer');
     lc.innerHTML = j.logs.slice().reverse().map(l => {
-      const icon = l.status === 'success' ? '✅' : l.status === 'failed' ? '❌' : l.status === 'ai_title' ? '✨' : '⏭️';
-      const cls = l.status === 'ai_title' ? 'success' : l.status;
+      const icon = l.status === 'success' ? '✅' : l.status === 'failed' ? '❌' : l.status === 'ai_title' ? '✨' : l.status === 'no_image' ? '🖼️' : '⏭️';
+      const cls = (l.status === 'ai_title' || l.status === 'no_image') ? 'success' : l.status;
       return `<div class="log-entry ${cls}">${icon} <strong>صف ${l.row}</strong> ${escapeHtml(l.title || l.reason || '')}</div>`;
     }).join('');
 
