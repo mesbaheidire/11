@@ -607,18 +607,26 @@ app.post('/api/upload-logo', upload.single('logo'), (req, res) => {
 });
 
 // ===== Store Popup (نافذة منبثقة في المتجر) =====
+// نحفظ الصورة كـ base64 في قاعدة البيانات لتبقى دائمة (لا تختفي عند إعادة التشغيل)
 app.post('/api/upload-popup-image', upload.single('image'), (req, res) => {
-  if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
-  const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
-  const safeExt = ['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg';
-  const filename = `popup_${Date.now()}.${safeExt}`;
-  const targetPath = path.join(__dirname, 'public', 'uploads', filename);
-  const uploadsDir = path.join(__dirname, 'public', 'uploads');
-  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.rename(req.file.path, targetPath, (err) => {
-    if (err) return res.status(500).json({ success: false, error: err.message });
-    res.json({ success: true, imageUrl: `/uploads/${filename}` });
-  });
+  if (!req.file) return res.status(400).json({ success: false, error: 'لم يتم رفع أي ملف' });
+  try {
+    const stats = fs.statSync(req.file.path);
+    if (stats.size > 3 * 1024 * 1024) {
+      try { fs.unlinkSync(req.file.path); } catch(_) {}
+      return res.status(400).json({ success: false, error: 'حجم الصورة يجب أن يكون أقل من 3 ميجابايت' });
+    }
+    const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const safeExt = ['jpg','jpeg','png','gif','webp'].includes(ext) ? ext : 'jpg';
+    const mime = safeExt === 'jpg' ? 'image/jpeg' : `image/${safeExt}`;
+    const buf = fs.readFileSync(req.file.path);
+    const dataUri = `data:${mime};base64,${buf.toString('base64')}`;
+    try { fs.unlinkSync(req.file.path); } catch(_) {}
+    res.json({ success: true, imageUrl: dataUri });
+  } catch (e) {
+    try { if (req.file) fs.unlinkSync(req.file.path); } catch(_) {}
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 app.get('/api/store/popup-config', async (req, res) => {
