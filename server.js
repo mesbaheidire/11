@@ -2783,7 +2783,9 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
-    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
+    if (incoming.messageTemplate) {
+      config.messageTemplate = { ...(config.messageTemplate || {}), ...incoming.messageTemplate };
+    }
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
     if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
     if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));
@@ -2820,7 +2822,9 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
-    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
+    if (incoming.messageTemplate) {
+      config.messageTemplate = { ...(config.messageTemplate || {}), ...incoming.messageTemplate };
+    }
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
     if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
     if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));

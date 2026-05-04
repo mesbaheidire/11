@@ -580,14 +580,24 @@
             localStorage.setItem('appSettings', JSON.stringify(settings));
             document.getElementById('warningText').textContent = settings.warning;
 
-            if (settings.telegramToken) {
-                const syncData = { botToken: settings.telegramToken };
-                fetch('/api/spy/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(syncData)
-                }).catch(() => {});
-            }
+            const syncData = {};
+            if (settings.telegramToken) syncData.botToken = settings.telegramToken;
+            syncData.messageTemplate = {
+                seasonOffer: settings.seasonOffer || '',
+                seasonOfferEnabled: !!settings.seasonOfferEnabled,
+                prefix: settings.prefix || '',
+                priceLabel: settings.salePrice || '',
+                linkLabel: settings.linkText || '',
+                couponLabel: settings.couponText || '',
+                footer: settings.footer || '',
+                botLink: settings.botLink || '',
+                hashtags: settings.hashtags || ''
+            };
+            fetch('/api/spy/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(syncData)
+            }).catch(() => {});
 
             closeSettings();
             showToast('تم حفظ الإعدادات');
