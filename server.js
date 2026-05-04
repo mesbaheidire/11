@@ -118,6 +118,142 @@ const app = express();
 const postScheduler = new PostScheduler();
 postScheduler.start();
 
+// ========== Auto-Repost System ==========
+let autoRepostInterval = null;
+let autoRepostBusy = false;
+let autoRepostState = {
+  enabled: false,
+  intervalMinutes: 60,
+  repostedIds: [],
+  lastRepostTime: null,
+  publishedCount: 0
+};
+
+async function loadAutoRepostConfig() {
+  try {
+    const raw = await db.getAppStorage('auto_repost_config');
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (typeof parsed.enabled === 'boolean') autoRepostState.enabled = parsed.enabled;
+      if (typeof parsed.intervalMinutes === 'number' && parsed.intervalMinutes >= 1) autoRepostState.intervalMinutes = parsed.intervalMinutes;
+      if (Array.isArray(parsed.repostedIds)) autoRepostState.repostedIds = parsed.repostedIds;
+      if (parsed.lastRepostTime) autoRepostState.lastRepostTime = parsed.lastRepostTime;
+      if (typeof parsed.publishedCount === 'number') autoRepostState.publishedCount = parsed.publishedCount;
+    }
+  } catch (e) {
+    console.log('⚠️ فشل تحميل إعدادات إعادة النشر:', e.message);
+  }
+}
+
+async function saveAutoRepostConfig() {
+  const ok = await db.setAppStorage('auto_repost_config', JSON.stringify({
+    enabled: autoRepostState.enabled,
+    intervalMinutes: autoRepostState.intervalMinutes,
+    repostedIds: autoRepostState.repostedIds,
+    lastRepostTime: autoRepostState.lastRepostTime,
+    publishedCount: autoRepostState.publishedCount
+  }));
+  return ok;
+}
+
+async function doAutoRepost() {
+  if (autoRepostBusy) { console.log('⏳ [إعادة نشر] عملية سابقة قيد التنفيذ'); return { sent: false, reason: 'busy' }; }
+  autoRepostBusy = true;
+  try {
+    if (!autoRepostState.enabled) return { sent: false, reason: 'disabled' };
+    const botToken = await getSharedBotToken();
+    if (!botToken) { console.log('⚠️ [إعادة نشر] لا يوجد توكن بوت'); return { sent: false, reason: 'لا يوجد توكن بوت' }; }
+    const shared = await loadSharedCredentials();
+    const channelId1 = shared.channelId || process.env.TELEGRAM_CHANNEL_ID;
+    const channelId2 = shared.channelId2 || '@AffiliDz';
+    const channels = [];
+    if (channelId1) channels.push(channelId1.startsWith('@') || channelId1.startsWith('-') ? channelId1 : '@' + channelId1);
+    if (channelId2) channels.push(channelId2.startsWith('@') || channelId2.startsWith('-') ? channelId2 : '@' + channelId2);
+    if (channels.length === 0) { console.log('⚠️ [إعادة نشر] لا توجد قنوات'); return { sent: false, reason: 'لا توجد قنوات' }; }
+
+    const allPosts = await db.getSavedPosts();
+    if (allPosts.length === 0) { console.log('⚠️ [إعادة نشر] لا توجد منشورات محفوظة'); return { sent: false, reason: 'لا توجد منشورات' }; }
+
+    let available = allPosts.filter(p => !autoRepostState.repostedIds.includes(p.id));
+    if (available.length === 0) {
+      autoRepostState.repostedIds = [];
+      available = allPosts;
+      console.log('🔄 [إعادة نشر] تم إعادة تعيين القائمة — كل المنشورات نُشرت');
+    }
+
+    const post = available[Math.floor(Math.random() * available.length)];
+    console.log(`📤 [إعادة نشر] نشر: "${(post.title || '').substring(0, 40)}..."`);
+
+    const bot = new Telegraf(botToken);
+    const finalMessage = post.message || `📢تخفيض لـ ${post.title}\n\n✅السعر بعد التخفيض: ${post.price}\n\n📌رابط الشراء:\n${post.link}`;
+    let resolvedImage = post.image;
+    if (resolvedImage && !resolvedImage.startsWith('data:')) {
+      resolvedImage = sanitizeAliImageUrl(resolvedImage);
+    }
+
+    const errors = [];
+    for (const ch of channels) {
+      try {
+        if (resolvedImage) {
+          if (resolvedImage.startsWith('data:image')) {
+            const base64Data = resolvedImage.replace(/^data:image\/\w+;base64,/, '');
+            const imageBuffer = Buffer.from(base64Data, 'base64');
+            await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: finalMessage });
+          } else {
+            const buf = await downloadImageBuffer(resolvedImage);
+            if (buf) {
+              await bot.telegram.sendPhoto(ch, { source: buf }, { caption: finalMessage });
+            } else {
+              await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage });
+            }
+          }
+        } else {
+          await bot.telegram.sendMessage(ch, finalMessage);
+        }
+      } catch (chErr) {
+        console.log(`⚠️ [إعادة نشر] فشل الإرسال لـ ${ch}: ${chErr.message}`);
+        errors.push(chErr.message);
+      }
+    }
+
+    if (errors.length === channels.length) {
+      return { sent: false, reason: 'فشل الإرسال لكل القنوات: ' + errors[0] };
+    }
+
+    autoRepostState.repostedIds.push(post.id);
+    autoRepostState.lastRepostTime = new Date().toISOString();
+    autoRepostState.publishedCount++;
+    await saveAutoRepostConfig();
+    console.log(`✅ [إعادة نشر] تم نشر "${(post.title || '').substring(0, 30)}" — ${autoRepostState.repostedIds.length}/${allPosts.length}`);
+    return { sent: true, title: post.title };
+  } catch (e) {
+    console.log('❌ [إعادة نشر] خطأ:', e.message);
+    return { sent: false, reason: e.message };
+  } finally {
+    autoRepostBusy = false;
+  }
+}
+
+function startAutoRepost() {
+  stopAutoRepost();
+  if (!autoRepostState.enabled || autoRepostState.intervalMinutes < 1) return;
+  const ms = autoRepostState.intervalMinutes * 60 * 1000;
+  autoRepostInterval = setInterval(doAutoRepost, ms);
+  console.log(`🔁 [إعادة نشر] تشغيل — كل ${autoRepostState.intervalMinutes} دقيقة`);
+}
+
+function stopAutoRepost() {
+  if (autoRepostInterval) {
+    clearInterval(autoRepostInterval);
+    autoRepostInterval = null;
+  }
+}
+
+setTimeout(async () => {
+  await loadAutoRepostConfig();
+  if (autoRepostState.enabled) startAutoRepost();
+}, 5000);
+
 // Gemini API Key Management System
 const GEMINI_KEYS_FILE = path.join(__dirname, 'gemini_keys.json');
 
@@ -2680,6 +2816,68 @@ app.delete('/api/saved-posts/before', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== Auto-Repost API ==========
+
+app.get('/api/auto-repost/config', (req, res) => {
+  res.json({
+    success: true,
+    enabled: autoRepostState.enabled,
+    intervalMinutes: autoRepostState.intervalMinutes,
+    lastRepostTime: autoRepostState.lastRepostTime,
+    publishedCount: autoRepostState.publishedCount,
+    repostedCount: autoRepostState.repostedIds.length
+  });
+});
+
+app.post('/api/auto-repost/config', async (req, res) => {
+  try {
+    const { enabled, intervalMinutes } = req.body;
+    if (typeof enabled === 'boolean') autoRepostState.enabled = enabled;
+    if (intervalMinutes !== undefined) autoRepostState.intervalMinutes = Math.max(1, parseInt(intervalMinutes) || 60);
+    if (!autoRepostState.enabled) {
+      stopAutoRepost();
+    } else {
+      startAutoRepost();
+    }
+    await saveAutoRepostConfig();
+    res.json({
+      success: true,
+      enabled: autoRepostState.enabled,
+      intervalMinutes: autoRepostState.intervalMinutes,
+      publishedCount: autoRepostState.publishedCount,
+      repostedCount: autoRepostState.repostedIds.length
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/auto-repost/reset', async (req, res) => {
+  try {
+    autoRepostState.repostedIds = [];
+    autoRepostState.publishedCount = 0;
+    autoRepostState.lastRepostTime = null;
+    await saveAutoRepostConfig();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/auto-repost/now', async (req, res) => {
+  try {
+    if (!autoRepostState.enabled) return res.json({ success: false, error: 'النظام غير مفعّل' });
+    const result = await doAutoRepost();
+    if (result && result.sent) {
+      res.json({ success: true, publishedCount: autoRepostState.publishedCount });
+    } else {
+      res.json({ success: false, error: (result && result.reason) || 'فشل النشر' });
+    }
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

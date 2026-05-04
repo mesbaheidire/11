@@ -66,6 +66,32 @@
         
         .loading { text-align: center; padding: 40px; }
         .loading i { font-size: 40px; color: var(--accent-purple); animation: spin 1s linear infinite; }
+
+        .ar-panel{background:var(--bg-card);border-radius:var(--radius-md);border:1px solid var(--border-subtle);margin-bottom:16px;overflow:hidden}
+        .ar-header{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;transition:background .2s}
+        .ar-header:hover{background:rgba(255,255,255,.03)}
+        .ar-title{font-size:14px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:8px}
+        .ar-title i{color:#10b981;font-size:16px}
+        .ar-status{font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;background:rgba(239,68,68,.15);color:#ef4444}
+        .ar-status.active{background:rgba(16,185,129,.15);color:#10b981}
+        .ar-body{padding:0 16px 16px;display:flex;flex-direction:column;gap:12px}
+        .ar-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+        .ar-label{font-size:13px;color:var(--text-secondary);font-weight:600}
+        .ar-input{width:90px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;font-family:'Cairo';font-size:13px;text-align:center}
+        .ar-input:focus{border-color:#7C3AED;outline:none}
+        .ar-switch{position:relative;width:46px;height:24px;flex-shrink:0}
+        .ar-switch input{opacity:0;width:0;height:0}
+        .ar-slider{position:absolute;inset:0;background:#4b5563;border-radius:24px;cursor:pointer;transition:.3s}
+        .ar-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+        .ar-switch input:checked+.ar-slider{background:#10b981}
+        .ar-switch input:checked+.ar-slider::before{transform:translateX(22px)}
+        .ar-btn{flex:1;border:none;border-radius:8px;padding:9px 8px;font-family:'Cairo';font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .2s}
+        .ar-btn:active{transform:scale(.96)}
+        .ar-btn-save{background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff}
+        .ar-btn-now{background:linear-gradient(135deg,#2AABEE,#229ED9);color:#fff}
+        .ar-btn-reset{background:rgba(239,68,68,.12);color:#ef4444}
+        .ar-info{font-size:12px;color:var(--text-muted);line-height:1.7;padding:10px 12px;background:var(--bg-input);border-radius:8px}
+        .ar-info b{color:var(--text-secondary)}
     </style>
 </head>
 <body>
@@ -76,6 +102,32 @@
     </div>
 
     <div class="content">
+        <div class="ar-panel" id="autoRepostPanel">
+            <div class="ar-header" onclick="toggleArPanel()">
+                <div class="ar-title"><i class="fas fa-sync-alt"></i> إعادة النشر التلقائي</div>
+                <div class="ar-status" id="arStatusBadge">معطّل</div>
+            </div>
+            <div class="ar-body" id="arBody" style="display:none">
+                <div class="ar-row">
+                    <label class="ar-label">التفعيل</label>
+                    <label class="ar-switch">
+                        <input type="checkbox" id="arEnabled" onchange="toggleAutoRepost()">
+                        <span class="ar-slider"></span>
+                    </label>
+                </div>
+                <div class="ar-row">
+                    <label class="ar-label">الفاصل الزمني (دقيقة)</label>
+                    <input type="number" id="arInterval" value="60" min="1" max="1440" class="ar-input">
+                </div>
+                <div class="ar-row">
+                    <button class="ar-btn ar-btn-save" onclick="saveArConfig()"><i class="fas fa-save"></i> حفظ</button>
+                    <button class="ar-btn ar-btn-now" onclick="repostNow()"><i class="fas fa-paper-plane"></i> نشر الآن</button>
+                    <button class="ar-btn ar-btn-reset" onclick="resetAr()"><i class="fas fa-redo"></i> تصفير</button>
+                </div>
+                <div class="ar-info" id="arInfo"></div>
+            </div>
+        </div>
+
         <div class="stats-bar">
             <div class="stats-count"><span id="postsCount">0</span> منشور محفوظ</div>
             <button class="clear-btn" id="clearAllBtn" style="display: none;">
@@ -550,6 +602,69 @@
         };
 
         loadPosts();
+
+        function toggleArPanel(){
+            const b=document.getElementById('arBody');
+            b.style.display=b.style.display==='none'?'flex':'none';
+        }
+        async function loadArConfig(){
+            try{
+                const r=await fetch('/api/auto-repost/config');
+                const d=await r.json();
+                if(!d.success)return;
+                document.getElementById('arEnabled').checked=d.enabled;
+                document.getElementById('arInterval').value=d.intervalMinutes||60;
+                const badge=document.getElementById('arStatusBadge');
+                badge.textContent=d.enabled?'مفعّل':'معطّل';
+                badge.className='ar-status'+(d.enabled?' active':'');
+                let info='';
+                if(d.publishedCount) info+=`<b>نُشر:</b> ${d.publishedCount} منشور`;
+                if(d.repostedCount) info+=` — <b>الدورة:</b> ${d.repostedCount} من أصل <span id="arTotal">...</span>`;
+                if(d.lastRepostTime) info+=`<br><b>آخر نشر:</b> ${new Date(d.lastRepostTime).toLocaleString('ar-EG')}`;
+                if(d.enabled) info+=`<br><b>التالي بعد:</b> ${d.intervalMinutes} دقيقة`;
+                document.getElementById('arInfo').innerHTML=info||'لم يتم النشر بعد';
+                if(document.getElementById('arTotal')){
+                    document.getElementById('arTotal').textContent=savedPosts.length||'...';
+                }
+            }catch(e){console.log('ar config error',e)}
+        }
+        async function toggleAutoRepost(){
+            const en=document.getElementById('arEnabled').checked;
+            const iv=parseInt(document.getElementById('arInterval').value)||60;
+            try{
+                const r=await fetch('/api/auto-repost/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:en,intervalMinutes:iv})});
+                const d=await r.json();
+                if(d.success){showToast(en?'تم تفعيل إعادة النشر التلقائي ✅':'تم إيقاف إعادة النشر ⏹','success');loadArConfig();}
+                else showToast(d.error||'خطأ','error');
+            }catch(e){showToast('خطأ في الاتصال','error')}
+        }
+        async function saveArConfig(){
+            const en=document.getElementById('arEnabled').checked;
+            const iv=parseInt(document.getElementById('arInterval').value)||60;
+            try{
+                const r=await fetch('/api/auto-repost/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:en,intervalMinutes:iv})});
+                const d=await r.json();
+                if(d.success){showToast('تم حفظ الإعدادات ✅','success');loadArConfig();}
+                else showToast(d.error||'خطأ','error');
+            }catch(e){showToast('خطأ في الاتصال','error')}
+        }
+        async function repostNow(){
+            try{
+                const r=await fetch('/api/auto-repost/now',{method:'POST'});
+                const d=await r.json();
+                if(d.success){showToast('تم نشر منشور عشوائي ✅','success');loadArConfig();}
+                else showToast(d.error||'فشل النشر','error');
+            }catch(e){showToast('خطأ','error')}
+        }
+        async function resetAr(){
+            if(!confirm('هل تريد تصفير عداد إعادة النشر؟'))return;
+            try{
+                const r=await fetch('/api/auto-repost/reset',{method:'POST'});
+                const d=await r.json();
+                if(d.success){showToast('تم التصفير ✅','success');loadArConfig();}
+            }catch(e){showToast('خطأ','error')}
+        }
+        setTimeout(loadArConfig,500);
     </script>
 </body>
 </html>
