@@ -38,13 +38,23 @@ async function fetchLinkPreviewFromHTMLCheerio(productId) {
             if (title) title = title.replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim().substring(0, 200);
             const isVid = (u) => typeof u === 'string' && (/\.(mp4|webm|mov|avi|m3u8)(\?|$|#)/i.test(u) || /cloud\.video\.taobao|video\.aliexpress|play\.aliexpress/i.test(u));
             if (image_url && isVid(image_url)) image_url = null;
+
+            // استخراج السعر من JSON المضمّن (priceText / amount)
+            let price = null;
+            const priceMatch = res.body.match(/"priceText"\s*:\s*"([^"]+)"/)
+                || res.body.match(/"formatedPrice"\s*:\s*"([^"]+)"/)
+                || res.body.match(/"amount"\s*:\s*"?([0-9.,]+)"?/);
+            if (priceMatch && priceMatch[1]) {
+                price = priceMatch[1].trim();
+            }
+
             if (title || image_url) {
-                console.log(`✅ Cheerio HTML preview نجح (${aliexpressUrl.includes('//ar.') ? 'ar' : aliexpressUrl.includes('//m.') ? 'm' : 'www'}): title=${title ? 'yes' : 'no'}, image=${image_url ? 'yes' : 'no'}`);
+                console.log(`✅ Cheerio HTML preview نجح (${aliexpressUrl.includes('//ar.') ? 'ar' : aliexpressUrl.includes('//m.') ? 'm' : 'www'}): title=${title ? 'yes' : 'no'}, image=${image_url ? 'yes' : 'no'}, price=${price || 'no'}`);
                 return {
                     method: 'HTML Scraping (cheerio)',
                     title: title || `منتج AliExpress #${productId}`,
                     image_url,
-                    price: 'راجع الرابط'
+                    price: price || 'راجع الرابط'
                 };
             }
         } catch (err) {
