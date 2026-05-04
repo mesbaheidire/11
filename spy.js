@@ -687,48 +687,6 @@ function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
   });
 }
 
-// ===== آلية جديدة #2: بحث صور Bing كملاذ أخير =====
-function fetchImageViaBingSearch(query, timeoutMs = 12000) {
-  return new Promise((resolve) => {
-    if (!query || query.length < 3) return resolve(null);
-    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query + ' aliexpress')}&form=HDRSC2&first=1`;
-    const req = https.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
-        'Accept': 'text/html',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: timeoutMs,
-    }, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', c => {
-        body += c;
-        if (body.length > 500000) res.destroy();
-      });
-      res.on('end', () => {
-        // Bing يخزّن بيانات الصور في سمة m="{...}" على كل عنصر
-        const mMatch = body.match(/m="\{[^}]*?&quot;murl&quot;:&quot;([^&]+)&quot;/);
-        let imageUrl = mMatch ? mMatch[1] : null;
-        if (!imageUrl) {
-          const altMatch = body.match(/"murl":"(https?:[^"]+)"/);
-          imageUrl = altMatch ? altMatch[1] : null;
-        }
-        if (imageUrl) {
-          imageUrl = imageUrl.replace(/&amp;/g, '&');
-          console.log(`✅ Bing Images وجد صورة: ${imageUrl.substring(0, 80)}...`);
-          return resolve({ image: imageUrl });
-        }
-        resolve(null);
-      });
-      res.on('error', () => resolve(null));
-    });
-    req.on('error', () => resolve(null));
-    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
-  });
-}
-
 function normalizeAliExpressLinks(text) {
   if (!text) return '';
   const links = [];
@@ -1859,7 +1817,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`⛔ fetchLinkPreview تم تجاهل رابط فيديو`);
   }
 
-  // 7) صورة المنشور الأصلي كخيار مباشر قبل Bing
+  // 7) صورة المنشور الأصلي كخيار مباشر
   if (!productImage && sourceImage) {
     console.log(`🖼 [7/9] استخدام صورة المنشور الأصلي`);
     productImage = { source: sourceImage };
@@ -1884,29 +1842,8 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 9) 🆕 بحث صور Bing باسم المنتج/العنوان
-  if (!productImage) {
-    const searchQuery = firstApiTitle || (text || '').split('\n').find(l => l.trim() && !l.startsWith('http') && !l.includes('aliexpress'));
-    if (searchQuery && searchQuery.length >= 5) {
-      console.log(`🖼 [9/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
-      try {
-        const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
-        if (bingResult && bingResult.image && !isLikelyVideoUrl(bingResult.image)) {
-          const bingBuffer = await downloadImageAsBuffer(bingResult.image);
-          if (bingBuffer) {
-            productImage = { source: bingBuffer };
-            productImageUrl = bingResult.image;
-            console.log(`✅ نجح Bing Images`);
-          }
-        } else if (bingResult && bingResult.image) {
-          console.log(`⛔ Bing تم تجاهل رابط فيديو`);
-        }
-      } catch (e) { console.log(`⚠️ فشل Bing Images: ${e.message}`); }
-    }
-  }
-
   if (!productImage && sourceImage) {
-    console.log(`🖼 [10/9] استخدام صورة المنشور الأصلي`);
+    console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي (احتياطي)`);
     productImage = { source: sourceImage };
   }
 
