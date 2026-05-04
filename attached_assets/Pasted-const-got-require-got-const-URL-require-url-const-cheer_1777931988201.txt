@@ -1,0 +1,551 @@
+const got = require("got");
+const { URL } = require("url");
+const cheerio = require("cheerio");
+const crypto = require("crypto");
+
+// AliExpress API Configuration
+const ALI_APP_KEY = process.env.ALI_APP_KEY || '';
+const ALI_APP_SECRET = process.env.ALI_APP_SECRET || '';
+const ALI_API_URL = "https://api-sg.aliexpress.com/sync";
+
+// Generate AliExpress API signature
+function generateSign(params, secret) {
+    const sorted = Object.keys(params).sort();
+    let str = '';
+    for (const key of sorted) {
+        str += key + params[key];
+    }
+    return crypto.createHmac('sha256', secret).update(str).digest('hex').toUpperCase();
+}
+
+// Call AliExpress API
+async function callAliExpressAPI(method, apiParams = {}) {
+    if (!ALI_APP_KEY || !ALI_APP_SECRET) {
+        console.log("⚠️ AliExpress API keys not configured");
+        return null;
+    }
+
+    const commonParams = {
+        app_key: ALI_APP_KEY,
+        method: method,
+        sign_method: 'hmac-sha256',
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        format: 'json',
+        v: '2.0',
+        ...apiParams
+    };
+
+    commonParams.sign = generateSign(commonParams, ALI_APP_SECRET);
+
+    try {
+        const res = await got.post(ALI_API_URL, {
+            form: commonParams,
+            responseType: 'json',
+            timeout: 10000
+        });
+        return res.body;
+    } catch (err) {
+        console.error("❌ AliExpress API error:", err.message);
+        return null;
+    }
+}
+
+// Get product details from AliExpress API
+async function fetchFromAliExpressAPI(productId) {
+    try {
+        const result = await callAliExpressAPI('aliexpress.affiliate.productdetail.get', {
+            product_ids: productId,
+            target_currency: 'USD',
+            target_language: 'AR',
+            tracking_id: '',
+            fields: 'product_title,product_main_image_url,product_small_image_urls,target_sale_price,target_original_price'
+        });
+
+        if (!result) return null;
+
+        const respKey = Object.keys(result).find(k => k.includes('productdetail'));
+        const resp = respKey ? result[respKey] : null;
+        
+        if (!resp || !resp.resp_result || String(resp.resp_result.resp_code) !== '200') {
+            console.log("⚠️ AliExpress API response:", resp?.resp_result?.resp_msg || 'Unknown error');
+            return null;
+        }
+
+        const productsData = resp.resp_result.result?.products?.product;
+        const products = Array.isArray(productsData) ? productsData : (productsData ? [productsData] : []);
+        if (!products || products.length === 0) return null;
+
+        const product = products[0];
+        console.log("✅ Product fetched from AliExpress API:", { title: product.product_title?.substring(0, 50) });
+
+        return {
+            title: product.product_title || null,
+            image_url: product.product_main_image_url || null,
+            price: product.target_sale_price || null,
+            original_price: product.target_original_price || null
+        };
+    } catch (err) {
+        console.error("❌ AliExpress API fetch error:", err.message);
+        return null;
+    }
+}
+
+// Generate affiliate links using AliExpress API
+async function generateAffLinksFromAPI(productId) {
+    try {
+        const urls = [
+            `https://www.aliexpress.com/item/${productId}.html`,
+        ];
+
+        const result = await callAliExpressAPI('aliexpress.affiliate.link.generate', {
+            source_values: urls.join(','),
+            promotion_link_type: '0',
+            tracking_id: ''
+        });
+
+        if (!result) return null;
+
+        const respKey = Object.keys(result).find(k => k.includes('link_generate'));
+        const resp = respKey ? result[respKey] : null;
+
+        if (!resp || !resp.resp_result || String(resp.resp_result.resp_code) !== '200') {
+            return null;
+        }
+
+        const linksData = resp.resp_result.result?.promotion_links?.promotion_link;
+        const links = Array.isArray(linksData) ? linksData : (linksData ? [linksData] : []);
+        if (!links || links.length === 0) return null;
+
+        return links[0].promotion_link || null;
+    } catch (err) {
+        console.error("❌ AliExpress API link generation error:", err.message);
+        return null;
+    }
+}
+
+async function getFinalRedirect(url) {
+    try {
+        const response = await got(url, {
+            followRedirect: false
+        });
+
+        if (response.headers.location) {
+            return response.headers.location;
+        }
+
+        return url;
+    } catch (err) {
+        console.error("❌ Redirect error:", err.message);
+        return url;
+    }
+}
+
+function extractProductId(url) {
+    try {
+        const u = new URL(url);
+
+        if (u.searchParams.has("productIds")) {
+            return u.searchParams.get("productIds");
+        }
+
+        if (u.searchParams.has("redirectUrl")) {
+            const decoded = decodeURIComponent(u.searchParams.get("redirectUrl"));
+            const m = decoded.match(/item\/(\d+)\.html/);
+            if (m) return m[1];
+        }
+
+        const m = u.pathname.match(/item\/(\d+)\.html/);
+        if (m) return m[1];
+
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+async function idCatcher(input) {
+    if (!input || typeof input !== "string") return null;
+
+    if (/^\d+$/.test(input)) {
+        return { id: input };
+    }
+
+    if (!input.startsWith("http")) {
+        input = "https://" + input;
+    }
+
+    let finalUrl = await getFinalRedirect(input);
+    finalUrl = await getFinalRedirect(finalUrl);
+
+    const id = extractProductId(finalUrl);
+
+    return { id, finalUrl };
+}
+
+// Method 1: Use Microlink.io API (free, no auth)
+async function fetchLinkPreviewFromAPI(productId) {
+    try {
+        const targetUrl = `https://www.aliexpress.com/item/${productId}.html`;
+
+        const res = await got("https://api.microlink.io", {
+            searchParams: {
+                url: targetUrl
+            },
+            responseType: "json",
+            timeout: 8000
+        });
+
+        if (res.body.status !== 'success' || !res.body.data) return null;
+
+        const data = res.body.data;
+        const preview = {
+            title: data.title || null,
+            image_url: data.image?.url || null
+        };
+        
+        if (preview.title && preview.image_url) {
+            console.log("✅ Preview fetched from Microlink:", { title: preview.title?.substring(0, 50), hasImage: true });
+            return preview;
+        }
+        return null;
+    } catch (err) {
+        console.error("⚠️ Microlink API error:", err.message);
+        return null;
+    }
+}
+
+// Method 2: Scrape directly from AliExpress using cheerio
+async function fetchLinkPreviewFromHTML(productId) {
+    try {
+        const aliexpressUrl = `https://www.aliexpress.com/item/${productId}.html`;
+        
+        const res = await got(aliexpressUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            },
+            timeout: 8000
+        });
+
+        const $ = cheerio.load(res.body);
+        
+        // Try to get title from various sources
+        let title = $('h1.pdp-mod-product-title-text').text().trim() ||
+                   $('meta[property="og:title"]').attr('content') ||
+                   $('title').text().split('|')[0].trim() ||
+                   null;
+        
+        // Try to get image from various sources
+        let image_url = $('meta[property="og:image"]').attr('content') ||
+                       $('img.gallery-panel__preview-image').attr('src') ||
+                       $('img.specZoom').attr('src') ||
+                       null;
+        
+        if (title && image_url) {
+            console.log("✅ Preview fetched from HTML:", { title: title.substring(0, 50), hasImage: true });
+            return {
+                title: title.substring(0, 200),
+                image_url: image_url
+            };
+        }
+        
+        if (title) {
+            return {
+                title: title.substring(0, 200),
+                image_url: null
+            };
+        }
+        
+        return null;
+    } catch (err) {
+        console.error("⚠️ HTML Scrape error:", err.message);
+        return null;
+    }
+}
+
+// Main function: Try multiple sources in order
+async function fetchLinkPreview(productId) {
+    let bestTitle = null;
+    
+    // 1. Try AliExpress Official API first (most reliable)
+    let preview = await fetchFromAliExpressAPI(productId);
+    if (preview) {
+        if (preview.title) bestTitle = preview.title;
+        if (preview.image_url) {
+            console.log("📦 Source: AliExpress API");
+            return preview;
+        }
+    }
+    
+    // 2. Try linkpreview.xyz API
+    preview = await fetchLinkPreviewFromAPI(productId);
+    if (preview) {
+        if (preview.title && !bestTitle) bestTitle = preview.title;
+        if (preview.image_url) {
+            console.log("📦 Source: LinkPreview API");
+            return { ...preview, title: bestTitle || preview.title };
+        }
+    }
+    
+    // 3. Try HTML scraping as last resort
+    preview = await fetchLinkPreviewFromHTML(productId);
+    if (preview) {
+        if (preview.title && !bestTitle) bestTitle = preview.title;
+        if (preview.image_url) {
+            console.log("📦 Source: HTML Scraping");
+            return { ...preview, title: bestTitle || preview.title };
+        }
+    }
+    
+    // Return best title found with no image
+    if (bestTitle) {
+        return {
+            title: bestTitle,
+            image_url: null
+        };
+    }
+    
+    // Last resort: return generic fallback
+    console.error("❌ Could not fetch product preview from any source");
+    return {
+        title: "منتج من AliExpress",
+        image_url: null
+    };
+}
+
+async function portaffFunction(cookie, ids) {
+    // Validate cookie
+    if (!cookie || typeof cookie !== "string" || cookie.trim().length === 0) {
+        throw new Error("❌ الكوكيز غير صحيحة أو فارغة.");
+    }
+
+    const idObj = await idCatcher(ids);
+    const productId = idObj?.id;
+
+    if (!productId) throw new Error("❌ لم يتم استخراج Product ID.");
+
+    const sourceTypes = {
+        "555": "coin",
+        "620": "point",
+        "562": "super",
+        "570": "limit",
+        "561": "ther3"
+    };
+
+    let result = { aff: {}, previews: {} };
+    let promoRequests = [];
+
+    for (const type in sourceTypes) {
+        const name = sourceTypes[type];
+
+        const targetUrl = type === "561"
+            ? `https://www.aliexpress.com/ssr/300000512/BundleDeals2?disableNav=YES&pha_manifest=ssr&_immersiveMode=true&productIds=${productId}&aff_fcid=`
+            : type === "555"
+                ? `https://m.aliexpress.com/p/coin-index/index.html?_immersiveMode=true&from=syicon&productIds=${productId}&aff_fcid=`
+                : `https://star.aliexpress.com/share/share.htm?redirectUrl=https%3A%2F%2Fvi.aliexpress.com%2Fitem%2F${productId}.html%3FsourceType%3D${type === "620" ? '620%26channel%3Dcoin' : type}`;
+
+        promoRequests.push(
+            got("https://portals.aliexpress.com/tools/linkGenerate/generatePromotionLink.htm", {
+                searchParams: {
+                    trackId: "default",
+                    targetUrl
+                },
+                headers: {
+                    cookie: `xman_t=${cookie};`
+                },
+                responseType: "json"
+            })
+                .then(r => ({ type: name, data: r.body.data }))
+                .catch(() => ({ type: name, data: null }))
+        );
+    }
+
+    const promoResults = await Promise.all(promoRequests);
+
+    if (promoResults.every(pr => pr.data === null)) {
+        throw new Error("❌ فشل إنشاء جميع الروابط. قد تكون الكوكيز منتهية الصلاحية.");
+    }
+
+    for (const pr of promoResults) {
+        result.aff[pr.type] = pr.data;
+    }
+
+    result.previews = await fetchLinkPreview(productId);
+
+    return result;
+}
+// Fetch daily earnings from AliExpress Affiliate API
+// dateStr: optional 'YYYY-MM-DD' string, defaults to today
+async function fetchDailyEarnings(dateStr) {
+    if (!ALI_APP_KEY || !ALI_APP_SECRET) return null;
+
+    const base = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+    const start = new Date(base);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(base);
+    end.setHours(23, 59, 59, 999);
+
+    const formatDate = (d) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
+    const baseParams = {
+        start_time: formatDate(start),
+        end_time: formatDate(end),
+        page_no: 1,
+        page_size: 50
+    };
+
+    const statusLabels = {
+        'Payment Completed': 'مكتملة الدفع',
+        'Settled':           'مسوّاة',
+        'Cancelled':         'ملغاة'
+    };
+
+    async function fetchByStatus(status) {
+        const result = await callAliExpressAPI('aliexpress.affiliate.order.list', { ...baseParams, status });
+        if (!result) return [];
+        const respKey = Object.keys(result).find(k => k.includes('order_list'));
+        const resp = respKey ? result[respKey] : null;
+        if (!resp || !resp.resp_result) return [];
+        if (String(resp.resp_result.resp_code) !== '200') return [];
+        const orders = resp.resp_result.result?.orders?.order || [];
+        return Array.isArray(orders) ? orders : (orders ? [orders] : []);
+    }
+
+    const [completedOrders, settledOrders, cancelledOrders] = await Promise.all([
+        fetchByStatus('Payment Completed'),
+        fetchByStatus('Settled'),
+        fetchByStatus('Cancelled')
+    ]);
+
+    const allRaw = [...completedOrders, ...settledOrders, ...cancelledOrders];
+
+    const getCommission = (o) => {
+        const val = o.estimated_paid_commission
+            ?? o.estimated_finish_commission
+            ?? o.commission_fee
+            ?? o.pub_share_fee
+            ?? o.commission
+            ?? 0;
+        // API returns value in cents (e.g. 56 = $0.56)
+        return (parseFloat(val) || 0) / 100;
+    };
+
+    const getOrderAmount = (o) => {
+        const val = o.paid_amount
+            ?? o.order_amount
+            ?? o.pay_amount
+            ?? o.order_total_amount
+            ?? 0;
+        // API returns value in cents (e.g. 808 = $8.08)
+        return (parseFloat(val) || 0) / 100;
+    };
+
+    const getCurrency = (o) => o.settled_currency || o.currency || 'USD';
+
+    const calcTotals = (orders) => {
+        let commission = 0;
+        let orderAmount = 0;
+        for (const o of orders) {
+            commission  += getCommission(o);
+            orderAmount += getOrderAmount(o);
+        }
+        return { commission, orderAmount };
+    };
+
+    const completedTotals  = calcTotals(completedOrders);
+    const settledTotals    = calcTotals(settledOrders);
+    const cancelledTotals  = calcTotals(cancelledOrders);
+
+    // Enrich each order with computed amount/commission so index.js can use them directly
+    const enrichOrders = (orders) => orders.map(o => ({
+        ...o,
+        _amount:     getOrderAmount(o),
+        _commission: getCommission(o)
+    }));
+
+    const allOrders = [...enrichOrders(completedOrders), ...enrichOrders(settledOrders)];
+
+    const grandCommission   = completedTotals.commission  + settledTotals.commission;
+    const grandOrderAmount  = completedTotals.orderAmount + settledTotals.orderAmount;
+    const currency = allRaw[0] ? getCurrency(allRaw[0]) : 'USD';
+
+    return {
+        grandCommission:  grandCommission.toFixed(2),
+        grandOrderAmount: grandOrderAmount.toFixed(2),
+        currency,
+        breakdown: {
+            completed: {
+                label:       statusLabels['Payment Completed'],
+                count:       completedOrders.length,
+                commission:  completedTotals.commission.toFixed(2),
+                orderAmount: completedTotals.orderAmount.toFixed(2),
+                orders:      enrichOrders(completedOrders)
+            },
+            settled: {
+                label:       statusLabels['Settled'],
+                count:       settledOrders.length,
+                commission:  settledTotals.commission.toFixed(2),
+                orderAmount: settledTotals.orderAmount.toFixed(2),
+                orders:      enrichOrders(settledOrders)
+            },
+            cancelled: {
+                label:       statusLabels['Cancelled'],
+                count:       cancelledOrders.length,
+                commission:  cancelledTotals.commission.toFixed(2),
+                orderAmount: cancelledTotals.orderAmount.toFixed(2),
+                orders:      enrichOrders(cancelledOrders)
+            }
+        },
+        allOrders
+    };
+}
+
+// Verify if an order ID belongs to our affiliate account
+async function verifyAffiliateOrder(orderId) {
+    if (!ALI_APP_KEY || !ALI_APP_SECRET) return null;
+
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - 90);
+
+    const formatDate = (d) => {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+
+    const baseParams = {
+        start_time: formatDate(start),
+        end_time: formatDate(end),
+        page_size: 50
+    };
+
+    for (const status of ['Payment Completed', 'Settled']) {
+        for (let page = 1; page <= 10; page++) {
+            const result = await callAliExpressAPI('aliexpress.affiliate.order.list', {
+                ...baseParams, status, page_no: page
+            });
+            if (!result) break;
+            const respKey = Object.keys(result).find(k => k.includes('order_list'));
+            const resp = respKey ? result[respKey] : null;
+            if (!resp?.resp_result || String(resp.resp_result.resp_code) !== '200') break;
+            const orders = resp.resp_result.result?.orders?.order || [];
+            const orderList = Array.isArray(orders) ? orders : (orders ? [orders] : []);
+            if (orderList.length === 0) break;
+            const found = orderList.find(o =>
+                String(o.order_id) === String(orderId) ||
+                String(o.sub_order_id) === String(orderId) ||
+                String(o.parent_order_number) === String(orderId)
+            );
+            // Return order with its API status so caller can decide
+            if (found) return { order: found, apiStatus: status };
+        }
+    }
+    return null;
+}
+
+exports.portaffFunction = portaffFunction;
+exports.generateAffLinksFromAPI = generateAffLinksFromAPI;
+exports.fetchDailyEarnings = fetchDailyEarnings;
+exports.verifyAffiliateOrder = verifyAffiliateOrder;
