@@ -44,6 +44,16 @@
         .post-price { font-size: 14px; color: var(--accent-green); font-weight: 700; margin-bottom: 5px; }
         .post-date { font-size: 12px; color: var(--text-muted); }
         
+        .post-coupon{display:flex;align-items:center;gap:8px;margin:0 15px 10px;padding:8px 12px;background:rgba(124,58,237,.1);border:1.5px dashed rgba(124,58,237,.4);border-radius:10px;cursor:pointer;transition:all .2s}
+        .post-coupon:hover{background:rgba(124,58,237,.18);border-color:rgba(124,58,237,.6)}
+        .post-coupon:active{transform:scale(.97)}
+        .post-coupon i{color:#7C3AED;font-size:16px;flex-shrink:0}
+        .post-coupon-code{flex:1;font-size:14px;font-weight:800;color:#a78bfa;letter-spacing:1px;direction:ltr;text-align:right}
+        .post-coupon-hint{font-size:10px;color:var(--text-muted);white-space:nowrap}
+        .post-coupon.copied{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.4)}
+        .post-coupon.copied i{color:#10b981}
+        .post-coupon.copied .post-coupon-code{color:#34d399}
+        .post-coupon.copied .post-coupon-hint{color:#10b981}
         .post-actions { display: grid; grid-template-columns: 1fr 1fr 1fr 50px; gap: 8px; padding: 0 15px 15px; }
         .action-btn { border: none; border-radius: var(--radius-sm); color: #fff; padding: 12px; font-family: 'Cairo'; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all var(--transition-fast); position: relative; overflow: hidden; }
         .action-btn::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 50%); pointer-events: none; }
@@ -306,6 +316,12 @@
                             <div class="post-date"><i class="fas fa-calendar"></i> ${new Date(p.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                         </div>
                     </div>
+                    ${(p.coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(p.coupon).trim())) ? `
+                    <div class="post-coupon" onclick="copyCoupon(this, '${p.coupon.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-ticket-alt"></i>
+                        <span class="post-coupon-code">${p.coupon}</span>
+                        <span class="post-coupon-hint"><i class="fas fa-copy"></i> نسخ</span>
+                    </div>` : ''}
                     <div class="post-actions">
                         <button class="action-btn republish-btn" onclick="republishPost('${p.id}', this)">
                             <i class="fab fa-telegram"></i> تليغرام
@@ -602,6 +618,34 @@
         };
 
         loadPosts();
+
+        function copyCoupon(el, code) {
+            navigator.clipboard.writeText(code).then(() => {
+                el.classList.add('copied');
+                el.querySelector('.post-coupon-hint').innerHTML = '<i class="fas fa-check"></i> تم النسخ';
+                showToast('تم نسخ الكوبون: ' + code, 'success');
+                setTimeout(() => {
+                    el.classList.remove('copied');
+                    el.querySelector('.post-coupon-hint').innerHTML = '<i class="fas fa-copy"></i> نسخ';
+                }, 2000);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = code;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                el.classList.add('copied');
+                el.querySelector('.post-coupon-hint').innerHTML = '<i class="fas fa-check"></i> تم النسخ';
+                showToast('تم نسخ الكوبون: ' + code, 'success');
+                setTimeout(() => {
+                    el.classList.remove('copied');
+                    el.querySelector('.post-coupon-hint').innerHTML = '<i class="fas fa-copy"></i> نسخ';
+                }, 2000);
+            });
+        }
 
         function toggleArPanel(){
             const b=document.getElementById('arBody');
