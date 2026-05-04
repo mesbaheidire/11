@@ -28,6 +28,8 @@ The application utilizes a shared CSS design system (`public/modern-theme.css`) 
     - Automates publishing to Telegram channels and Facebook pages.
     - Supports post scheduling and auto-saving of published posts for republishing.
     - Features a 5-tier image fallback system for reliable visual content delivery in posts.
+    - **Image safety**: Source-channel images are NEVER used as a fallback to avoid posting wrong/unrelated images (e.g. a pinned mining-machine photo for a smartwatch product). If no proper product image is found, the post is sent as text-only.
+    - **Text sanitization**: CDN image URLs (ae-pic, aliexpress-media, alicdn, *.avif, *.webp, jpg_NNNxNNN) are stripped from incoming spy text before AI processing to prevent leaking raw image links into published posts. The smart sender no longer pastes the image URL into the message body when sendPhoto fails.
     - **Auto-Repost System:** Background scheduler that randomly republishes saved posts to Telegram at configurable intervals (1–1440 minutes). Config stored in `app_storage` key `auto_repost_config`. Tracks reposted IDs to avoid repeats, resets cycle when all posts are covered. Includes concurrency guard (`autoRepostBusy` flag) to prevent overlapping executions. UI panel in `saved-posts.html` with toggle, interval input, manual trigger, and reset. API: `GET/POST /api/auto-repost/config`, `POST /api/auto-repost/now`, `POST /api/auto-repost/reset`.
 - **Competitor Monitoring (Channel Spy):**
     - Monitors public Telegram channels using GramJS (Userbot mode) without admin access.

@@ -455,7 +455,7 @@ function sanitizeAliImageUrlSpy(url) {
   } catch (e) { return url; }
 }
 
-// إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → URL retry → link_preview → نص فقط)
+// إرسال منشور إلى قناة (Buffer → URL → URL retry → نص فقط بدون لصق رابط الصورة)
 async function smartSendPostSpy(bot, target, captionMessage, textMessage, productImage, imageUrl, opts = {}) {
   const sendOpts = { parse_mode: 'HTML', ...opts };
   // تنظيف الرابط من لاحقات avif/webp
@@ -486,18 +486,9 @@ async function smartSendPostSpy(bot, target, captionMessage, textMessage, produc
       await bot.telegram.sendPhoto(target, imageUrl, { caption: captionMessage, ...sendOpts });
       return { ok: true, via: 'url_retry' };
     } catch (e) { console.log(`⚠️ [smartSend] sendPhoto URL retry فشل: ${e.message}`); }
-    // المحاولة 4: ضع رابط الصورة في النص ليُعرض كمعاينة كبيرة
-    try {
-      const msgWithImage = imageUrl + '\n\n' + textMessage.substring(0, 4000);
-      await bot.telegram.sendMessage(target, msgWithImage, {
-        ...sendOpts,
-        link_preview_options: { is_disabled: false, url: imageUrl, prefer_large_media: true }
-      });
-      return { ok: true, via: 'link_preview' };
-    } catch (e) { console.log(`⚠️ [smartSend] link_preview فشل: ${e.message}`); }
   }
-  // الأخير: نص فقط
-  await bot.telegram.sendMessage(target, textMessage, sendOpts);
+  // الأخير: نص فقط — بدون لصق رابط الصورة في النص (لتجنب ظهور روابط CDN قبيحة)
+  await bot.telegram.sendMessage(target, textMessage, { ...sendOpts, link_preview_options: { is_disabled: true } });
   return { ok: true, via: 'text_only' };
 }
 
@@ -1817,11 +1808,8 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`⛔ fetchLinkPreview تم تجاهل رابط فيديو`);
   }
 
-  // 7) صورة المنشور الأصلي كخيار مباشر
-  if (!productImage && sourceImage) {
-    console.log(`🖼 [7/9] استخدام صورة المنشور الأصلي`);
-    productImage = { source: sourceImage };
-  }
+  // 7) تخطي صورة المنشور الأصلي — قد تكون صورة منتج آخر/مثبتة لا علاقة لها (مثل صور آلات تعدين)
+  // نفضّل النشر بدون صورة على نشر صورة خاطئة.
 
   // 8) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
   if (productImage && typeof productImage === 'string') {
@@ -1842,9 +1830,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
+  // 9) لا نستخدم صورة القناة المصدر كاحتياطي أبداً — لتفادي صور خاطئة (آلة تعدين لساعة ذكية مثلاً)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [9/9] استخدام صورة المنشور الأصلي (احتياطي)`);
-    productImage = { source: sourceImage };
+    console.log(`⚠️ [9/9] لا توجد صورة منتج صحيحة — سيتم النشر كنص فقط (تم تجاهل صورة القناة المصدر لتفادي عرض صورة خاطئة)`);
   }
 
   // إذا انتهى بنا الأمر بـ Buffer فقط بدون URL (مثل صورة قناة المصدر)،
@@ -2308,7 +2296,7 @@ async function startSpy(config) {
       console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
 
       let text = msg.message || '';
-      
+
       let entityUrls = [];
       if (msg.entities && Array.isArray(msg.entities)) {
         for (const ent of msg.entities) {
@@ -2347,6 +2335,14 @@ async function startSpy(config) {
       if (entityUrls.length > 0) {
         text = text + '\n' + entityUrls.join('\n');
       }
+
+      // تنظيف روابط صور CDN من النص (ae-pic, aliexpress-media, alicdn, .avif, .webp, jpg_NNNxNNN)
+      // يتم بعد استخراج entities لتجنب إفساد ent.offset/length
+      text = text.replace(/https?:\/\/[^\s]*(?:ae-pic|aliexpress-media|alicdn)[^\s]*/gi, '')
+                 .replace(/https?:\/\/\S+\.(?:avif|webp)(?:\S*)?/gi, '')
+                 .replace(/https?:\/\/\S+jpg_\d+x\d+\S*/gi, '')
+                 .replace(/\n{3,}/g, '\n\n')
+                 .trim();
 
       if (!text.trim()) {
         console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
