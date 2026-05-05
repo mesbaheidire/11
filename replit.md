@@ -1,205 +1,66 @@
-# AffiliDz — منصة أتمتة الأفلييت
+# AffiliDz
 
-## Overview
-**AffiliDz** is an Arabic-language affiliate marketing automation platform for Telegram channel owners targeting the Algerian/DZD market. Features include affiliate link generation, competitor monitoring (spy), AI content generation, image watermarking, automated Telegram + Facebook publishing, and a Telegram Mini App store. The app is a PWA (Progressive Web App) that can be installed on mobile devices.
+An automated AliExpress affiliate marketing platform for Telegram channel owners (targeting the Algerian market). Enables link conversion, AI content generation, channel spying, and scheduled publishing to Telegram and Facebook.
 
-## Project Structure
-- `server.js` - Main Express server entry point
-- `afflink.js` - AliExpress affiliate link generation logic
-- `scheduler.js` - Post scheduling functionality
-- `aliexpress-api.js` - AliExpress API integration
-- `index.js` - Telegram bot entry point
-- `spy.js` - Channel spy module (monitor competitor channels)
-- `public/` - Static frontend files
-  - `index.html` - Main app interface
-  - `spy.html` - Channel spy management page
-  - `collections.html` - Collections page
-  - `telegram.html` - Telegram publishing page
-  - `video-generator.html` - مولّد فيديوهات TikTok/Reels تلقائي (Canvas + MediaRecorder، client-side)
-    - يجلب بيانات المنتج من `/api/affiliate`، يحمّل الصورة عبر `/api/proxy-image` كـ fallback لتجاوز CORS
-    - 3 قوالب (burst/story/minimal)، 3 مدد (10/15/30 ثانية)، 9:16 بدقة 540×960، 30fps
-    - مخرج WebM (VP9/VP8 + Opus)، يدعم رفع موسيقى خلفية ودمجها عبر AudioContext
-    - معاينة حية على Canvas + شريط تقدم أثناء التسجيل + زر تحميل بعد الانتهاء
-  - `store.html` - Telegram Mini App store (Yassir-inspired purple theme)
-  - `store-analytics.html` - Store analytics dashboard for admin
-  - `saved-posts.html` - Saved posts management page
-  - `manifest.json` - PWA manifest
-  - `sw.js` - Service worker for offline support
+## Run & Operate
 
-## Tech Stack
-- **Backend**: Node.js with Express
-- **Frontend**: Vanilla HTML/CSS/JavaScript (PWA)
-- **Design System**: `public/modern-theme.css` — shared CSS design tokens and utility classes
-  - CSS variables: `--bg-primary`, `--accent-orange`, `--accent-purple`, `--accent-blue`, etc.
-  - Reusable classes: `.m-card`, `.m-btn-*`, `.m-input`, `.m-toast`, `.m-glass-nav`
-  - Glass morphism, gradient buttons with light overlay, curved headers with `::after` pseudo-element
-  - Focus-visible accessibility styles, smooth transitions, responsive breakpoints
-  - Imported by all dark-themed pages (index, telegram, spy, discover, saved-posts, collections, video-generator)
-  - `store.html` and `store-analytics.html` use their own independent theme systems
-- **Dependencies**: axios, cheerio, cors, express, sharp, telegraf
+- **Start**: `npm start` (runs `node server.js`)
+- **Required secrets**: `DATABASE_URL` (auto-set by Replit DB), `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `cook` (AliExpress session cookie)
+- **Optional**: `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET`, `ALIEXPRESS_TRACK_ID`, `TELEGRAM_CHANNEL_ID`
 
-## Running the App
-The app runs on port 5000 with the command:
-```
-npm start
-```
+## Stack
 
-## Features
-- Generate AliExpress affiliate links
-- Frame product images with custom borders
-- **Logo Watermark** - Add channel logo as watermark to framed images
-  - Upload PNG logo with transparent background
-  - 5 position options (corners + center)
-  - 3 size options (small, medium, large)
-- Publish offers to Telegram channels
-- Schedule posts for later
-- PWA support for mobile installation
-- **Discover Winning Products** - Search for hot products using AliExpress API with optional Gemini AI ranking
-  - AI-powered keyword suggestions for Algerian market
-  - Product analysis with AI scoring and hooks in Algerian dialect
-  - Fallback mode works without Gemini API key
-- **Gemini API Key Rotation** - Automatic switching between multiple API keys
-  - Add multiple keys in Settings (comma-separated)
-  - Auto-rotates to next key when quota is exceeded
-  - Status display shows current key and total available
-  - Keys stored securely in `gemini_keys.json` (gitignored)
-- **AI Hook Refinement** - Improve user-written Algerian hooks with AI
-  - Two buttons: "توليد (AI)" for generating new hooks, "تحسين (AI)" for refining existing ones
-- **Saved Posts History** - Auto-save published posts for easy republishing
-  - View all saved posts with thumbnails
-  - One-click republish to Telegram
-  - Edit saved posts before republishing
-  - Posts stored in Neon PostgreSQL `saved_posts` table (persistent)
-- **Channel Spy (تجسس على القنوات)** - Monitor competitor Telegram channels
-  - Uses GramJS (Telegram MTProto) Userbot mode — monitors any public channel you're subscribed to without admin access
-  - Auto-detect AliExpress links from source channel posts
-  - Convert links to your own affiliate links automatically
-  - Extract price from competitor posts, get product title and image from AliExpress API
-  - **Unified Gemini analysis** — Single AI call (`/api/ai-analyze-post`) extracts productName, price, coupons[], sellerCoupon, sellerCouponCode, links[], isPhone from post text; `analyzePostFull()` in spy.js calls this once per post
-  - **AI extraction hierarchy**: 1) Unified Gemini analysis, 2) Individual AI extractors (extractCouponWithAI, extractSellerCouponWithAI, extractPriceWithAI), 3) Regex fallbacks
-  - **AI-powered product info extraction** — Gemini analyzes post text to extract product name and type (phone vs other)
-  - **AI-powered seller coupon extraction** — Automatically detects and extracts seller coupons from competitor posts
-  - AI-powered title refinement via Gemini (improves AliExpress product titles)
-  - Publishes with AliExpress API image (not competitor's image) to target channels
-  - Bot token and cookie used automatically from main app environment variables
-  - Configurable message template with seller coupon field
-  - Choose affiliate link type (Coin, Point, Super, Limited, Bundle)
-  - Duplicate link detection — skips already-processed links (stored 7 days, file: `spy_processed.json`)
-  - Random publish delay (configurable 1-60 min range) to avoid detection
-  - Daily publish limit — configurable max posts per day (0 = unlimited), resets at midnight
-  - Manual review mode — products sent to you via bot with "Publish"/"Skip" buttons before posting (30-min expiry)
-  - Owner notifications — sends you a personal Telegram message when a new product is detected
-  - Activity log with full history (images, targets, message stored for republishing)
-  - **Republish buttons** — Each log entry with saved message data shows "إعادة نشر" (instant) and "نشر مؤجل" (delayed, user-specified minutes) buttons; republish targets are validated against configured target channels server-side
-  - Auto-restart on server reboot
-  - Authentication flow: API ID/Hash from my.telegram.org + phone verification
-  - Session stored in PostgreSQL `telegram_session` table (with file fallback), config in `spy_config` table (with file fallback)
-  - All async functions properly awaited (getBotToken, getCookie, loadConfig, saveConfig, loadAuthState, saveAuthState)
-  - Config caching with `getCachedConfig()` for performance in synchronous contexts
+- **Runtime**: Node.js 20
+- **Framework**: Express 5
+- **Database**: PostgreSQL via `pg` (Replit managed)
+- **AI**: Google Gemini (`@google/generative-ai`)
+- **Telegram**: Telegraf (bot) + telegram (MTProto for spy)
+- **Frontend**: Vanilla HTML/CSS/JS (PWA)
+- **Image processing**: sharp, multer
+- **Other**: axios, got, xlsx, cors, dotenv
 
-- **Facebook Page Auto-Posting** - Automatically publish products to your Facebook Page
-  - Requires Facebook Page Access Token and Page ID (permissions: pages_manage_posts, pages_read_engagement)
-  - Posts with image + text + affiliate link
-  - Verify token and test post from spy settings UI
-  - Integrated with spy module — publishes to Facebook after Telegram
-  - **Manual Facebook publish** from index.html, telegram.html, and saved-posts.html
-  - Token masking in API responses; masked tokens never overwrite stored tokens
-  - Settings stored in spy config (database)
+## Where things live
 
-## Product Metadata Extraction
-The app uses multiple fallback methods to extract product title and image:
-1. **AliExpress API** - First attempt using internal API
-2. **microlink.io API** - External API for reliable metadata extraction
-3. **Web Scraping** - Multiple AliExpress domains with JSON parsing
-4. **LinkPreview.xyz API** - Fallback via `https://linkpreview.xyz/api/get-meta-tags?url=...` for meta tag extraction
-5. **Mobile page fallback** - Direct scraping of AliExpress mobile pages
+- `server.js` — Main Express server (3700+ lines, all API routes)
+- `db.js` — PostgreSQL schema + all DB helpers
+- `spy.js` — Telegram channel monitoring (MTProto)
+- `afflink.js` — AliExpress affiliate link conversion
+- `aliexpress-api.js` — AliExpress product search API
+- `scheduler.js` — Scheduled post queue
+- `facebook.js` — Facebook Page posting
+- `public/` — All frontend HTML pages (PWA)
+- `public/index.html` — Main dashboard
 
-### Spy Image Fetching Chain (spy.js)
-When processing spy posts, images are fetched in this priority order:
-1. **LinkPreview.xyz** — `fetchImageViaLinkPreview()` direct call
-2. **Microlink.io API** — `fetchImageViaMicrolink()` using mobile AliExpress URL
-3. **AliExpress API** — `getProductDetails()` direct call from aliexpress-api.js
-4. **og:image extraction** — `fetchOgImage()` from affiliate link HTML
-5. **fetchLinkPreview()** — full wrapper from afflink.js (microlink + API + scraping + linkpreview)
-6. **Download as Buffer** — convert any URL-only image to buffer via `downloadImageAsBuffer()`
-7. **Source image** — original Telegram post image (last resort)
+## Architecture decisions
 
-### Local Image Cache (saved_posts thumbnails)
-- `cacheImageBufferAsUrl(buffer)` in spy.js writes any image Buffer (e.g. Telegram source channel image with no public URL) to `public/spy-cache/<sha1>.<ext>` and returns a stable `/spy-cache/...` URL
-- Used as a final fallback when `productImageUrl` is null but `productImage.source` is a Buffer — ensures `saved_posts.image_url` is never empty when we have image data
-- Detects format (jpg/png/gif/webp) from magic bytes; deduplicated via SHA1 hash
-- Directory `public/spy-cache/` is gitignored (kept via `.gitkeep`)
+- Credentials are loaded from env vars first, then DB (`app_storage` table), then local file (`app_credentials.json`) as fallback
+- Gemini API keys support rotation — multiple keys stored in `gemini_keys.json` or env var (comma-separated)
+- DB tables are auto-created on startup via `initDatabase()` in `db.js`
+- Port defaults to `5000` (Replit webview compatible), overridable via `PORT` env var
+- No authentication layer — app is intended for single-owner use with credentials stored in settings UI
 
-## Credential Loading Priority
-Environment variables (Render) always take priority over database and local file storage:
-1. **Environment variables** (Render / hosting platform) — always first
-2. **Database** (app_storage table) — fallback
-3. **Local file** (app_credentials.json) — last resort
+## Product
 
-## Environment Variables
-### Required for Render/Production Deployment:
-- `DATABASE_URL` - PostgreSQL connection string (auto-set by Render)
-- `NEON_DATABASE_URL` - Neon PostgreSQL connection string (takes priority over DATABASE_URL)
-- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - Database credentials
+- Convert AliExpress product links to affiliate links
+- Generate AI marketing copy (hooks, titles) via Gemini
+- Monitor competitor Telegram channels ("Spy" mode)
+- Schedule and auto-publish posts to Telegram channels and Facebook pages
+- Bulk import products from Excel files
+- PWA installable on mobile
 
-### Optional (can be set as environment variables):
-- `TELEGRAM_BOT_TOKEN` - Telegram bot token
-- `TELEGRAM_CHANNEL_ID` - Default channel ID
-- `cook` - AliExpress cookie for affiliate generation
-- `GEMINI_API_KEY` - Single or multiple keys (comma-separated) for AI features
-- `SPY_CONFIG_DATA` - Spy configuration (JSON-encoded, stored in environment for Render)
-- `SPY_SESSION_DATA` - Telegram session (stored in environment for Render)
+## User preferences
 
-## Database Schema
-The app uses PostgreSQL with the following key tables:
-- `spy_config` - Spy module configuration
-- `spy_auth_state` - Telegram authentication state
-- `spy_processed_links` - 7-day history of processed links
-- `spy_log` - Activity log for spy operations
-- `telegram_session` - Telegram user session
-- `gemini_keys` - Gemini API keys storage
-- `saved_posts` - User's saved posts
-- `app_storage` - General key-value storage for Render compatibility
+_Populate as you build_
 
-## Database / Storage
-- **Neon PostgreSQL** - Primary persistent storage (free tier, always-on)
-- `db.js` connects via `NEON_DATABASE_URL` (priority) or `DATABASE_URL`
-- `initDatabase()` auto-creates all tables on startup
-- Saved posts, spy config, credentials, sessions all stored in Neon DB
-- No more file-based storage for saved posts (was `saved_posts.json`)
-- SSL enabled for Neon (`rejectUnauthorized: false`)
+## Gotchas
 
-## Render Deployment Notes
-The app is **fully compatible with Render** and uses:
-1. **Neon PostgreSQL** - For persistent data (survives restarts, free forever)
-2. **Environment variables** - Set `DATABASE_URL` on Render to Neon connection string
-3. Tables are auto-created on first startup
+- The spy module requires Telegram API ID/Hash (MTProto) — different from bot token
+- First startup may log a DB error for `spy_config` table not existing — this is harmless, tables are created shortly after
+- AliExpress cookie (`cook`) expires and must be refreshed periodically
+- `sharp` requires native binaries — already installed via npm
 
-Set `DATABASE_URL` in Render Environment to your Neon connection string.
+## Pointers
 
-## Excel Import Feature (May 2026)
-- Page: `public/excel-import.html` — upload .xlsx/csv, map columns, customize message template, batch publish to Telegram.
-- Endpoints in `server.js`:
-  - `POST /api/excel/parse` — parse uploaded file via `xlsx`, return columns + rows
-  - `POST /api/excel/start` — start background job (auto-convert AliExpress links via `portaffFunction`, publish to Telegram, optionally save to history)
-  - `GET /api/excel/status/:jobId` — poll progress (capped logs/errors)
-  - `POST /api/excel/control/:jobId` — pause/resume/cancel
-- In-memory `excelJobs` Map with TTL cleanup (1h) and max 20 jobs.
-- Reuses one `Telegraf` instance per job, shared `formatChannelIdShared()` for channel ID normalization.
-- Nav icon added in `public/index.html` (green Excel icon).
-
-## Cleanup Summary (May 3, 2026)
-**Removed 12 unused npm packages**: `@google/genai`, `drizzle-zod`, `follow-redirects`, `input`, `link-preview-js`, `p-limit`, `p-retry`, `zod`, `zod-validation-error`, `cheerio`, fake `https`/`url` (shadowed Node core).
-**Deleted files**: `attached_assets/` (90MB of unused screenshots), `render-safe-storage.js`, `app.yaml`, `public/spy-cache/`, `public/sw.js` (broken SW that wiped cache).
-**Fixed**: `public/index.html` now unregisters any old service worker installed in user browsers.
-**Result**: Project size reduced from ~250MB to ~86MB (-164MB). All pages still serve 200, no syntax errors.
-
-## Smart Image Send (May 3, 2026)
-Both Excel import (`server.js` `sendPostWithImage`) and Spy page (`spy.js` `smartSendPostSpy`) use the same 5-tier image fallback:
-1. Buffer download → 2. URL retry → 3. Preview image → 4. Original URL retry → 5. `link_preview` with `prefer_large_media: true` → 6. text-only (rare).
-This guarantees every post has visual content as long as the image URL is valid.
-
-## Product Stats Fix (May 3, 2026 — Root Cause)
-Rating/orders/discount in store.html product modal were "—" because `aliexpress.affiliate.productdetail.get` and `product.query` (with `product_ids`) often don't return these fields per-product.
-**Fix in `aliexpress-api.js`**: Added `_queryByKeywords()` 3rd-tier fallback inside `getProductDetails()`. When productdetail+queryById both miss rating/orders/discount, we search by the product **title** (first 8 words) and match the product by ID in results — search-result cards include full stats reliably.
-**Also fixed in `server.js`**: Added `getProductDetails` to require destructure (was missing). Replaced broken HTML scraper with cookie-jar-based search SSR scraper (`_aliFetchWithCookieJar` + `_extractProductCardFromSearch`) — but scraper is captcha-blocked from server IPs, so it's now just a final safety net. The reliable path is the API + keyword fallback.
+- DB skill: `.local/skills/database/SKILL.md`
+- Workflows skill: `.local/skills/workflows/SKILL.md`
+- Secrets skill: `.local/skills/environment-secrets/SKILL.md`
