@@ -34,7 +34,7 @@ The application utilizes a shared CSS design system (`public/modern-theme.css`) 
 - **Competitor Monitoring (Channel Spy):**
     - Monitors public Telegram channels using GramJS (Userbot mode) without admin access.
     - Auto-detects and converts AliExpress links to user's affiliate links.
-    - Extracts product information (price, title, image, coupons) using AI and various fallbacks.
+    - Extracts product information (price, title, image, coupons) using AI and various fallbacks. Spy post analysis (`/api/ai-analyze-post`) uses **`gemini-2.5-flash`** (full, not lite) for higher accuracy on price/coupon extraction; the prompt includes 7 strict price rules + 5 worked examples to ignore strikethrough/original prices, coupon thresholds (e.g. `$20/159`), and percentages. `getGeminiModel()` and `runGeminiWithRotation()` accept an optional `modelName` parameter so individual endpoints can pick the model that fits their accuracy/cost tradeoff.
     - Offers configurable message templates, duplicate link detection, random publish delays, daily limits, and manual review mode.
     - Provides owner notifications and a detailed activity log with republishing capabilities.
 - **Video Generator:** A client-side TikTok/Reels video generator (`public/video-generator.html`) using Canvas and MediaRecorder. It supports multiple templates, durations, and aspect ratios, with custom background music integration and live preview.

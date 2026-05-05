@@ -335,13 +335,13 @@ function rotateGeminiKey() {
 }
 
 // Get a Gemini model instance with current key
-function getGeminiModel() {
+function getGeminiModel(modelName = "gemini-2.5-flash-lite") {
   const apiKey = getCurrentGeminiKey();
   if (!apiKey) return null;
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    return genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    return genAI.getGenerativeModel({ model: modelName });
   } catch (e) {
     console.log('Error creating Gemini model:', e.message);
     return null;
@@ -883,9 +883,9 @@ app.get('/api/gemini-status', async (req, res) => {
 });
 
 // Helper function to run Gemini with auto-rotation on quota error
-async function runGeminiWithRotation(prompt, maxRetries = 3) {
+async function runGeminiWithRotation(prompt, maxRetries = 3, modelName = "gemini-2.5-flash-lite") {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const currentModel = getGeminiModel();
+    const currentModel = getGeminiModel(modelName);
     if (!currentModel) {
       throw new Error('No Gemini API key available');
     }
@@ -1783,14 +1783,28 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 
 ## قواعد صارمة:
 1. استخرج اسم المنتج الإنجليزي الدقيق (العلامة التجارية + الموديل + النسخة).
-2. استخرج السعر النهائي بعد التخفيض فقط (بالدولار).
+2. استخراج السعر — اتبع هذه القواعد بدقة عالية:
+   أ. السعر هو **السعر النهائي بعد جميع التخفيضات والكوبونات** (بالدولار $).
+   ب. غالباً يأتي بعد كلمات: "السعر", "السعر النهائي", "بسعر", "ب", "السعر مع الكوبون", "بعد الكوبون", "بعد الخصم", "Price", "Final Price".
+   ج. **تجاهل تماماً**: السعر الأصلي (المشطوب)، السعر قبل التخفيض، أسعار التحدي، أسعار في أمثلة الكوبونات (مثل "كوبون $20/159" — هنا 20 و159 هما شروط الكوبون وليسا سعر المنتج).
+   د. إذا وُجدت عدة أسعار، اختر **الأصغر** (السعر النهائي بعد كل التخفيضات).
+   هـ. تجاهل النِسب المئوية (50%) والأرقام بدون $ التي ليست سعراً.
+   و. الصيغة المطلوبة: "$X.XX" أو "$X" (بدون فواصل أو مسافات).
+   ز. إذا لم تجد سعراً صريحاً للمنتج → null. لا تخمّن.
 3. الكوبونات العامة: كل كود يأتي بعد "كوبون" أو على سطور "كوبون" → ضعه في coupons[].
 4. قسيمة البائع: فقط ما يأتي صراحة بعد "قسيمة البائع" أو "إحجز قسيمة" → sellerCoupon. إذا لم يوجد → null.
 5. ⚠️ لا تضع نفس الكود في كلا المكانين. إذا كان الكود كوبون عام، لا تضعه كقسيمة بائع.
 6. استخرج كل روابط AliExpress كمصفوفة بدون تكرار.
 7. حدد إذا كان المنتج هاتف ذكي أم لا.
 
-## أمثلة:
+## أمثلة السعر:
+- "السعر: ~~$45.99~~ → $19.99" → price: "$19.99" (الأصغر/النهائي)
+- "بسعر $12.50 بعد كوبون $5/50" → price: "$12.50" (تجاهل 5 و50 لأنها شروط الكوبون)
+- "Final Price: $8.75 | Original: $20" → price: "$8.75"
+- "خصم 50% بسعر $24" → price: "$24" (تجاهل 50%)
+- "كوبون $20/159 : CDOF06" بدون ذكر سعر منتج → price: null
+
+## أمثلة الكوبونات:
 مثال 1: "كوبون $20/159 : CDOF06 \n كوبون $20/159 : OD20 \n كوبون $20/159 : ODYOUS20"
 → coupons: ["CDOF06", "OD20", "ODYOUS20"], sellerCoupon: null (لا يوجد ذكر لقسيمة البائع)
 
@@ -1818,8 +1832,8 @@ ${text}
 }`;
 
     try {
-      const rawResult = await runGeminiWithRotation(prompt);
-      console.log(`🧠 AI analyze-post raw: "${rawResult.substring(0, 200)}"`);
+      const rawResult = await runGeminiWithRotation(prompt, 3, "gemini-2.5-flash");
+      console.log(`🧠 AI analyze-post (flash) raw: "${rawResult.substring(0, 200)}"`);
       let result = null;
       try {
         const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
