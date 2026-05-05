@@ -334,6 +334,42 @@ function rotateGeminiKey() {
   return false;
 }
 
+// 🛡️ Anti-hallucination price validator: ensures AI-returned price exists as a COMPLETE number token in source text
+// Prevents AI from inventing prices (e.g. returning $131.4 calculated from $214.4 minus a $18 coupon).
+function validatePriceAgainstText(priceValue, sourceText) {
+  if (!priceValue || !sourceText) return false;
+  // Extract the numeric portion from the AI-returned price (handles $X.XX, $X,XX, X.XX$, etc.)
+  const aiNumMatch = String(priceValue).match(/(\d{1,3}(?:[.,\s]\d{3})*[.,]\d+|\d+[.,]\d+|\d+)/);
+  if (!aiNumMatch) return false;
+  // Normalize: remove thousand separators (spaces), unify decimal to "."
+  const normalize = (s) => {
+    let n = String(s).replace(/\s/g, '');
+    // If both . and , present, last one is decimal, the other is thousands
+    if (n.includes('.') && n.includes(',')) {
+      const lastDot = n.lastIndexOf('.');
+      const lastComma = n.lastIndexOf(',');
+      if (lastDot > lastComma) n = n.replace(/,/g, ''); // 1,234.56 → 1234.56
+      else n = n.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
+    } else if (n.includes(',')) {
+      // Could be decimal (12,50) or thousands (1,234). If exactly 3 digits after comma → thousands
+      const parts = n.split(',');
+      if (parts.length === 2 && parts[1].length === 3) n = n.replace(',', ''); // 1,234 → 1234
+      else n = n.replace(',', '.'); // 12,50 → 12.50
+    }
+    // Remove trailing zeros after decimal for canonical comparison
+    if (n.includes('.')) n = n.replace(/\.?0+$/, '') || '0';
+    return n;
+  };
+  const aiCanonical = normalize(aiNumMatch[1]);
+  if (!aiCanonical || aiCanonical === '0') return false;
+  // Extract ALL number tokens from source text (with word boundaries)
+  const sourceTokens = sourceText.match(/\d{1,3}(?:[.,\s]\d{3})*[.,]\d+|\d+[.,]\d+|\d+/g) || [];
+  for (const tok of sourceTokens) {
+    if (normalize(tok) === aiCanonical) return true;
+  }
+  return false;
+}
+
 // Get a Gemini model instance with current key
 function getGeminiModel(modelName = "gemini-2.5-flash-lite") {
   const apiKey = getCurrentGeminiKey();
@@ -1515,18 +1551,26 @@ app.post('/api/ai-extract-price', async (req, res) => {
     }
 
     try {
-      const prompt = `أنت محلل نصوص خبير. استخرج السعر من النص التالي.
+      const prompt = `أنت **مستخرج** نصوص خبير، لست آلة حاسبة. استخرج السعر المكتوب حرفياً في النص التالي.
+
+⚠️⚠️⚠️ **القاعدة الذهبية**: السعر الذي تُرجعه يجب أن يكون موجوداً **حرفياً ونصياً** في النص. **ممنوع منعاً باتاً** أي عملية حسابية، طرح، جمع، أو تطبيق كوبون.
 
 قواعد:
-1. ابحث عن أي سعر مذكور بأي عملة (دينار، دولار، يورو، ريال، درهم، جنيه، DA, DZD, USD, EUR، إلخ).
-2. إذا وُجد أكثر من سعر، اختر السعر النهائي أو سعر البيع (وليس السعر الأصلي/المشطوب).
-3. أعد الإجابة بصيغة JSON فقط: {"price":"السعر مع العملة"} أو {"price":null} إذا لم تجد سعراً.
-4. لا تضف أي شرح أو نص إضافي — فقط JSON.
+1. ابحث عن أي سعر مذكور صراحة بأي عملة (دينار، دولار، يورو، ريال، درهم، جنيه، DA, DZD, USD, EUR، إلخ).
+2. إذا وُجد أكثر من سعر صريح، اختر **السعر النهائي/الأصغر المكتوب نصياً** (وليس المشطوب)، ولا تحسبه أنت.
+3. **تجاهل تماماً** الأرقام التي هي شروط كوبون مثل "$149/18" أو "$20/159" — هذه شروط خصم وليست أسعار منتج.
+4. ⚠️ لا تطبّق الكوبون على السعر. لا تطرح ولا تجمع. السعر المُرجع يجب أن يكون **نسخاً حرفياً** من النص.
+5. إذا لم تجد سعراً صريحاً → {"price":null}.
+6. أعد JSON فقط: {"price":"السعر مع العملة كما كُتب نصياً"} أو {"price":null}. لا شرح إضافي.
+
+أمثلة:
+- "السعر: $214.4 \\n كوبون: $149/18" → {"price":"$214.4"} (لا تحسب 214.4-18، لا تُرجع $131.4 لأنه غير موجود في النص).
+- "بسعر $50 بعد كوبون $10/40" → {"price":"$50"} (لا تُرجع $40).
 
 النص:
 ${text}`;
 
-      const rawResult = await runGeminiWithRotation(prompt);
+      const rawResult = await runGeminiWithRotation(prompt, 3, "gemini-2.5-flash");
       let extracted = null;
       try {
         const jsonMatch = rawResult.match(/\{[\s\S]*?"price"[\s\S]*?\}/);
@@ -1548,6 +1592,11 @@ ${text}`;
         const hasNumber = /\d/.test(extracted);
         if (!hasNumber || extracted.length > 50) {
           return res.json({ success: true, price: null, method: 'ai_invalid' });
+        }
+        // 🛡️ Anti-hallucination: ensure the numeric part exists as a complete token in source text
+        if (!validatePriceAgainstText(extracted, text)) {
+          console.log(`🚨 سعر مُهلوَس مرفوض (legacy): "${extracted}" غير موجود كرقم كامل في النص`);
+          return res.json({ success: true, price: null, method: 'ai_hallucinated' });
         }
       }
 
@@ -1783,14 +1832,16 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 
 ## قواعد صارمة:
 1. استخرج اسم المنتج الإنجليزي الدقيق (العلامة التجارية + الموديل + النسخة).
-2. استخراج السعر — اتبع هذه القواعد بدقة عالية:
-   أ. السعر هو **السعر النهائي بعد جميع التخفيضات والكوبونات** (بالدولار $).
-   ب. غالباً يأتي بعد كلمات: "السعر", "السعر النهائي", "بسعر", "ب", "السعر مع الكوبون", "بعد الكوبون", "بعد الخصم", "Price", "Final Price".
-   ج. **تجاهل تماماً**: السعر الأصلي (المشطوب)، السعر قبل التخفيض، أسعار التحدي، أسعار في أمثلة الكوبونات (مثل "كوبون $20/159" — هنا 20 و159 هما شروط الكوبون وليسا سعر المنتج).
-   د. إذا وُجدت عدة أسعار، اختر **الأصغر** (السعر النهائي بعد كل التخفيضات).
-   هـ. تجاهل النِسب المئوية (50%) والأرقام بدون $ التي ليست سعراً.
-   و. الصيغة المطلوبة: "$X.XX" أو "$X" (بدون فواصل أو مسافات).
-   ز. إذا لم تجد سعراً صريحاً للمنتج → null. لا تخمّن.
+2. استخراج السعر — اتبع هذه القواعد بدقة قصوى:
+   ⚠️⚠️⚠️ **القاعدة الذهبية**: السعر الذي تُرجعه يجب أن يكون موجوداً **حرفياً ونصياً** في النص. **ممنوع منعاً باتاً** أي عملية حسابية، طرح، جمع، أو تطبيق كوبون. أنت **مستخرج** نصوص فقط، لست آلة حاسبة.
+   أ. ابحث عن السعر المكتوب صراحة بعد كلمات: "السعر", "السعر النهائي", "بسعر", "السعر بعد التخفيض", "Price", "Final Price", "💰", "✅".
+   ب. السعر يكون السعر النهائي المعروض كنص — لا تحسبه أنت.
+   ج. **تجاهل تماماً**: السعر المشطوب (~~$X~~)، السعر قبل التخفيض، أسعار في شروط الكوبون (مثل "$20/159" أو "$149/18" — هذه شروط كوبون "خصم $20 على طلبات $159+"، **ليست أسعار منتج**).
+   د. إذا وُجد سعر واحد صريح فقط للمنتج → خذه كما هو.
+   هـ. إذا وُجدت عدة أسعار صريحة للمنتج → اختر **الأصغر** المكتوب نصياً (لا تحسبه).
+   و. تجاهل النِسب المئوية (50%) والأرقام بدون $.
+   ز. الصيغة المطلوبة: "$X.XX" أو "$X" (نسخ حرفي من النص).
+   ح. ⚠️ **تحقق نهائي**: قبل إرجاع السعر، تأكد أن الرقم بالضبط (نفس الأرقام نفس الفاصلة) موجود في النص. إن لم يكن موجوداً حرفياً → أرجع null. **لا تخمّن، لا تحسب، لا تستنتج**.
 3. الكوبونات العامة: كل كود يأتي بعد "كوبون" أو على سطور "كوبون" → ضعه في coupons[].
 4. قسيمة البائع: فقط ما يأتي صراحة بعد "قسيمة البائع" أو "إحجز قسيمة" → sellerCoupon. إذا لم يوجد → null.
 5. ⚠️ لا تضع نفس الكود في كلا المكانين. إذا كان الكود كوبون عام، لا تضعه كقسيمة بائع.
@@ -1803,6 +1854,8 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 - "Final Price: $8.75 | Original: $20" → price: "$8.75"
 - "خصم 50% بسعر $24" → price: "$24" (تجاهل 50%)
 - "كوبون $20/159 : CDOF06" بدون ذكر سعر منتج → price: null
+- ⚠️ **مثال هلوسة محظورة**: نص "السعر: $214.4 \n كوبون: $149/18 : CDSR05" → price: **"$214.4"** (نسخ حرفي). **خطأ فادح** أن تُرجع "$131.4" أو أي رقم محسوب من طرح الكوبون من السعر — هذا اختراع لرقم غير موجود في النص.
+- ⚠️ مثال آخر: نص "السعر: $50 \n كوبون: $10/40" → price: "$50" (لا تحسب 50-10=40، أرجع 50 كما هو).
 
 ## أمثلة الكوبونات:
 مثال 1: "كوبون $20/159 : CDOF06 \n كوبون $20/159 : OD20 \n كوبون $20/159 : ODYOUS20"
@@ -1845,13 +1898,24 @@ ${text}
           if (!Array.isArray(result.links)) result.links = [];
           result.coupons = result.coupons.map(c => String(c).trim().toUpperCase()).filter(c => c && c !== 'NULL');
           result.links = result.links.map(l => String(l).trim()).filter(l => l && l.includes('aliexpress'));
+
+          // 🛡️ Anti-hallucination: validate that the returned price exists as a complete number token in the source text
+          if (result.price && typeof result.price === 'string' && result.price !== 'null') {
+            if (!validatePriceAgainstText(result.price, text)) {
+              console.log(`🚨 سعر مُهلوَس مرفوض: AI أعاد "${result.price}" لكنه غير موجود كرقم كامل في النص الأصلي`);
+              result.price = null;
+            }
+          } else if (result.price === 'null' || result.price === '') {
+            result.price = null;
+          }
         }
       } catch (parseErr) {
         console.log(`⚠️ AI analyze-post parse error: ${parseErr.message}`);
       }
 
+      const responseMethod = (result && result.price === null) ? 'ai_price_validated' : 'ai';
       console.log(`✅ AI analyze-post result: ${JSON.stringify(result)}`);
-      res.json({ success: true, result, method: 'ai' });
+      res.json({ success: true, result, method: responseMethod });
     } catch (aiError) {
       console.log('AI analyze-post failed:', aiError.message);
       res.json({ success: true, result: null, method: 'fallback' });
