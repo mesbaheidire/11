@@ -1338,11 +1338,7 @@ function showDet(){
   const couponEl=document.getElementById('detCoupon');
   if(p._coupon){couponEl.style.display='block';document.getElementById('detCouponCode').textContent=p._coupon}else{couponEl.style.display='none'}
   const msgEl=document.getElementById('detMessage');
-  if(p._message){
-    const raw=p._message.replace(/<[^>]*>/g,'').trim();
-    const kept=raw.split('\n').filter(l=>{const t=l.trim();return t&&(/📢.*تخفيض/.test(t)||/🎁.*كوب/.test(t)||/🎁.*قسيمة/.test(t))}).join('\n').trim();
-    if(kept){msgEl.style.display='block';document.getElementById('detMessageText').textContent=kept}else{msgEl.style.display='none'}
-  }else{msgEl.style.display='none'}
+  if(p._message){msgEl.style.display='block';document.getElementById('detMessageText').textContent=p._message}else{msgEl.style.display='none'}
   document.getElementById('detOverlay').classList.add('show');
   if(tg){tg.BackButton.show();tg.BackButton.onClick(closeDet)}
 }

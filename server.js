@@ -118,142 +118,6 @@ const app = express();
 const postScheduler = new PostScheduler();
 postScheduler.start();
 
-// ========== Auto-Repost System ==========
-let autoRepostInterval = null;
-let autoRepostBusy = false;
-let autoRepostState = {
-  enabled: false,
-  intervalMinutes: 60,
-  repostedIds: [],
-  lastRepostTime: null,
-  publishedCount: 0
-};
-
-async function loadAutoRepostConfig() {
-  try {
-    const raw = await db.getAppStorage('auto_repost_config');
-    if (raw) {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (typeof parsed.enabled === 'boolean') autoRepostState.enabled = parsed.enabled;
-      if (typeof parsed.intervalMinutes === 'number' && parsed.intervalMinutes >= 1) autoRepostState.intervalMinutes = parsed.intervalMinutes;
-      if (Array.isArray(parsed.repostedIds)) autoRepostState.repostedIds = parsed.repostedIds;
-      if (parsed.lastRepostTime) autoRepostState.lastRepostTime = parsed.lastRepostTime;
-      if (typeof parsed.publishedCount === 'number') autoRepostState.publishedCount = parsed.publishedCount;
-    }
-  } catch (e) {
-    console.log('⚠️ فشل تحميل إعدادات إعادة النشر:', e.message);
-  }
-}
-
-async function saveAutoRepostConfig() {
-  const ok = await db.setAppStorage('auto_repost_config', JSON.stringify({
-    enabled: autoRepostState.enabled,
-    intervalMinutes: autoRepostState.intervalMinutes,
-    repostedIds: autoRepostState.repostedIds,
-    lastRepostTime: autoRepostState.lastRepostTime,
-    publishedCount: autoRepostState.publishedCount
-  }));
-  return ok;
-}
-
-async function doAutoRepost() {
-  if (autoRepostBusy) { console.log('⏳ [إعادة نشر] عملية سابقة قيد التنفيذ'); return { sent: false, reason: 'busy' }; }
-  autoRepostBusy = true;
-  try {
-    if (!autoRepostState.enabled) return { sent: false, reason: 'disabled' };
-    const botToken = await getSharedBotToken();
-    if (!botToken) { console.log('⚠️ [إعادة نشر] لا يوجد توكن بوت'); return { sent: false, reason: 'لا يوجد توكن بوت' }; }
-    const shared = await loadSharedCredentials();
-    const channelId1 = shared.channelId || process.env.TELEGRAM_CHANNEL_ID;
-    const channelId2 = shared.channelId2 || '@AffiliDz';
-    const channels = [];
-    if (channelId1) channels.push(channelId1.startsWith('@') || channelId1.startsWith('-') ? channelId1 : '@' + channelId1);
-    if (channelId2) channels.push(channelId2.startsWith('@') || channelId2.startsWith('-') ? channelId2 : '@' + channelId2);
-    if (channels.length === 0) { console.log('⚠️ [إعادة نشر] لا توجد قنوات'); return { sent: false, reason: 'لا توجد قنوات' }; }
-
-    const allPosts = await db.getSavedPosts();
-    if (allPosts.length === 0) { console.log('⚠️ [إعادة نشر] لا توجد منشورات محفوظة'); return { sent: false, reason: 'لا توجد منشورات' }; }
-
-    let available = allPosts.filter(p => !autoRepostState.repostedIds.includes(p.id));
-    if (available.length === 0) {
-      autoRepostState.repostedIds = [];
-      available = allPosts;
-      console.log('🔄 [إعادة نشر] تم إعادة تعيين القائمة — كل المنشورات نُشرت');
-    }
-
-    const post = available[Math.floor(Math.random() * available.length)];
-    console.log(`📤 [إعادة نشر] نشر: "${(post.title || '').substring(0, 40)}..."`);
-
-    const bot = new Telegraf(botToken);
-    const finalMessage = post.message || `📢تخفيض لـ ${post.title}\n\n✅السعر بعد التخفيض: ${post.price}\n\n📌رابط الشراء:\n${post.link}`;
-    let resolvedImage = post.image;
-    if (resolvedImage && !resolvedImage.startsWith('data:')) {
-      resolvedImage = sanitizeAliImageUrl(resolvedImage);
-    }
-
-    const errors = [];
-    for (const ch of channels) {
-      try {
-        if (resolvedImage) {
-          if (resolvedImage.startsWith('data:image')) {
-            const base64Data = resolvedImage.replace(/^data:image\/\w+;base64,/, '');
-            const imageBuffer = Buffer.from(base64Data, 'base64');
-            await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: finalMessage });
-          } else {
-            const buf = await downloadImageBuffer(resolvedImage);
-            if (buf) {
-              await bot.telegram.sendPhoto(ch, { source: buf }, { caption: finalMessage });
-            } else {
-              await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage });
-            }
-          }
-        } else {
-          await bot.telegram.sendMessage(ch, finalMessage);
-        }
-      } catch (chErr) {
-        console.log(`⚠️ [إعادة نشر] فشل الإرسال لـ ${ch}: ${chErr.message}`);
-        errors.push(chErr.message);
-      }
-    }
-
-    if (errors.length === channels.length) {
-      return { sent: false, reason: 'فشل الإرسال لكل القنوات: ' + errors[0] };
-    }
-
-    autoRepostState.repostedIds.push(post.id);
-    autoRepostState.lastRepostTime = new Date().toISOString();
-    autoRepostState.publishedCount++;
-    await saveAutoRepostConfig();
-    console.log(`✅ [إعادة نشر] تم نشر "${(post.title || '').substring(0, 30)}" — ${autoRepostState.repostedIds.length}/${allPosts.length}`);
-    return { sent: true, title: post.title };
-  } catch (e) {
-    console.log('❌ [إعادة نشر] خطأ:', e.message);
-    return { sent: false, reason: e.message };
-  } finally {
-    autoRepostBusy = false;
-  }
-}
-
-function startAutoRepost() {
-  stopAutoRepost();
-  if (!autoRepostState.enabled || autoRepostState.intervalMinutes < 1) return;
-  const ms = autoRepostState.intervalMinutes * 60 * 1000;
-  autoRepostInterval = setInterval(doAutoRepost, ms);
-  console.log(`🔁 [إعادة نشر] تشغيل — كل ${autoRepostState.intervalMinutes} دقيقة`);
-}
-
-function stopAutoRepost() {
-  if (autoRepostInterval) {
-    clearInterval(autoRepostInterval);
-    autoRepostInterval = null;
-  }
-}
-
-setTimeout(async () => {
-  await loadAutoRepostConfig();
-  if (autoRepostState.enabled) startAutoRepost();
-}, 5000);
-
 // Gemini API Key Management System
 const GEMINI_KEYS_FILE = path.join(__dirname, 'gemini_keys.json');
 
@@ -334,50 +198,14 @@ function rotateGeminiKey() {
   return false;
 }
 
-// 🛡️ Anti-hallucination price validator: ensures AI-returned price exists as a COMPLETE number token in source text
-// Prevents AI from inventing prices (e.g. returning $131.4 calculated from $214.4 minus a $18 coupon).
-function validatePriceAgainstText(priceValue, sourceText) {
-  if (!priceValue || !sourceText) return false;
-  // Extract the numeric portion from the AI-returned price (handles $X.XX, $X,XX, X.XX$, etc.)
-  const aiNumMatch = String(priceValue).match(/(\d{1,3}(?:[.,\s]\d{3})*[.,]\d+|\d+[.,]\d+|\d+)/);
-  if (!aiNumMatch) return false;
-  // Normalize: remove thousand separators (spaces), unify decimal to "."
-  const normalize = (s) => {
-    let n = String(s).replace(/\s/g, '');
-    // If both . and , present, last one is decimal, the other is thousands
-    if (n.includes('.') && n.includes(',')) {
-      const lastDot = n.lastIndexOf('.');
-      const lastComma = n.lastIndexOf(',');
-      if (lastDot > lastComma) n = n.replace(/,/g, ''); // 1,234.56 → 1234.56
-      else n = n.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
-    } else if (n.includes(',')) {
-      // Could be decimal (12,50) or thousands (1,234). If exactly 3 digits after comma → thousands
-      const parts = n.split(',');
-      if (parts.length === 2 && parts[1].length === 3) n = n.replace(',', ''); // 1,234 → 1234
-      else n = n.replace(',', '.'); // 12,50 → 12.50
-    }
-    // Remove trailing zeros after decimal for canonical comparison
-    if (n.includes('.')) n = n.replace(/\.?0+$/, '') || '0';
-    return n;
-  };
-  const aiCanonical = normalize(aiNumMatch[1]);
-  if (!aiCanonical || aiCanonical === '0') return false;
-  // Extract ALL number tokens from source text (with word boundaries)
-  const sourceTokens = sourceText.match(/\d{1,3}(?:[.,\s]\d{3})*[.,]\d+|\d+[.,]\d+|\d+/g) || [];
-  for (const tok of sourceTokens) {
-    if (normalize(tok) === aiCanonical) return true;
-  }
-  return false;
-}
-
 // Get a Gemini model instance with current key
-function getGeminiModel(modelName = "gemini-2.5-flash-lite") {
+function getGeminiModel() {
   const apiKey = getCurrentGeminiKey();
   if (!apiKey) return null;
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    return genAI.getGenerativeModel({ model: modelName });
+    return genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
   } catch (e) {
     console.log('Error creating Gemini model:', e.message);
     return null;
@@ -919,9 +747,9 @@ app.get('/api/gemini-status', async (req, res) => {
 });
 
 // Helper function to run Gemini with auto-rotation on quota error
-async function runGeminiWithRotation(prompt, maxRetries = 3, modelName = "gemini-2.5-flash-lite") {
+async function runGeminiWithRotation(prompt, maxRetries = 3) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const currentModel = getGeminiModel(modelName);
+    const currentModel = getGeminiModel();
     if (!currentModel) {
       throw new Error('No Gemini API key available');
     }
@@ -1551,26 +1379,18 @@ app.post('/api/ai-extract-price', async (req, res) => {
     }
 
     try {
-      const prompt = `أنت **مستخرج** نصوص خبير، لست آلة حاسبة. استخرج السعر المكتوب حرفياً في النص التالي.
-
-⚠️⚠️⚠️ **القاعدة الذهبية**: السعر الذي تُرجعه يجب أن يكون موجوداً **حرفياً ونصياً** في النص. **ممنوع منعاً باتاً** أي عملية حسابية، طرح، جمع، أو تطبيق كوبون.
+      const prompt = `أنت محلل نصوص خبير. استخرج السعر من النص التالي.
 
 قواعد:
-1. ابحث عن أي سعر مذكور صراحة بأي عملة (دينار، دولار، يورو، ريال، درهم، جنيه، DA, DZD, USD, EUR، إلخ).
-2. إذا وُجد أكثر من سعر صريح، اختر **السعر النهائي/الأصغر المكتوب نصياً** (وليس المشطوب)، ولا تحسبه أنت.
-3. **تجاهل تماماً** الأرقام التي هي شروط كوبون مثل "$149/18" أو "$20/159" — هذه شروط خصم وليست أسعار منتج.
-4. ⚠️ لا تطبّق الكوبون على السعر. لا تطرح ولا تجمع. السعر المُرجع يجب أن يكون **نسخاً حرفياً** من النص.
-5. إذا لم تجد سعراً صريحاً → {"price":null}.
-6. أعد JSON فقط: {"price":"السعر مع العملة كما كُتب نصياً"} أو {"price":null}. لا شرح إضافي.
-
-أمثلة:
-- "السعر: $214.4 \\n كوبون: $149/18" → {"price":"$214.4"} (لا تحسب 214.4-18، لا تُرجع $131.4 لأنه غير موجود في النص).
-- "بسعر $50 بعد كوبون $10/40" → {"price":"$50"} (لا تُرجع $40).
+1. ابحث عن أي سعر مذكور بأي عملة (دينار، دولار، يورو، ريال، درهم، جنيه، DA, DZD, USD, EUR، إلخ).
+2. إذا وُجد أكثر من سعر، اختر السعر النهائي أو سعر البيع (وليس السعر الأصلي/المشطوب).
+3. أعد الإجابة بصيغة JSON فقط: {"price":"السعر مع العملة"} أو {"price":null} إذا لم تجد سعراً.
+4. لا تضف أي شرح أو نص إضافي — فقط JSON.
 
 النص:
 ${text}`;
 
-      const rawResult = await runGeminiWithRotation(prompt, 3, "gemini-2.5-flash");
+      const rawResult = await runGeminiWithRotation(prompt);
       let extracted = null;
       try {
         const jsonMatch = rawResult.match(/\{[\s\S]*?"price"[\s\S]*?\}/);
@@ -1592,11 +1412,6 @@ ${text}`;
         const hasNumber = /\d/.test(extracted);
         if (!hasNumber || extracted.length > 50) {
           return res.json({ success: true, price: null, method: 'ai_invalid' });
-        }
-        // 🛡️ Anti-hallucination: ensure the numeric part exists as a complete token in source text
-        if (!validatePriceAgainstText(extracted, text)) {
-          console.log(`🚨 سعر مُهلوَس مرفوض (legacy): "${extracted}" غير موجود كرقم كامل في النص`);
-          return res.json({ success: true, price: null, method: 'ai_hallucinated' });
         }
       }
 
@@ -1832,32 +1647,14 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 
 ## قواعد صارمة:
 1. استخرج اسم المنتج الإنجليزي الدقيق (العلامة التجارية + الموديل + النسخة).
-2. استخراج السعر — اتبع هذه القواعد بدقة قصوى:
-   ⚠️⚠️⚠️ **القاعدة الذهبية**: السعر الذي تُرجعه يجب أن يكون موجوداً **حرفياً ونصياً** في النص. **ممنوع منعاً باتاً** أي عملية حسابية، طرح، جمع، أو تطبيق كوبون. أنت **مستخرج** نصوص فقط، لست آلة حاسبة.
-   أ. ابحث عن السعر المكتوب صراحة بعد كلمات: "السعر", "السعر النهائي", "بسعر", "السعر بعد التخفيض", "Price", "Final Price", "💰", "✅".
-   ب. السعر يكون السعر النهائي المعروض كنص — لا تحسبه أنت.
-   ج. **تجاهل تماماً**: السعر المشطوب (~~$X~~)، السعر قبل التخفيض، أسعار في شروط الكوبون (مثل "$20/159" أو "$149/18" — هذه شروط كوبون "خصم $20 على طلبات $159+"، **ليست أسعار منتج**).
-   د. إذا وُجد سعر واحد صريح فقط للمنتج → خذه كما هو.
-   هـ. إذا وُجدت عدة أسعار صريحة للمنتج → اختر **الأصغر** المكتوب نصياً (لا تحسبه).
-   و. تجاهل النِسب المئوية (50%) والأرقام بدون $.
-   ز. الصيغة المطلوبة: "$X.XX" أو "$X" (نسخ حرفي من النص).
-   ح. ⚠️ **تحقق نهائي**: قبل إرجاع السعر، تأكد أن الرقم بالضبط (نفس الأرقام نفس الفاصلة) موجود في النص. إن لم يكن موجوداً حرفياً → أرجع null. **لا تخمّن، لا تحسب، لا تستنتج**.
+2. استخرج السعر النهائي بعد التخفيض فقط (بالدولار).
 3. الكوبونات العامة: كل كود يأتي بعد "كوبون" أو على سطور "كوبون" → ضعه في coupons[].
 4. قسيمة البائع: فقط ما يأتي صراحة بعد "قسيمة البائع" أو "إحجز قسيمة" → sellerCoupon. إذا لم يوجد → null.
 5. ⚠️ لا تضع نفس الكود في كلا المكانين. إذا كان الكود كوبون عام، لا تضعه كقسيمة بائع.
 6. استخرج كل روابط AliExpress كمصفوفة بدون تكرار.
 7. حدد إذا كان المنتج هاتف ذكي أم لا.
 
-## أمثلة السعر:
-- "السعر: ~~$45.99~~ → $19.99" → price: "$19.99" (الأصغر/النهائي)
-- "بسعر $12.50 بعد كوبون $5/50" → price: "$12.50" (تجاهل 5 و50 لأنها شروط الكوبون)
-- "Final Price: $8.75 | Original: $20" → price: "$8.75"
-- "خصم 50% بسعر $24" → price: "$24" (تجاهل 50%)
-- "كوبون $20/159 : CDOF06" بدون ذكر سعر منتج → price: null
-- ⚠️ **مثال هلوسة محظورة**: نص "السعر: $214.4 \n كوبون: $149/18 : CDSR05" → price: **"$214.4"** (نسخ حرفي). **خطأ فادح** أن تُرجع "$131.4" أو أي رقم محسوب من طرح الكوبون من السعر — هذا اختراع لرقم غير موجود في النص.
-- ⚠️ مثال آخر: نص "السعر: $50 \n كوبون: $10/40" → price: "$50" (لا تحسب 50-10=40، أرجع 50 كما هو).
-
-## أمثلة الكوبونات:
+## أمثلة:
 مثال 1: "كوبون $20/159 : CDOF06 \n كوبون $20/159 : OD20 \n كوبون $20/159 : ODYOUS20"
 → coupons: ["CDOF06", "OD20", "ODYOUS20"], sellerCoupon: null (لا يوجد ذكر لقسيمة البائع)
 
@@ -1885,8 +1682,8 @@ ${text}
 }`;
 
     try {
-      const rawResult = await runGeminiWithRotation(prompt, 3, "gemini-2.5-flash");
-      console.log(`🧠 AI analyze-post (flash) raw: "${rawResult.substring(0, 200)}"`);
+      const rawResult = await runGeminiWithRotation(prompt);
+      console.log(`🧠 AI analyze-post raw: "${rawResult.substring(0, 200)}"`);
       let result = null;
       try {
         const cleaned = rawResult.replace(/`{1,3}[\w]*\s*/g, '').replace(/`/g, '');
@@ -1898,24 +1695,13 @@ ${text}
           if (!Array.isArray(result.links)) result.links = [];
           result.coupons = result.coupons.map(c => String(c).trim().toUpperCase()).filter(c => c && c !== 'NULL');
           result.links = result.links.map(l => String(l).trim()).filter(l => l && l.includes('aliexpress'));
-
-          // 🛡️ Anti-hallucination: validate that the returned price exists as a complete number token in the source text
-          if (result.price && typeof result.price === 'string' && result.price !== 'null') {
-            if (!validatePriceAgainstText(result.price, text)) {
-              console.log(`🚨 سعر مُهلوَس مرفوض: AI أعاد "${result.price}" لكنه غير موجود كرقم كامل في النص الأصلي`);
-              result.price = null;
-            }
-          } else if (result.price === 'null' || result.price === '') {
-            result.price = null;
-          }
         }
       } catch (parseErr) {
         console.log(`⚠️ AI analyze-post parse error: ${parseErr.message}`);
       }
 
-      const responseMethod = (result && result.price === null) ? 'ai_price_validated' : 'ai';
       console.log(`✅ AI analyze-post result: ${JSON.stringify(result)}`);
-      res.json({ success: true, result, method: responseMethod });
+      res.json({ success: true, result, method: 'ai' });
     } catch (aiError) {
       console.log('AI analyze-post failed:', aiError.message);
       res.json({ success: true, result: null, method: 'fallback' });
@@ -2897,68 +2683,6 @@ app.delete('/api/saved-posts/before', async (req, res) => {
   }
 });
 
-// ========== Auto-Repost API ==========
-
-app.get('/api/auto-repost/config', (req, res) => {
-  res.json({
-    success: true,
-    enabled: autoRepostState.enabled,
-    intervalMinutes: autoRepostState.intervalMinutes,
-    lastRepostTime: autoRepostState.lastRepostTime,
-    publishedCount: autoRepostState.publishedCount,
-    repostedCount: autoRepostState.repostedIds.length
-  });
-});
-
-app.post('/api/auto-repost/config', async (req, res) => {
-  try {
-    const { enabled, intervalMinutes } = req.body;
-    if (typeof enabled === 'boolean') autoRepostState.enabled = enabled;
-    if (intervalMinutes !== undefined) autoRepostState.intervalMinutes = Math.max(1, parseInt(intervalMinutes) || 60);
-    if (!autoRepostState.enabled) {
-      stopAutoRepost();
-    } else {
-      startAutoRepost();
-    }
-    await saveAutoRepostConfig();
-    res.json({
-      success: true,
-      enabled: autoRepostState.enabled,
-      intervalMinutes: autoRepostState.intervalMinutes,
-      publishedCount: autoRepostState.publishedCount,
-      repostedCount: autoRepostState.repostedIds.length
-    });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/auto-repost/reset', async (req, res) => {
-  try {
-    autoRepostState.repostedIds = [];
-    autoRepostState.publishedCount = 0;
-    autoRepostState.lastRepostTime = null;
-    await saveAutoRepostConfig();
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-app.post('/api/auto-repost/now', async (req, res) => {
-  try {
-    if (!autoRepostState.enabled) return res.json({ success: false, error: 'النظام غير مفعّل' });
-    const result = await doAutoRepost();
-    if (result && result.sent) {
-      res.json({ success: true, publishedCount: autoRepostState.publishedCount });
-    } else {
-      res.json({ success: false, error: (result && result.reason) || 'فشل النشر' });
-    }
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 // ========== Facebook API ==========
 
 app.post('/api/facebook/verify', async (req, res) => {
@@ -3059,9 +2783,7 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
-    if (incoming.messageTemplate) {
-      config.messageTemplate = { ...(config.messageTemplate || {}), ...incoming.messageTemplate };
-    }
+    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
     if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
     if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));
@@ -3098,9 +2820,7 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.sourceChannels) config.sourceChannels = incoming.sourceChannels;
     if (incoming.targetChannels) config.targetChannels = incoming.targetChannels;
     if (incoming.linkType) config.linkType = incoming.linkType;
-    if (incoming.messageTemplate) {
-      config.messageTemplate = { ...(config.messageTemplate || {}), ...incoming.messageTemplate };
-    }
+    if (incoming.messageTemplate) config.messageTemplate = incoming.messageTemplate;
     if (incoming.autoPublish !== undefined) config.autoPublish = incoming.autoPublish;
     if (incoming.publishDelay !== undefined) config.publishDelay = incoming.publishDelay;
     if (incoming.delayMin !== undefined) config.delayMin = Math.max(1, Math.min(30, parseInt(incoming.delayMin) || 1));

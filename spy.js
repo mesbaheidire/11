@@ -455,7 +455,7 @@ function sanitizeAliImageUrlSpy(url) {
   } catch (e) { return url; }
 }
 
-// إرسال منشور إلى قناة (Buffer → URL → URL retry → نص فقط بدون لصق رابط الصورة)
+// إرسال منشور إلى قناة مع ضمان ظهور الصورة (Buffer → URL → preview → URL retry → link_preview → نص فقط)
 async function smartSendPostSpy(bot, target, captionMessage, textMessage, productImage, imageUrl, opts = {}) {
   const sendOpts = { parse_mode: 'HTML', ...opts };
   // تنظيف الرابط من لاحقات avif/webp
@@ -486,9 +486,18 @@ async function smartSendPostSpy(bot, target, captionMessage, textMessage, produc
       await bot.telegram.sendPhoto(target, imageUrl, { caption: captionMessage, ...sendOpts });
       return { ok: true, via: 'url_retry' };
     } catch (e) { console.log(`⚠️ [smartSend] sendPhoto URL retry فشل: ${e.message}`); }
+    // المحاولة 4: ضع رابط الصورة في النص ليُعرض كمعاينة كبيرة
+    try {
+      const msgWithImage = imageUrl + '\n\n' + textMessage.substring(0, 4000);
+      await bot.telegram.sendMessage(target, msgWithImage, {
+        ...sendOpts,
+        link_preview_options: { is_disabled: false, url: imageUrl, prefer_large_media: true }
+      });
+      return { ok: true, via: 'link_preview' };
+    } catch (e) { console.log(`⚠️ [smartSend] link_preview فشل: ${e.message}`); }
   }
-  // الأخير: نص فقط — بدون لصق رابط الصورة في النص (لتجنب ظهور روابط CDN قبيحة)
-  await bot.telegram.sendMessage(target, textMessage, { ...sendOpts, link_preview_options: { is_disabled: true } });
+  // الأخير: نص فقط
+  await bot.telegram.sendMessage(target, textMessage, sendOpts);
   return { ok: true, via: 'text_only' };
 }
 
@@ -675,6 +684,48 @@ function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
       req.setTimeout(timeoutMs, () => { req.destroy(); tryNext(); });
     };
     tryNext();
+  });
+}
+
+// ===== آلية جديدة #2: بحث صور Bing كملاذ أخير =====
+function fetchImageViaBingSearch(query, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!query || query.length < 3) return resolve(null);
+    const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query + ' aliexpress')}&form=HDRSC2&first=1`;
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36',
+        'Accept': 'text/html',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => {
+        body += c;
+        if (body.length > 500000) res.destroy();
+      });
+      res.on('end', () => {
+        // Bing يخزّن بيانات الصور في سمة m="{...}" على كل عنصر
+        const mMatch = body.match(/m="\{[^}]*?&quot;murl&quot;:&quot;([^&]+)&quot;/);
+        let imageUrl = mMatch ? mMatch[1] : null;
+        if (!imageUrl) {
+          const altMatch = body.match(/"murl":"(https?:[^"]+)"/);
+          imageUrl = altMatch ? altMatch[1] : null;
+        }
+        if (imageUrl) {
+          imageUrl = imageUrl.replace(/&amp;/g, '&');
+          console.log(`✅ Bing Images وجد صورة: ${imageUrl.substring(0, 80)}...`);
+          return resolve({ image: imageUrl });
+        }
+        resolve(null);
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
   });
 }
 
@@ -1808,8 +1859,11 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`⛔ fetchLinkPreview تم تجاهل رابط فيديو`);
   }
 
-  // 7) تخطي صورة المنشور الأصلي — قد تكون صورة منتج آخر/مثبتة لا علاقة لها (مثل صور آلات تعدين)
-  // نفضّل النشر بدون صورة على نشر صورة خاطئة.
+  // 7) صورة المنشور الأصلي كخيار مباشر قبل Bing
+  if (!productImage && sourceImage) {
+    console.log(`🖼 [7/9] استخدام صورة المنشور الأصلي`);
+    productImage = { source: sourceImage };
+  }
 
   // 8) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
   if (productImage && typeof productImage === 'string') {
@@ -1830,9 +1884,30 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 9) لا نستخدم صورة القناة المصدر كاحتياطي أبداً — لتفادي صور خاطئة (آلة تعدين لساعة ذكية مثلاً)
+  // 9) 🆕 بحث صور Bing باسم المنتج/العنوان
+  if (!productImage) {
+    const searchQuery = firstApiTitle || (text || '').split('\n').find(l => l.trim() && !l.startsWith('http') && !l.includes('aliexpress'));
+    if (searchQuery && searchQuery.length >= 5) {
+      console.log(`🖼 [9/9] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
+      try {
+        const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
+        if (bingResult && bingResult.image && !isLikelyVideoUrl(bingResult.image)) {
+          const bingBuffer = await downloadImageAsBuffer(bingResult.image);
+          if (bingBuffer) {
+            productImage = { source: bingBuffer };
+            productImageUrl = bingResult.image;
+            console.log(`✅ نجح Bing Images`);
+          }
+        } else if (bingResult && bingResult.image) {
+          console.log(`⛔ Bing تم تجاهل رابط فيديو`);
+        }
+      } catch (e) { console.log(`⚠️ فشل Bing Images: ${e.message}`); }
+    }
+  }
+
   if (!productImage && sourceImage) {
-    console.log(`⚠️ [9/9] لا توجد صورة منتج صحيحة — سيتم النشر كنص فقط (تم تجاهل صورة القناة المصدر لتفادي عرض صورة خاطئة)`);
+    console.log(`🖼 [10/9] استخدام صورة المنشور الأصلي`);
+    productImage = { source: sourceImage };
   }
 
   // إذا انتهى بنا الأمر بـ Buffer فقط بدون URL (مثل صورة قناة المصدر)،
@@ -2296,7 +2371,7 @@ async function startSpy(config) {
       console.log(`✅ رسالة مطابقة من قناة مصدر: ${chatTitle}`);
 
       let text = msg.message || '';
-
+      
       let entityUrls = [];
       if (msg.entities && Array.isArray(msg.entities)) {
         for (const ent of msg.entities) {
@@ -2335,14 +2410,6 @@ async function startSpy(config) {
       if (entityUrls.length > 0) {
         text = text + '\n' + entityUrls.join('\n');
       }
-
-      // تنظيف روابط صور CDN من النص (ae-pic, aliexpress-media, alicdn, .avif, .webp, jpg_NNNxNNN)
-      // يتم بعد استخراج entities لتجنب إفساد ent.offset/length
-      text = text.replace(/https?:\/\/[^\s]*(?:ae-pic|aliexpress-media|alicdn)[^\s]*/gi, '')
-                 .replace(/https?:\/\/\S+\.(?:avif|webp)(?:\S*)?/gi, '')
-                 .replace(/https?:\/\/\S+jpg_\d+x\d+\S*/gi, '')
-                 .replace(/\n{3,}/g, '\n\n')
-                 .trim();
 
       if (!text.trim()) {
         console.log('⚠️ رسالة فارغة (ربما صورة/فيديو بدون نص)');
