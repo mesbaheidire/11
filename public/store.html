@@ -988,9 +988,6 @@ async function openSaved(p){track('click',p?.title||'saved_product');
           if(info.price&&(!curProduct.price||curProduct.price==='0'))curProduct.price=info.price;
           // تحديث الواجهة المعروضة حالياً (نستخدم fmt الذكية)
           if(document.getElementById('detOverlay').classList.contains('show')){
-            document.getElementById('dRating').textContent=fmtRating(curProduct.rating);
-            document.getElementById('dOrders').textContent=fmtOrders(curProduct.orders);
-            document.getElementById('dDisc').textContent=fmtDiscount(curProduct.discount,curProduct.original_price,curProduct.price||curProduct.sale_price);
             if(curProduct.shop_name){document.getElementById('detShop').style.display='flex';document.getElementById('detShopName').textContent=curProduct.shop_name}
           }
         }
@@ -1294,9 +1291,6 @@ async function enrichProductInfo(pid){
     if(info.shop_name&&!curProduct.shop_name)curProduct.shop_name=info.shop_name;
     // حدّث الواجهة فقط إذا النافذة لا تزال مفتوحة على نفس المنتج
     if(document.getElementById('detOverlay').classList.contains('show')){
-      document.getElementById('dRating').textContent=fmtRating(curProduct.rating);
-      document.getElementById('dOrders').textContent=fmtOrders(curProduct.orders);
-      document.getElementById('dDisc').textContent=fmtDiscount(curProduct.discount,curProduct.original_price,curProduct.price||curProduct.sale_price);
       if(curProduct.shop_name){
         document.getElementById('detShop').style.display='flex';
         document.getElementById('detShopName').textContent=curProduct.shop_name;
@@ -1312,9 +1306,6 @@ function showDet(){
   const price=p.price||p.sale_price||'';
   document.getElementById('detPrice').innerHTML=price?`<span class="cur">USD</span> ${esc(price)}`:'';
   document.getElementById('detOrig').textContent=p.original_price&&p.original_price!==price?('الأصلي: '+p.original_price+' USD'):'';
-  document.getElementById('dRating').textContent=fmtRating(p.rating);
-  document.getElementById('dOrders').textContent=fmtOrders(p.orders);
-  document.getElementById('dDisc').textContent=fmtDiscount(p.discount,p.original_price,p.price||p.sale_price);
   const shop=document.getElementById('detShop');
   if(p.shop_name){shop.style.display='flex';document.getElementById('detShopName').textContent=p.shop_name}else{shop.style.display='none'}
   const couponEl=document.getElementById('detCoupon');
