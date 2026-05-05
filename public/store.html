@@ -455,7 +455,9 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
   animation:up .28s ease;
 }
 @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.det-handle{width:38px;height:4px;background:#DDD8E4;border-radius:2px;margin:10px auto 14px}
+.det-handle-row{display:flex;align-items:center;justify-content:center;position:relative;margin:10px 0 14px}
+.det-handle{width:38px;height:4px;background:#DDD8E4;border-radius:2px}
+.det-close-btn{position:absolute;left:0;top:50%;transform:translateY(-50%);background:var(--pri-pale);border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--pri);font-size:16px}
 .det-img{
   width:100%;height:230px;object-fit:contain;
   border-radius:14px;background:var(--pri-pale);margin-bottom:14px;
@@ -712,7 +714,10 @@ body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);min-h
 <!-- DETAIL MODAL -->
 <div class="overlay" id="detOverlay" onclick="if(event.target===this)closeDet()">
   <div class="det">
-    <div class="det-handle"></div>
+    <div class="det-handle-row">
+      <div class="det-handle"></div>
+      <button class="det-close-btn" onclick="closeDet()"><i class="fas fa-times"></i></button>
+    </div>
     <img id="detImg" class="det-img" src="" onerror="this.style.display='none'">
     <div class="det-title" id="detTitle"></div>
     <div class="price-row">
