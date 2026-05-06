@@ -789,6 +789,80 @@ async function runGeminiWithRotation(prompt, maxRetries = 3) {
   throw new Error('All Gemini API keys exhausted');
 }
 
+// Vision variant: send a prompt + image (base64) to Gemini with key rotation
+async function runGeminiVisionWithRotation(prompt, imageBase64, mimeType = 'image/jpeg', maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const currentModel = getGeminiModel();
+    if (!currentModel) throw new Error('No Gemini API key available');
+    try {
+      const result = await currentModel.generateContent([
+        prompt,
+        { inlineData: { data: imageBase64, mimeType } }
+      ]);
+      const response = await result.response;
+      const text = response.text().trim();
+      rotateGeminiKey();
+      return text;
+    } catch (error) {
+      const errorMsg = error.message || '';
+      const isQuotaError = errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
+      const isKeyError = errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('not valid') || errorMsg.includes('leaked') || errorMsg.includes('403');
+      console.log(`⚠️ Gemini Vision error (محاولة ${attempt + 1}): ${errorMsg.substring(0, 120)}`);
+      if (isQuotaError || isKeyError) {
+        if (rotateGeminiKey()) continue;
+      }
+      if (attempt === maxRetries - 1) throw error;
+    }
+  }
+  throw new Error('All Gemini API keys exhausted');
+}
+
+// التحقق البصري: هل الصورة تتطابق مع وصف المنتج في النص؟ (داخلي فقط — localhost)
+app.post('/api/ai-validate-image', async (req, res) => {
+  try {
+    const remoteIp = (req.ip || req.connection?.remoteAddress || '').replace('::ffff:', '');
+    if (remoteIp !== '127.0.0.1' && remoteIp !== '::1' && remoteIp !== 'localhost') {
+      return res.status(403).json({ success: false, error: 'forbidden' });
+    }
+    const { imageBase64, mimeType, postText, productTitle } = req.body || {};
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.json({ success: true, matches: true, reason: 'no_image' });
+    }
+    if (!getGeminiModel()) {
+      return res.json({ success: true, matches: true, reason: 'no_ai' });
+    }
+    const desc = (productTitle || postText || '').toString().substring(0, 800);
+    if (!desc.trim()) {
+      return res.json({ success: true, matches: true, reason: 'no_text' });
+    }
+    const prompt = `أنت مدقّق بصري. مهمتك تحديد ما إذا كانت الصورة تُظهر نفس المنتج المذكور في النص.
+
+النص (يصف منتجاً معروضاً للبيع):
+"""
+${desc}
+"""
+
+افحص الصورة جيداً. هل تُظهر الصورة هذا المنتج بالذات (نفس الفئة والنوع العام: مثلاً هاتف لمنشور هاتف، ساعة لمنشور ساعة، آلة تعدين لمنشور تعدين، إلخ)؟
+
+تجاهل الاختلافات الطفيفة في اللون أو الزاوية. ركّز على نوع المنتج الأساسي.
+
+أجب بكلمة واحدة فقط: yes أو no`;
+
+    try {
+      const raw = await runGeminiVisionWithRotation(prompt, imageBase64, mimeType || 'image/jpeg');
+      const answer = (raw || '').toLowerCase().trim();
+      const matches = /\byes\b/.test(answer) && !/\bno\b/.test(answer);
+      console.log(`🔎 [validate-image] الرد: "${answer.substring(0,30)}" → ${matches ? '✅ تطابق' : '❌ عدم تطابق'}`);
+      res.json({ success: true, matches, raw: answer.substring(0, 50) });
+    } catch (e) {
+      console.log(`⚠️ [validate-image] فشل: ${e.message}`);
+      res.json({ success: true, matches: true, reason: 'ai_error' });
+    }
+  } catch (e) {
+    res.json({ success: true, matches: true, reason: 'exception', error: e.message });
+  }
+});
+
 // Add logo watermark only (without frame)
 app.post('/api/add-watermark', async (req, res) => {
   try {

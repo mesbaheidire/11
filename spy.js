@@ -1637,6 +1637,44 @@ async function analyzePostFull(text) {
   });
 }
 
+// التحقق البصري من الصورة عبر Gemini — يتصل بـ /api/ai-validate-image
+async function validateImageMatchesPost(buffer, postText, productTitle) {
+  return new Promise((resolve) => {
+    if (!Buffer.isBuffer(buffer) || buffer.length < 1000) return resolve(true);
+    // حد أقصى 5MB raw — base64 سيزيد ~33% فيظل تحت حد express.json (10mb)
+    if (buffer.length > 5 * 1024 * 1024) {
+      console.log(`⏭ [validate-image] تخطّي صورة كبيرة (${Math.round(buffer.length/1024)}KB) — قبول افتراضي`);
+      return resolve(true);
+    }
+    const imageBase64 = buffer.toString('base64');
+    const ext = detectImageExt(buffer);
+    const mimeType = ext === 'png' ? 'image/png' : (ext === 'webp' ? 'image/webp' : (ext === 'gif' ? 'image/gif' : 'image/jpeg'));
+    const postData = JSON.stringify({ imageBase64, mimeType, postText: (postText || '').substring(0, 800), productTitle: productTitle || '' });
+    const options = {
+      hostname: '127.0.0.1',
+      port: parseInt(process.env.PORT) || 5000,
+      path: '/api/ai-validate-image',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          // إذا فشل AI أو لا يوجد مفتاح، نقبل الصورة (لا نحظر بدون سبب)
+          resolve(parsed && parsed.matches !== false);
+        } catch { resolve(true); }
+      });
+    });
+    req.on('error', () => resolve(true));
+    req.setTimeout(12000, () => { req.destroy(); resolve(true); });
+    req.write(postData);
+    req.end();
+  });
+}
+
 async function processPost(config, text, sourceImage, sourceName) {
   const aliLinks = extractAliExpressLinks(text);
   if (aliLinks.length === 0) return;
@@ -1811,6 +1849,23 @@ async function processPost(config, text, sourceImage, sourceName) {
   // دالة مساعدة: هل رابط الصورة من CDN الرسمي لـ AliExpress؟
   const isAliCdnImage = (url) => url && typeof url === 'string' && /alicdn\.com|aliexpress-media/i.test(url);
 
+  // عنوان المنتج للتحقق البصري (إن وُجد من AI أو سيُحدَّث لاحقاً)
+  const titleHintForValidation = (aiResult && aiResult.productName) ? aiResult.productName : '';
+
+  // محاولة وضع صورة كمرشح + التحقق البصري عبر Gemini. ترجع true إن قُبلت.
+  const tryAcceptImage = async (stepName, candidateBuffer, candidateUrl) => {
+    if (!candidateBuffer || !Buffer.isBuffer(candidateBuffer)) return false;
+    const matches = await validateImageMatchesPost(candidateBuffer, text, titleHintForValidation);
+    if (!matches) {
+      console.log(`❌ [${stepName}] Gemini رفض الصورة (لا تتطابق مع المنتج) — انتقال للخطوة التالية`);
+      return false;
+    }
+    productImage = { source: candidateBuffer };
+    productImageUrl = candidateUrl || productImageUrl;
+    console.log(`✅ [${stepName}] صورة مقبولة (مرّت تحقق Gemini)`);
+    return true;
+  };
+
   // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
     console.log(`🖼 [1/6] محاولة AliExpress API...`);
@@ -1818,15 +1873,14 @@ async function processPost(config, text, sourceImage, sourceName) {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
         const apiBuffer = await downloadImageAsBuffer(apiResult.image_url);
-        productImage = apiBuffer ? { source: apiBuffer } : apiResult.image_url;
-        productImageUrl = apiResult.image_url;
-        console.log(`✅ نجح AliExpress API`);
-        if (!firstApiTitle && apiResult.title) firstApiTitle = apiResult.title;
-        if (!firstProductPrice && (apiResult.sale_price || apiResult.price)) {
-          firstProductPrice = priceFromPost || apiResult.sale_price || apiResult.price;
+        if (apiBuffer && await tryAcceptImage('AliExpress API', apiBuffer, apiResult.image_url)) {
+          if (!firstApiTitle && apiResult.title) firstApiTitle = apiResult.title;
+          if (!firstProductPrice && (apiResult.sale_price || apiResult.price)) {
+            firstProductPrice = priceFromPost || apiResult.sale_price || apiResult.price;
+          }
         }
       } else if (apiResult && apiResult.image_url && !isAliCdnImage(apiResult.image_url)) {
-        console.log(`⚠️ AliExpress API أعاد صورة خارج CDN — تجاهل: ${String(apiResult.image_url).substring(0,80)}`);
+        console.log(`⚠️ AliExpress API أعاد صورة خارج CDN — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
@@ -1838,10 +1892,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       const mjResult = await fetchImageFromMobilePageJson(firstProductId);
       if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
         const mjBuffer = await downloadImageAsBuffer(mjResult.image);
-        productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
-        productImageUrl = mjResult.image;
-        console.log(`✅ نجح Mobile JSON scraper`);
-        if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
+          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+        }
       }
     } catch (e) { console.log(`⚠️ فشل Mobile JSON scraper: ${e.message}`); }
   }
@@ -1853,11 +1906,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
         const chBuffer = await downloadImageAsBuffer(chResult.image);
-        productImage = chBuffer ? { source: chBuffer } : chResult.image;
-        productImageUrl = chResult.image;
-        console.log(`✅ نجح Cheerio scraper`);
+        if (chBuffer) await tryAcceptImage('Cheerio', chBuffer, chResult.image);
       } else if (chResult && chResult.image && !isAliCdnImage(chResult.image)) {
-        console.log(`⚠️ Cheerio أعاد صورة خارج alicdn.com — تجاهل: ${String(chResult.image).substring(0,80)}`);
+        console.log(`⚠️ Cheerio أعاد صورة خارج alicdn.com — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
@@ -1869,12 +1920,11 @@ async function processPost(config, text, sourceImage, sourceName) {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
       if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image) && isAliCdnImage(lpResult.image)) {
         const lpBuffer = await downloadImageAsBuffer(lpResult.image);
-        productImage = lpBuffer ? { source: lpBuffer } : lpResult.image;
-        productImageUrl = lpResult.image;
-        console.log(`✅ نجح LinkPreview.xyz`);
-        if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
+        if (lpBuffer && await tryAcceptImage('LinkPreview', lpBuffer, lpResult.image)) {
+          if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
+        }
       } else if (lpResult && lpResult.image) {
-        console.log(`⚠️ LinkPreview أعاد صورة غير مؤهلة (${isLikelyVideoUrl(lpResult.image) ? 'فيديو' : 'خارج alicdn.com'}) — تجاهل`);
+        console.log(`⚠️ LinkPreview أعاد صورة غير مؤهلة — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
@@ -1886,19 +1936,18 @@ async function processPost(config, text, sourceImage, sourceName) {
       const mlResult = await fetchImageViaMicrolink(previewLink);
       if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image) && isAliCdnImage(mlResult.image)) {
         const mlBuffer = await downloadImageAsBuffer(mlResult.image);
-        productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
-        productImageUrl = mlResult.image;
-        console.log(`✅ نجح Microlink.io`);
-        if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+        if (mlBuffer && await tryAcceptImage('Microlink', mlBuffer, mlResult.image)) {
+          if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+        }
       } else if (mlResult && mlResult.image) {
-        console.log(`⚠️ Microlink أعاد صورة غير مؤهلة (${isLikelyVideoUrl(mlResult.image) ? 'فيديو' : 'خارج alicdn.com'}) — تجاهل`);
+        console.log(`⚠️ Microlink أعاد صورة غير مؤهلة — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
 
-  // 6) صورة المنشور الأصلي من تيليغرام (آخر احتياط — الصورة الحقيقية للمنتج المنشورة)
+  // 6) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [6/6] استخدام صورة المنشور الأصلي من تيليغرام`);
+    console.log(`🖼 [6/6] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
     productImage = { source: sourceImage };
   }
 
