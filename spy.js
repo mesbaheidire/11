@@ -1868,7 +1868,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [1/6] محاولة AliExpress API...`);
+    console.log(`🖼 [1/5] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -1885,23 +1885,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 2) كشط JSON مضمّن من صفحة الجوال (يتحقق من alicdn.com)
+  // 2) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/6] محاولة Mobile JSON scraper...`);
-    try {
-      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
-      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
-        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
-        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
-          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ فشل Mobile JSON scraper: ${e.message}`); }
-  }
-
-  // 3) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [3/6] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [2/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -1913,9 +1899,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 4) LinkPreview.xyz (يُقبل فقط من alicdn.com)
+  // 3) LinkPreview.xyz (يُقبل فقط من alicdn.com)
   if (!productImage && previewLink) {
-    console.log(`🖼 [4/6] محاولة LinkPreview.xyz...`);
+    console.log(`🖼 [3/5] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
       if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image) && isAliCdnImage(lpResult.image)) {
@@ -1929,9 +1915,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
-  // 5) Microlink.io (يُقبل فقط من alicdn.com)
+  // 4) Microlink.io (يُقبل فقط من alicdn.com)
   if (!productImage && previewLink) {
-    console.log(`🖼 [5/6] محاولة Microlink.io...`);
+    console.log(`🖼 [4/5] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
       if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image) && isAliCdnImage(mlResult.image)) {
@@ -1945,9 +1931,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
 
-  // 6) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
+  // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [6/6] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
+    console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
     productImage = { source: sourceImage };
   }
 
