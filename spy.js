@@ -1913,6 +1913,19 @@ async function processPost(config, text, sourceImage, sourceName) {
     return true;
   };
 
+  // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
+  if (!productImage && firstProductImage) {
+    console.log(`🖼 [0/5] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
+    try {
+      if (!isLikelyVideoUrl(firstProductImage) && isAliCdnImage(firstProductImage)) {
+        const lpBuf = await downloadImageAsBuffer(firstProductImage);
+        if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
+      } else if (!isAliCdnImage(firstProductImage)) {
+        console.log(`⚠️ صورة fetchLinkPreview خارج CDN — تجاهل`);
+      }
+    } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
+  }
+
   // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
     console.log(`🖼 [1/5] محاولة AliExpress API...`);
