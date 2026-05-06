@@ -634,6 +634,30 @@ async function fetchImageFromAliExpressPageCheerio(productId, timeoutMs = 12000)
   return null;
 }
 
+// ⭐ الكود البسيط المُجرَّب في بوتات أخرى — linkpreview.xyz + vi.aliexpress.com
+async function fetchImageViaSimplePreview(productId, timeoutMs = 15000) {
+  if (!productId) return null;
+  try {
+    const res = await got("https://linkpreview.xyz/api/get-meta-tags", {
+      searchParams: {
+        url: `https://vi.aliexpress.com/item/${productId}.html`
+      },
+      responseType: "json",
+      timeout: { request: timeoutMs }
+    });
+    const image = res.body?.image || null;
+    const title = res.body?.title || null;
+    if (image) {
+      console.log(`✅ Simple Preview وجد صورة: ${String(image).substring(0, 80)}...`);
+      return { image, title };
+    }
+    return null;
+  } catch (err) {
+    console.log(`⚠️ Simple Preview فشل: ${err.message}`);
+    return null;
+  }
+}
+
 function fetchImageViaMicrolink(url, timeoutMs = 20000) {
   return new Promise((resolve) => {
     if (!url) return resolve(null);
@@ -1913,6 +1937,24 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`✅ [${stepName}] صورة مقبولة (مرّت تحقق Gemini)`);
     return true;
   };
+
+  // ⭐ -1) الكود البسيط المُجرَّب في بوتات أخرى — linkpreview.xyz + vi.aliexpress.com
+  // بدون تحقق Gemini (مثل بوتاتك الأخرى التي تعمل بسلاسة)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [⭐] محاولة Simple Preview (الكود المُجرَّب)...`);
+    try {
+      const sp = await fetchImageViaSimplePreview(firstProductId);
+      if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
+        const spBuf = await downloadImageAsBuffer(sp.image);
+        if (spBuf && Buffer.isBuffer(spBuf)) {
+          productImage = { source: spBuf };
+          productImageUrl = sp.image;
+          if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
+          console.log(`✅ [Simple Preview] صورة مقبولة بدون تحقق (مصدر موثوق)`);
+        }
+      }
+    } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
+  }
 
   // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
   // مصدر موثوق: نسمح بأي CDN (Gemini سيتحقق بصرياً)
