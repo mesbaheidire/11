@@ -1810,13 +1810,13 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 1) صورة المنشور الأصلي من تيليغرام (الأولوية القصوى)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [1/10] استخدام صورة المنشور الأصلي من تيليغرام`);
+    console.log(`🖼 [1/5] استخدام صورة المنشور الأصلي من تيليغرام`);
     productImage = { source: sourceImage };
   }
 
   // 2) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/10] محاولة AliExpress API...`);
+    console.log(`🖼 [2/5] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url)) {
@@ -1834,7 +1834,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 3) كشط صفحة AliExpress مباشرة بـ Cheerio (og:image + CSS selectors)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [3/10] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [3/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image) {
@@ -1846,51 +1846,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 4) كشط JSON المضمّن من صفحة الجوال (runParams / imagePathList)
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [4/10] محاولة Mobile Page JSON...`);
-    try {
-      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
-      if (mjResult && mjResult.image && !isLikelyVideoUrl(mjResult.image)) {
-        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
-        productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
-        productImageUrl = mjResult.image;
-        console.log(`✅ نجح Mobile Page JSON`);
-        if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
-      } else if (mjResult && mjResult.image) {
-        console.log(`⛔ Mobile Page JSON تم تجاهل رابط فيديو`);
-      }
-    } catch (e) { console.log(`⚠️ فشل Mobile Page JSON: ${e.message}`); }
-  }
-
-  // 5) استخراج og:image
-  if (!productImage && convertedLinks[0]?.affLink) {
-    console.log(`🖼 [5/10] محاولة استخراج og:image...`);
-    try {
-      const ogImg = await fetchOgImage(convertedLinks[0].affLink);
-      if (ogImg && !isLikelyVideoUrl(ogImg)) {
-        const ogBuffer = await downloadImageAsBuffer(ogImg);
-        productImage = ogBuffer ? { source: ogBuffer } : ogImg;
-        productImageUrl = ogImg;
-        console.log(`✅ نجح og:image`);
-      } else if (ogImg) {
-        console.log(`⛔ og:image تم تجاهل رابط فيديو`);
-      }
-    } catch (e) { console.log(`⚠️ فشل og:image: ${e.message}`); }
-  }
-
-  // 6) صورة من fetchLinkPreview() — السلسلة الكاملة في afflink
-  if (!productImage && firstProductImage && typeof firstProductImage === 'string' && !isLikelyVideoUrl(firstProductImage)) {
-    console.log(`🖼 [6/10] استخدام صورة fetchLinkPreview...`);
-    productImage = firstProductImage;
-    productImageUrl = firstProductImage;
-  } else if (!productImage && firstProductImage && isLikelyVideoUrl(firstProductImage)) {
-    console.log(`⛔ fetchLinkPreview تم تجاهل رابط فيديو`);
-  }
-
-  // 7) LinkPreview.xyz
+  // 4) LinkPreview.xyz
   if (!productImage && previewLink) {
-    console.log(`🖼 [7/10] محاولة LinkPreview.xyz...`);
+    console.log(`🖼 [4/5] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
       if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
@@ -1905,11 +1863,11 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
-  // 8) Microlink.io
+  // 5) Microlink.io
   if (!productImage) {
-    const mlUrl = mobileProductUrl || previewLink;
+    const mlUrl = previewLink;
     if (mlUrl) {
-      console.log(`🖼 [8/10] محاولة Microlink.io...`);
+      console.log(`🖼 [5/5] محاولة Microlink.io...`);
       try {
         const mlResult = await fetchImageViaMicrolink(mlUrl);
         if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
@@ -1925,43 +1883,18 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 9) تحميل كـ Buffer (إن وُجدت صورة كرابط نصي حالياً)
+  // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
   if (productImage && typeof productImage === 'string') {
     if (isLikelyVideoUrl(productImage)) {
       console.log(`⛔ تم اكتشاف رابط فيديو في productImage — إلغاء`);
       productImage = null;
-    }
-  }
-  if (productImage && typeof productImage === 'string') {
-    console.log(`🖼 [9/10] محاولة تحميل الصورة كـ Buffer...`);
-    if (!productImageUrl) productImageUrl = productImage;
-    const buf = await downloadImageAsBuffer(productImage);
-    if (buf) {
-      productImage = { source: buf };
-      console.log(`✅ تم التحميل كـ Buffer (${Math.round(buf.length/1024)}KB)`);
     } else {
-      console.log(`⚠️ فشل التحميل كـ Buffer — إرسال URL مباشر`);
-    }
-  }
-
-  // 10) بحث صور Bing باسم المنتج/العنوان
-  if (!productImage) {
-    const searchQuery = firstApiTitle || (text || '').split('\n').find(l => l.trim() && !l.startsWith('http') && !l.includes('aliexpress'));
-    if (searchQuery && searchQuery.length >= 5) {
-      console.log(`🖼 [10/10] محاولة Bing Images: "${searchQuery.substring(0, 50)}..."`);
-      try {
-        const bingResult = await fetchImageViaBingSearch(searchQuery.substring(0, 100));
-        if (bingResult && bingResult.image && !isLikelyVideoUrl(bingResult.image)) {
-          const bingBuffer = await downloadImageAsBuffer(bingResult.image);
-          if (bingBuffer) {
-            productImage = { source: bingBuffer };
-            productImageUrl = bingResult.image;
-            console.log(`✅ نجح Bing Images`);
-          }
-        } else if (bingResult && bingResult.image) {
-          console.log(`⛔ Bing تم تجاهل رابط فيديو`);
-        }
-      } catch (e) { console.log(`⚠️ فشل Bing Images: ${e.message}`); }
+      if (!productImageUrl) productImageUrl = productImage;
+      const buf = await downloadImageAsBuffer(productImage);
+      if (buf) {
+        productImage = { source: buf };
+        console.log(`✅ تم التحميل كـ Buffer (${Math.round(buf.length/1024)}KB)`);
+      }
     }
   }
 
