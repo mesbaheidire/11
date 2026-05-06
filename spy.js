@@ -1915,14 +1915,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   };
 
   // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
+  // مصدر موثوق: نسمح بأي CDN (Gemini سيتحقق بصرياً)
   if (!productImage && firstProductImage) {
     console.log(`🖼 [0/5] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
     try {
-      if (!isLikelyVideoUrl(firstProductImage) && isAliCdnImage(firstProductImage)) {
+      if (!isLikelyVideoUrl(firstProductImage)) {
         const lpBuf = await downloadImageAsBuffer(firstProductImage);
         if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
-      } else if (!isAliCdnImage(firstProductImage)) {
-        console.log(`⚠️ صورة fetchLinkPreview خارج CDN — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
   }
@@ -1960,34 +1959,30 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) LinkPreview.xyz (يُقبل فقط من alicdn.com)
+  // 3) LinkPreview.xyz (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
   if (!productImage && previewLink) {
     console.log(`🖼 [3/5] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
-      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image) && isAliCdnImage(lpResult.image)) {
+      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
         const lpBuffer = await downloadImageAsBuffer(lpResult.image);
         if (lpBuffer && await tryAcceptImage('LinkPreview', lpBuffer, lpResult.image)) {
           if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
         }
-      } else if (lpResult && lpResult.image) {
-        console.log(`⚠️ LinkPreview أعاد صورة غير مؤهلة — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
-  // 4) Microlink.io (يُقبل فقط من alicdn.com)
+  // 4) Microlink.io (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
   if (!productImage && previewLink) {
     console.log(`🖼 [4/5] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
-      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image) && isAliCdnImage(mlResult.image)) {
+      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
         const mlBuffer = await downloadImageAsBuffer(mlResult.image);
         if (mlBuffer && await tryAcceptImage('Microlink', mlBuffer, mlResult.image)) {
           if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
         }
-      } else if (mlResult && mlResult.image) {
-        console.log(`⚠️ Microlink أعاد صورة غير مؤهلة — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
