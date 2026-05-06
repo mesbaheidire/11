@@ -544,9 +544,10 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
 
 async function fetchImageFromAliExpressPageCheerio(productId, timeoutMs = 12000) {
   if (!productId) return null;
-  // نُجرّب صفحة الجوال أولاً ثم سطح المكتب — الجوال يُرنَّد بـ SSR أحسن
+  // نُجرّب صفحة الجوال أولاً ثم نطاق فيتنام (SSR أنظف) ثم سطح المكتب
   const urls = [
     `https://m.aliexpress.com/item/${productId}.html`,
+    `https://vi.aliexpress.com/item/${productId}.html`,
     `https://www.aliexpress.com/item/${productId}.html`,
   ];
 
