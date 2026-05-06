@@ -544,46 +544,93 @@ function fetchOgImage(url, timeoutMs = 12000, maxRedirects = 5) {
 
 async function fetchImageFromAliExpressPageCheerio(productId, timeoutMs = 12000) {
   if (!productId) return null;
-  const url = `https://www.aliexpress.com/item/${productId}.html`;
-  try {
-    const response = await got(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-      },
-      timeout: { request: timeoutMs },
-      followRedirect: true
-    });
+  // نُجرّب صفحة الجوال أولاً ثم سطح المكتب — الجوال يُرنَّد بـ SSR أحسن
+  const urls = [
+    `https://m.aliexpress.com/item/${productId}.html`,
+    `https://www.aliexpress.com/item/${productId}.html`,
+  ];
 
-    const $ = cheerio.load(response.body);
+  const normalizeImg = (u) => {
+    if (!u) return null;
+    let s = String(u).replace(/\\u002F/g, '/').replace(/\\\//g, '/').replace(/\\/g, '');
+    if (s.startsWith('//')) s = 'https:' + s;
+    return s;
+  };
 
-    let imageUrl =
-      $('meta[property="og:image"]').attr('content') ||
-      $('meta[name="twitter:image"]').attr('content') ||
-      $('.gallery-panel__preview-image').attr('src') ||
-      $('.magnifier-image').attr('src') ||
-      $('img.specZoom').attr('src') ||
-      $('img[class*="product-image"]').first().attr('src') ||
-      $('img[class*="main-image"]').first().attr('src');
-
-    if (!imageUrl) {
-      const fallbackMatch = response.body.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-        || response.body.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-      if (fallbackMatch && fallbackMatch[1]) imageUrl = fallbackMatch[1];
-    }
-
-    if (imageUrl && imageUrl.startsWith('//')) imageUrl = 'https:' + imageUrl;
-
-    if (imageUrl && !isLikelyVideoUrl(imageUrl)) {
-      console.log(`✅ Cheerio وجد صورة: ${imageUrl.substring(0, 80)}...`);
-      return { image: imageUrl };
+  // أنماط JSON المضمّنة داخل <script> — صور المصنع الأصلية بدقة عالية
+  const extractFromScripts = (body) => {
+    const patterns = [
+      /"imagePathList"\s*:\s*\[\s*"([^"]+)"/,
+      /"imageBigViewURL"\s*:\s*\[\s*"([^"]+)"/,
+      /"mainImageUrl"\s*:\s*"(https?:[^"]+)"/,
+      /"imageUrl"\s*:\s*"(https?:\/\/[^"]*alicdn[^"]+)"/,
+      /window\.runParams[\s\S]{0,500}?"image[Pp]ath[Ll]ist"\s*:\s*\[\s*"([^"]+)"/,
+      /"images"\s*:\s*\[\s*"(https?:\/\/[^"]*alicdn[^"]+)"/,
+    ];
+    for (const p of patterns) {
+      const m = body.match(p);
+      if (m && m[1]) {
+        const url = normalizeImg(m[1]);
+        if (url && /alicdn\.com|aliexpress-media/i.test(url) && !isLikelyVideoUrl(url)) {
+          return url;
+        }
+      }
     }
     return null;
-  } catch (e) {
-    console.log(`⚠️ فشل Cheerio scraper: ${e.message}`);
-    return null;
+  };
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const userAgent = i === 0
+      ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
+      : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    try {
+      const response = await got(url, {
+        headers: {
+          'User-Agent': userAgent,
+          'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        },
+        timeout: { request: timeoutMs },
+        followRedirect: true
+      });
+
+      const body = response.body || '';
+
+      // 1) أولاً: استخراج من JSON المضمّن في <script> (دقة عالية + من المصنع)
+      const jsonImage = extractFromScripts(body);
+      if (jsonImage) {
+        console.log(`✅ Cheerio (JSON) وجد صورة عالية الدقة: ${jsonImage.substring(0, 80)}...`);
+        return { image: jsonImage };
+      }
+
+      // 2) ثانياً: og:image / twitter:image / CSS selectors
+      const $ = cheerio.load(body);
+      let imageUrl = normalizeImg(
+        $('meta[property="og:image"]').attr('content') ||
+        $('meta[name="twitter:image"]').attr('content') ||
+        $('.gallery-panel__preview-image').attr('src') ||
+        $('.magnifier-image').attr('src') ||
+        $('img.specZoom').attr('src') ||
+        $('img[class*="product-image"]').first().attr('src') ||
+        $('img[class*="main-image"]').first().attr('src')
+      );
+
+      if (!imageUrl) {
+        const fallbackMatch = body.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+          || body.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+        if (fallbackMatch && fallbackMatch[1]) imageUrl = normalizeImg(fallbackMatch[1]);
+      }
+
+      if (imageUrl && !isLikelyVideoUrl(imageUrl)) {
+        console.log(`✅ Cheerio (HTML) وجد صورة: ${imageUrl.substring(0, 80)}...`);
+        return { image: imageUrl };
+      }
+    } catch (e) {
+      console.log(`⚠️ Cheerio فشل على ${url.includes('m.') ? 'mobile' : 'desktop'}: ${e.message}`);
+    }
   }
+  return null;
 }
 
 function fetchImageViaMicrolink(url, timeoutMs = 20000) {
