@@ -1808,12 +1808,15 @@ async function processPost(config, text, sourceImage, sourceName) {
   const previewLink = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
   const mobileProductUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : null;
 
+  // دالة مساعدة: هل رابط الصورة من CDN الرسمي لـ AliExpress؟
+  const isAliCdnImage = (url) => url && typeof url === 'string' && /alicdn\.com|aliexpress-media/i.test(url);
+
   // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [1/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1/6] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
-      if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url)) {
+      if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
         const apiBuffer = await downloadImageAsBuffer(apiResult.image_url);
         productImage = apiBuffer ? { source: apiBuffer } : apiResult.image_url;
         productImageUrl = apiResult.image_url;
@@ -1822,61 +1825,80 @@ async function processPost(config, text, sourceImage, sourceName) {
         if (!firstProductPrice && (apiResult.sale_price || apiResult.price)) {
           firstProductPrice = priceFromPost || apiResult.sale_price || apiResult.price;
         }
+      } else if (apiResult && apiResult.image_url && !isAliCdnImage(apiResult.image_url)) {
+        console.log(`⚠️ AliExpress API أعاد صورة خارج CDN — تجاهل: ${String(apiResult.image_url).substring(0,80)}`);
       }
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 2) كشط صفحة AliExpress مباشرة بـ Cheerio (og:image + CSS selectors)
+  // 2) كشط JSON مضمّن من صفحة الجوال (يتحقق من alicdn.com)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [2/6] محاولة Mobile JSON scraper...`);
+    try {
+      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
+      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
+        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
+        productImage = mjBuffer ? { source: mjBuffer } : mjResult.image;
+        productImageUrl = mjResult.image;
+        console.log(`✅ نجح Mobile JSON scraper`);
+        if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+      }
+    } catch (e) { console.log(`⚠️ فشل Mobile JSON scraper: ${e.message}`); }
+  }
+
+  // 3) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [3/6] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
-      if (chResult && chResult.image) {
+      if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
         const chBuffer = await downloadImageAsBuffer(chResult.image);
         productImage = chBuffer ? { source: chBuffer } : chResult.image;
         productImageUrl = chResult.image;
         console.log(`✅ نجح Cheerio scraper`);
+      } else if (chResult && chResult.image && !isAliCdnImage(chResult.image)) {
+        console.log(`⚠️ Cheerio أعاد صورة خارج alicdn.com — تجاهل: ${String(chResult.image).substring(0,80)}`);
       }
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) LinkPreview.xyz
+  // 4) LinkPreview.xyz (يُقبل فقط من alicdn.com)
   if (!productImage && previewLink) {
-    console.log(`🖼 [3/5] محاولة LinkPreview.xyz...`);
+    console.log(`🖼 [4/6] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
-      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
+      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image) && isAliCdnImage(lpResult.image)) {
         const lpBuffer = await downloadImageAsBuffer(lpResult.image);
         productImage = lpBuffer ? { source: lpBuffer } : lpResult.image;
         productImageUrl = lpResult.image;
         console.log(`✅ نجح LinkPreview.xyz`);
         if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
       } else if (lpResult && lpResult.image) {
-        console.log(`⛔ LinkPreview تم تجاهل رابط فيديو`);
+        console.log(`⚠️ LinkPreview أعاد صورة غير مؤهلة (${isLikelyVideoUrl(lpResult.image) ? 'فيديو' : 'خارج alicdn.com'}) — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
-  // 4) Microlink.io
+  // 5) Microlink.io (يُقبل فقط من alicdn.com)
   if (!productImage && previewLink) {
-    console.log(`🖼 [4/5] محاولة Microlink.io...`);
+    console.log(`🖼 [5/6] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
-      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
+      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image) && isAliCdnImage(mlResult.image)) {
         const mlBuffer = await downloadImageAsBuffer(mlResult.image);
         productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
         productImageUrl = mlResult.image;
         console.log(`✅ نجح Microlink.io`);
         if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
       } else if (mlResult && mlResult.image) {
-        console.log(`⛔ Microlink تم تجاهل رابط فيديو`);
+        console.log(`⚠️ Microlink أعاد صورة غير مؤهلة (${isLikelyVideoUrl(mlResult.image) ? 'فيديو' : 'خارج alicdn.com'}) — تجاهل`);
       }
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
 
-  // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط)
+  // 6) صورة المنشور الأصلي من تيليغرام (آخر احتياط — الصورة الحقيقية للمنتج المنشورة)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام`);
+    console.log(`🖼 [6/6] استخدام صورة المنشور الأصلي من تيليغرام`);
     productImage = { source: sourceImage };
   }
 
