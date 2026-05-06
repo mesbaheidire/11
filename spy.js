@@ -1808,15 +1808,9 @@ async function processPost(config, text, sourceImage, sourceName) {
   const previewLink = convertedLinks[0]?.affLink || (firstProductId ? `https://www.aliexpress.com/item/${firstProductId}.html` : null);
   const mobileProductUrl = firstProductId ? `https://m.aliexpress.com/item/${firstProductId}.html` : null;
 
-  // 1) صورة المنشور الأصلي من تيليغرام (الأولوية القصوى)
-  if (!productImage && sourceImage) {
-    console.log(`🖼 [1/5] استخدام صورة المنشور الأصلي من تيليغرام`);
-    productImage = { source: sourceImage };
-  }
-
-  // 2) AliExpress API (مباشرة)
+  // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1/5] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url)) {
@@ -1832,9 +1826,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 3) كشط صفحة AliExpress مباشرة بـ Cheerio (og:image + CSS selectors)
+  // 2) كشط صفحة AliExpress مباشرة بـ Cheerio (og:image + CSS selectors)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [3/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [2/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image) {
@@ -1846,9 +1840,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 4) LinkPreview.xyz
+  // 3) LinkPreview.xyz
   if (!productImage && previewLink) {
-    console.log(`🖼 [4/5] محاولة LinkPreview.xyz...`);
+    console.log(`🖼 [3/5] محاولة LinkPreview.xyz...`);
     try {
       const lpResult = await fetchImageViaLinkPreview(previewLink);
       if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
@@ -1863,24 +1857,27 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
   }
 
-  // 5) Microlink.io
-  if (!productImage) {
-    const mlUrl = previewLink;
-    if (mlUrl) {
-      console.log(`🖼 [5/5] محاولة Microlink.io...`);
-      try {
-        const mlResult = await fetchImageViaMicrolink(mlUrl);
-        if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
-          const mlBuffer = await downloadImageAsBuffer(mlResult.image);
-          productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
-          productImageUrl = mlResult.image;
-          console.log(`✅ نجح Microlink.io`);
-          if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
-        } else if (mlResult && mlResult.image) {
-          console.log(`⛔ Microlink تم تجاهل رابط فيديو`);
-        }
-      } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
-    }
+  // 4) Microlink.io
+  if (!productImage && previewLink) {
+    console.log(`🖼 [4/5] محاولة Microlink.io...`);
+    try {
+      const mlResult = await fetchImageViaMicrolink(previewLink);
+      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
+        const mlBuffer = await downloadImageAsBuffer(mlResult.image);
+        productImage = mlBuffer ? { source: mlBuffer } : mlResult.image;
+        productImageUrl = mlResult.image;
+        console.log(`✅ نجح Microlink.io`);
+        if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+      } else if (mlResult && mlResult.image) {
+        console.log(`⛔ Microlink تم تجاهل رابط فيديو`);
+      }
+    } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
+  }
+
+  // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط)
+  if (!productImage && sourceImage) {
+    console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام`);
+    productImage = { source: sourceImage };
   }
 
   // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
