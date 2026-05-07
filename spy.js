@@ -1959,7 +1959,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
   // مصدر موثوق: نسمح بأي CDN (Gemini سيتحقق بصرياً)
   if (!productImage && firstProductImage) {
-    console.log(`🖼 [0/5] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
+    console.log(`🖼 [0/4] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
     try {
       if (!isLikelyVideoUrl(firstProductImage)) {
         const lpBuf = await downloadImageAsBuffer(firstProductImage);
@@ -1970,7 +1970,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [1/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1/4] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -1989,7 +1989,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 2) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [2/4] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -2001,23 +2001,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) LinkPreview.xyz (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
+  // 3) Microlink.io (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
   if (!productImage && previewLink) {
-    console.log(`🖼 [3/5] محاولة LinkPreview.xyz...`);
-    try {
-      const lpResult = await fetchImageViaLinkPreview(previewLink);
-      if (lpResult && lpResult.image && !isLikelyVideoUrl(lpResult.image)) {
-        const lpBuffer = await downloadImageAsBuffer(lpResult.image);
-        if (lpBuffer && await tryAcceptImage('LinkPreview', lpBuffer, lpResult.image)) {
-          if (!firstApiTitle && lpResult.title) firstApiTitle = lpResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ فشل LinkPreview.xyz: ${e.message}`); }
-  }
-
-  // 4) Microlink.io (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
-  if (!productImage && previewLink) {
-    console.log(`🖼 [4/5] محاولة Microlink.io...`);
+    console.log(`🖼 [3/4] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
       if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
@@ -2031,7 +2017,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
+    console.log(`🖼 [4/4] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
     productImage = { source: sourceImage };
   }
 
