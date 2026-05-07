@@ -7,6 +7,7 @@ const { portaffFunction, fetchLinkPreview, idCatcher } = require('./afflink');
 const { searchHotProducts, searchProducts, getProductDetails } = require('./aliexpress-api');
 const { Telegraf } = require('telegraf');
 const { PostScheduler } = require('./scheduler');
+const { RepublishManager } = require('./republish');
 const sharp = require('sharp');
 const https = require('https');
 const http = require('http');
@@ -117,6 +118,9 @@ async function getSharedBotToken() {
 const app = express();
 const postScheduler = new PostScheduler();
 postScheduler.start();
+
+const republishManager = new RepublishManager();
+republishManager.start();
 
 // Gemini API Key Management System
 const GEMINI_KEYS_FILE = path.join(__dirname, 'gemini_keys.json');
@@ -2743,6 +2747,90 @@ app.delete('/api/saved-posts', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// ========== Republish Campaigns ==========
+function sanitizeCampaign(c) {
+  if (!c) return c;
+  const { credentials, ...safe } = c;
+  return {
+    ...safe,
+    has_credentials: !!(credentials && credentials.telegramToken),
+  };
+}
+
+app.get('/api/republish/campaigns', async (req, res) => {
+  try {
+    const list = await db.listRepublishCampaigns();
+    res.json({ success: true, campaigns: list.map(sanitizeCampaign) });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/republish/campaigns', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const min = parseInt(body.minMinutes, 10) || 30;
+    const max = parseInt(body.maxMinutes, 10) || Math.max(min, 90);
+    if (max < min) return res.status(400).json({ success: false, error: 'الحد الأقصى أصغر من الأدنى' });
+
+    // Build queue from current saved posts
+    const all = await db.getSavedPosts();
+    if (!all.length) return res.status(400).json({ success: false, error: 'لا توجد منشورات محفوظة' });
+    const ids = all.map(p => p.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+
+    // Snapshot credentials so the campaign survives restarts
+    const shared = await loadSharedCredentials();
+    const credentials = {
+      telegramToken: shared.botToken || process.env.TELEGRAM_BOT_TOKEN || '',
+      channelId: shared.channelId || process.env.TELEGRAM_CHANNEL_ID || '',
+      channelId2: shared.channelId2 || '',
+      channelChoice: body.channelChoice || shared.channelChoice || 'both',
+    };
+
+    const camp = await db.createRepublishCampaign({
+      name: body.name,
+      channelChoice: body.channelChoice || 'both',
+      minMinutes: min,
+      maxMinutes: max,
+      activeHoursStart: body.activeHoursStart === '' || body.activeHoursStart == null ? null : parseInt(body.activeHoursStart, 10),
+      activeHoursEnd: body.activeHoursEnd === '' || body.activeHoursEnd == null ? null : parseInt(body.activeHoursEnd, 10),
+      maxCount: body.maxCount ? parseInt(body.maxCount, 10) : null,
+      regenerateAi: !!body.regenerateAi,
+      queue: ids,
+      nextRunAt: body.startNow ? new Date() : new Date(Date.now() + (Math.round((min + Math.random() * (max - min)) * 60 * 1000))),
+      credentials,
+    });
+    res.json({ success: true, campaign: sanitizeCampaign(camp) });
+  } catch (e) {
+    console.error('Create republish campaign error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/republish/campaigns/:id/stop', async (req, res) => {
+  try { await db.updateRepublishCampaign(req.params.id, { status: 'stopped' }); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.post('/api/republish/campaigns/:id/resume', async (req, res) => {
+  try {
+    await db.updateRepublishCampaign(req.params.id, { status: 'active', next_run_at: new Date() });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.delete('/api/republish/campaigns/:id', async (req, res) => {
+  try { await db.deleteRepublishCampaign(req.params.id); res.json({ success: true }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+app.get('/api/republish/campaigns/:id/log', async (req, res) => {
+  try { const log = await db.getRepublishLog(req.params.id, 200); res.json({ success: true, log }); }
+  catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.delete('/api/saved-posts/before', async (req, res) => {

@@ -85,6 +85,33 @@ async function initDatabase() {
         value TEXT,
         updated_at TIMESTAMP DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS republish_campaigns (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        channel_choice TEXT DEFAULT 'both',
+        min_minutes INTEGER DEFAULT 30,
+        max_minutes INTEGER DEFAULT 90,
+        active_hours_start INTEGER,
+        active_hours_end INTEGER,
+        max_count INTEGER,
+        regenerate_ai BOOLEAN DEFAULT FALSE,
+        status TEXT DEFAULT 'active',
+        total_published INTEGER DEFAULT 0,
+        queue JSONB DEFAULT '[]'::jsonb,
+        position INTEGER DEFAULT 0,
+        next_run_at TIMESTAMP,
+        last_run_at TIMESTAMP,
+        credentials JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS republish_log (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER REFERENCES republish_campaigns(id) ON DELETE CASCADE,
+        saved_post_id TEXT,
+        status TEXT,
+        error TEXT,
+        published_at TIMESTAMP DEFAULT NOW()
+      );
     `);
     await pool.query(`
       DO $$ BEGIN
@@ -505,6 +532,82 @@ async function getAppStorage(key) {
   }
 }
 
+// ===== Republish Campaigns =====
+async function createRepublishCampaign(c) {
+  const r = await query(
+    `INSERT INTO republish_campaigns
+       (name, channel_choice, min_minutes, max_minutes, active_hours_start, active_hours_end,
+        max_count, regenerate_ai, status, queue, position, next_run_at, credentials)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9::jsonb,0,$10,$11::jsonb)
+     RETURNING *`,
+    [
+      c.name || `حملة ${new Date().toLocaleString('ar')}`,
+      c.channelChoice || 'both',
+      c.minMinutes || 30,
+      c.maxMinutes || 90,
+      c.activeHoursStart ?? null,
+      c.activeHoursEnd ?? null,
+      c.maxCount || null,
+      !!c.regenerateAi,
+      JSON.stringify(c.queue || []),
+      c.nextRunAt || new Date(),
+      c.credentials ? JSON.stringify(c.credentials) : null,
+    ]
+  );
+  return r.rows[0];
+}
+
+async function listRepublishCampaigns() {
+  const r = await query('SELECT * FROM republish_campaigns ORDER BY created_at DESC');
+  return r.rows;
+}
+
+async function getRepublishCampaign(id) {
+  const r = await query('SELECT * FROM republish_campaigns WHERE id=$1', [id]);
+  return r.rows[0] || null;
+}
+
+async function updateRepublishCampaign(id, updates) {
+  const map = {
+    status: 'status', position: 'position', total_published: 'total_published',
+    next_run_at: 'next_run_at', last_run_at: 'last_run_at', queue: 'queue',
+  };
+  const fields = []; const values = []; let i = 1;
+  for (const [k, col] of Object.entries(map)) {
+    if (updates[k] !== undefined) {
+      const isJson = col === 'queue';
+      fields.push(`${col} = $${i++}${isJson ? '::jsonb' : ''}`);
+      values.push(isJson ? JSON.stringify(updates[k]) : updates[k]);
+    }
+  }
+  if (!fields.length) return true;
+  values.push(id);
+  await query(`UPDATE republish_campaigns SET ${fields.join(', ')} WHERE id=$${i}`, values);
+  return true;
+}
+
+async function deleteRepublishCampaign(id) {
+  await query('DELETE FROM republish_campaigns WHERE id=$1', [id]);
+  return true;
+}
+
+async function logRepublish(campaignId, savedPostId, status, error) {
+  try {
+    await query(
+      'INSERT INTO republish_log (campaign_id, saved_post_id, status, error) VALUES ($1,$2,$3,$4)',
+      [campaignId, savedPostId, status, error || null]
+    );
+  } catch (e) { /* ignore */ }
+}
+
+async function getRepublishLog(campaignId, limit = 100) {
+  const r = await query(
+    'SELECT * FROM republish_log WHERE campaign_id=$1 ORDER BY published_at DESC LIMIT $2',
+    [campaignId, limit]
+  );
+  return r.rows;
+}
+
 module.exports = {
   initDatabase,
   query,
@@ -529,6 +632,13 @@ module.exports = {
   deleteSavedPost,
   deleteSavedPostsBefore,
   clearSavedPosts,
+  createRepublishCampaign,
+  listRepublishCampaigns,
+  getRepublishCampaign,
+  updateRepublishCampaign,
+  deleteRepublishCampaign,
+  logRepublish,
+  getRepublishLog,
   setAppStorage,
   getAppStorage,
   closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
