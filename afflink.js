@@ -198,34 +198,47 @@ async function fetchLinkPreview(productId) {
         }
     }
 
-    // ⭐ 0) Simple Preview أولاً (نفس ترتيب صفحة التجسس — الأكثر موثوقية للصورة)
-    const spEarly = await trySimplePreview();
-    if (spEarly?.image) {
-        console.log("✅ Simple Preview حصل على الصورة — جلب بيانات API للسعر");
-    }
+    // دالة مساعدة: هل الرابط من CDN الرسمي لـ AliExpress (الأكثر موثوقية)؟
+    const isAliCdnImage = (url) => url && typeof url === 'string' && /alicdn\.com|aliexpress-media/i.test(url);
 
-    // 1) AliExpress API (للحصول على السعر/المتجر/التقييم)
+    // 1) AliExpress API أولاً (الصورة الرسمية من alicdn.com — لا تُخطئ المنتج)
+    let apiResult = null;
     try {
-        const apiResult = await getProductDetails(productId);
-        if (apiResult && apiResult.title) {
-            // الأولوية للصورة: Simple Preview > AliExpress API
-            const finalImage = spEarly?.image || apiResult.image_url || null;
-            console.log("✅ Product fetched via AliExpress API - Title:", apiResult.title.substring(0, 50) + "...");
-            return {
-                method: spEarly?.image ? "Simple Preview + API" : "AliExpress API",
-                title: apiResult.title,
-                image_url: finalImage,
-                price: apiResult.sale_price || apiResult.price || "غير متوفر",
-                original_price: apiResult.original_price,
-                discount: apiResult.discount,
-                currency: apiResult.currency,
-                shop_name: apiResult.shop_name,
-                rating: apiResult.rating,
-                orders: apiResult.orders
-            };
-        }
+        apiResult = await getProductDetails(productId);
     } catch (apiErr) {
         console.log("AliExpress API fetch failed:", apiErr.message);
+    }
+
+    // 2) Simple Preview كاحتياط للصورة (فقط إن لم يكن لدى API صورة من alicdn)
+    let spEarly = null;
+    const apiHasGoodImage = apiResult?.image_url && isAliCdnImage(apiResult.image_url);
+    if (!apiHasGoodImage) {
+        console.log("⚠️ API لا يحتوي صورة alicdn — محاولة Simple Preview");
+        spEarly = await trySimplePreview();
+    }
+
+    if (apiResult && apiResult.title) {
+        // الأولوية للصورة: API (alicdn) > Simple Preview > أي صورة من API
+        const finalImage = (apiHasGoodImage ? apiResult.image_url : null)
+            || spEarly?.image
+            || apiResult.image_url
+            || null;
+        const methodLabel = apiHasGoodImage
+            ? "AliExpress API (alicdn)"
+            : (spEarly?.image ? "API + Simple Preview" : "AliExpress API");
+        console.log(`✅ Product fetched - Method: ${methodLabel} - Title: ${apiResult.title.substring(0, 50)}...`);
+        return {
+            method: methodLabel,
+            title: apiResult.title,
+            image_url: finalImage,
+            price: apiResult.sale_price || apiResult.price || "غير متوفر",
+            original_price: apiResult.original_price,
+            discount: apiResult.discount,
+            currency: apiResult.currency,
+            shop_name: apiResult.shop_name,
+            rating: apiResult.rating,
+            orders: apiResult.orders
+        };
     }
 
     // إن فشل API لكن Simple Preview نجح: نُرجع الصورة + العنوان فقط
