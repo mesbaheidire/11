@@ -397,10 +397,17 @@ async function getGeminiKeys() {
   }
 }
 
+function stripIntroBlockquote(text) {
+  if (!text || typeof text !== 'string') return text;
+  // Remove the leading <blockquote>...</blockquote> intro (and its trailing blank lines)
+  return text.replace(/^\s*<blockquote>[\s\S]*?<\/blockquote>\s*\n*/i, '').trimStart();
+}
+
 async function addSavedPost(post) {
   try {
     const postId = post.id || post.post_id || Date.now().toString();
     const savedAt = post.savedAt || post.createdAt || new Date().toISOString();
+    if (post.message) post.message = stripIntroBlockquote(post.message);
     await query(
       `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, created_at, data) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
@@ -452,6 +459,7 @@ async function getSavedPosts(limit = null) {
 
 async function updateSavedPost(postId, updates) {
   try {
+    if (updates && updates.message) updates.message = stripIntroBlockquote(updates.message);
     const fields = [];
     const values = [];
     let i = 1;
