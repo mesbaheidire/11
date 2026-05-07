@@ -166,10 +166,19 @@ class RepublishManager {
     }
   }
 
+  stripIntro(text) {
+    if (!text || typeof text !== 'string') return text;
+    // 1) Remove a leading <blockquote>...</blockquote> intro (Algerian hook)
+    let out = text.replace(/^\s*<blockquote>[\s\S]*?<\/blockquote>\s*\n*/i, '');
+    // 2) Remove any leftover blockquote tags anywhere (defensive)
+    out = out.replace(/<\/?blockquote>/gi, '');
+    return out.trimStart();
+  }
+
   buildMessage(post) {
-    if (post.message && post.message.trim()) return post.message;
+    if (post.message && post.message.trim()) return this.stripIntro(post.message);
+    // Build from scratch WITHOUT the Algerian hook (republish should be clean)
     const lines = [];
-    if (post.hook) lines.push(post.hook, '');
     if (post.title) lines.push(`🛍️ ${post.title}`);
     if (post.price) lines.push(`💰 ${post.price}`);
     if (post.coupon) lines.push(`🎟️ كوبون: ${post.coupon}`);
