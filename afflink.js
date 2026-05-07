@@ -1,88 +1,6 @@
 const got = require("got");
 const { URL } = require("url");
-const cheerio = require('cheerio');
 const { getProductDetails } = require('./aliexpress-api');
-
-// كاشف فيديو + Cheerio scraper لاستخراج صورة alicdn.com الرسمية من صفحة AliExpress
-function _isLikelyVideoUrl(url) {
-    if (!url || typeof url !== 'string') return false;
-    return /\.(mp4|webm|mov|avi|m3u8|ts|flv|mkv)(\?|$|#)/i.test(url)
-        || /cloud\.video\.taobao\.com|video\.aliexpress|play\.aliexpress|videoid=|playerType=|movie\.aliexpress/i.test(url);
-}
-
-async function _fetchAlicdnImageViaCheerio(productId, timeoutMs = 12000) {
-    if (!productId) return null;
-    const urls = [
-        `https://m.aliexpress.com/item/${productId}.html`,
-        `https://vi.aliexpress.com/item/${productId}.html`,
-        `https://www.aliexpress.com/item/${productId}.html`,
-    ];
-    const normalizeImg = (u) => {
-        if (!u) return null;
-        let s = String(u).replace(/\\u002F/g, '/').replace(/\\\//g, '/').replace(/\\/g, '');
-        if (s.startsWith('//')) s = 'https:' + s;
-        return s;
-    };
-    const extractFromScripts = (body) => {
-        const patterns = [
-            /"imagePathList"\s*:\s*\[\s*"([^"]+)"/,
-            /"imageBigViewURL"\s*:\s*\[\s*"([^"]+)"/,
-            /"mainImageUrl"\s*:\s*"(https?:[^"]+)"/,
-            /"imageUrl"\s*:\s*"(https?:\/\/[^"]*alicdn[^"]+)"/,
-            /window\.runParams[\s\S]{0,500}?"image[Pp]ath[Ll]ist"\s*:\s*\[\s*"([^"]+)"/,
-            /"images"\s*:\s*\[\s*"(https?:\/\/[^"]*alicdn[^"]+)"/,
-        ];
-        for (const p of patterns) {
-            const m = body.match(p);
-            if (m && m[1]) {
-                const url = normalizeImg(m[1]);
-                if (url && /alicdn\.com|aliexpress-media/i.test(url) && !_isLikelyVideoUrl(url)) return url;
-            }
-        }
-        return null;
-    };
-    for (let i = 0; i < urls.length; i++) {
-        const url = urls[i];
-        const userAgent = i === 0
-            ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'
-            : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-        try {
-            const response = await got(url, {
-                headers: { 'User-Agent': userAgent, 'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8', 'Accept': 'text/html,*/*;q=0.8' },
-                timeout: { request: timeoutMs },
-                followRedirect: true
-            });
-            const body = response.body || '';
-            const jsonImage = extractFromScripts(body);
-            if (jsonImage) {
-                console.log(`✅ Cheerio (JSON) صورة alicdn: ${jsonImage.substring(0, 80)}`);
-                let title = '';
-                const tm = body.match(/<meta property="og:title" content="([^"]+)"/i);
-                if (tm) title = tm[1].replace(/ - AliExpress.*$/i, '').trim();
-                return { image: jsonImage, title };
-            }
-            const $ = cheerio.load(body);
-            let imageUrl = normalizeImg(
-                $('meta[property="og:image"]').attr('content') ||
-                $('meta[name="twitter:image"]').attr('content') ||
-                $('.gallery-panel__preview-image').attr('src') ||
-                $('.magnifier-image').attr('src') ||
-                $('img.specZoom').attr('src') ||
-                $('img[class*="product-image"]').first().attr('src') ||
-                $('img[class*="main-image"]').first().attr('src')
-            );
-            if (imageUrl && /alicdn\.com|aliexpress-media/i.test(imageUrl) && !_isLikelyVideoUrl(imageUrl)) {
-                console.log(`✅ Cheerio (HTML) صورة alicdn: ${imageUrl.substring(0, 80)}`);
-                let title = $('meta[property="og:title"]').attr('content') || '';
-                title = title.replace(/ - AliExpress.*$/i, '').trim();
-                return { image: imageUrl, title };
-            }
-        } catch (e) {
-            console.log(`⚠️ Cheerio فشل على ${url.includes('m.') ? 'mobile' : 'desktop'}: ${e.message}`);
-        }
-    }
-    return null;
-}
 
 
 function isValidAffUrl(value) {
@@ -280,69 +198,39 @@ async function fetchLinkPreview(productId) {
         }
     }
 
-    // دالة مساعدة: هل الرابط من CDN الرسمي لـ AliExpress (الأكثر موثوقية)؟
-    const isAliCdnImage = (url) => url && typeof url === 'string' && /alicdn\.com|aliexpress-media/i.test(url);
+    // ⭐ 0) Simple Preview أولاً (نفس ترتيب صفحة التجسس — الأكثر موثوقية للصورة)
+    const spEarly = await trySimplePreview();
+    if (spEarly?.image) {
+        console.log("✅ Simple Preview حصل على الصورة — جلب بيانات API للسعر");
+    }
 
-    // 1) AliExpress API أولاً (الصورة الرسمية من alicdn.com — لا تُخطئ المنتج)
-    let apiResult = null;
+    // 1) AliExpress API (للحصول على السعر/المتجر/التقييم)
     try {
-        apiResult = await getProductDetails(productId);
+        const apiResult = await getProductDetails(productId);
+        if (apiResult && apiResult.title) {
+            // الأولوية للصورة: Simple Preview > AliExpress API
+            const finalImage = spEarly?.image || apiResult.image_url || null;
+            console.log("✅ Product fetched via AliExpress API - Title:", apiResult.title.substring(0, 50) + "...");
+            return {
+                method: spEarly?.image ? "Simple Preview + API" : "AliExpress API",
+                title: apiResult.title,
+                image_url: finalImage,
+                price: apiResult.sale_price || apiResult.price || "غير متوفر",
+                original_price: apiResult.original_price,
+                discount: apiResult.discount,
+                currency: apiResult.currency,
+                shop_name: apiResult.shop_name,
+                rating: apiResult.rating,
+                orders: apiResult.orders
+            };
+        }
     } catch (apiErr) {
         console.log("AliExpress API fetch failed:", apiErr.message);
     }
 
-    // 2) إن لم تتوفر صورة API alicdn → Cheerio scraper (يستخرج alicdn من صفحة المنتج مباشرة)
-    let cheerioImg = null;
-    const apiHasGoodImage = apiResult?.image_url && isAliCdnImage(apiResult.image_url);
-    if (!apiHasGoodImage) {
-        console.log("⚠️ API لا يحتوي صورة alicdn — محاولة Cheerio scraper");
-        cheerioImg = await _fetchAlicdnImageViaCheerio(productId);
-    }
-
-    // 3) Simple Preview كاحتياط أخير للصورة (فقط لو فشل Cheerio أيضاً)
-    let spEarly = null;
-    if (!apiHasGoodImage && !cheerioImg?.image) {
-        console.log("⚠️ Cheerio أيضاً فشل — محاولة Simple Preview");
-        spEarly = await trySimplePreview();
-    }
-
-    if (apiResult && apiResult.title) {
-        // الأولوية: API (alicdn) > Cheerio (alicdn) > Simple Preview > أي صورة من API
-        const finalImage = (apiHasGoodImage ? apiResult.image_url : null)
-            || cheerioImg?.image
-            || spEarly?.image
-            || apiResult.image_url
-            || null;
-        const methodLabel = apiHasGoodImage
-            ? "AliExpress API (alicdn)"
-            : (cheerioImg?.image ? "API + Cheerio (alicdn)" : (spEarly?.image ? "API + Simple Preview" : "AliExpress API"));
-        console.log(`✅ Product fetched - Method: ${methodLabel} - Title: ${apiResult.title.substring(0, 50)}...`);
-        return {
-            method: methodLabel,
-            title: apiResult.title,
-            image_url: finalImage,
-            price: apiResult.sale_price || apiResult.price || "غير متوفر",
-            original_price: apiResult.original_price,
-            discount: apiResult.discount,
-            currency: apiResult.currency,
-            shop_name: apiResult.shop_name,
-            rating: apiResult.rating,
-            orders: apiResult.orders
-        };
-    }
-
-    // إن فشل API: استخدم Cheerio أولاً (alicdn موثوق) ثم Simple Preview
-    if (cheerioImg?.image) {
-        console.log("✅ Cheerio standalone (API فشل):", cheerioImg.image.substring(0, 60));
-        return {
-            method: "Cheerio (alicdn)",
-            title: cheerioImg.title || `منتج AliExpress #${productId}`,
-            image_url: cheerioImg.image,
-            price: "راجع الرابط"
-        };
-    }
+    // إن فشل API لكن Simple Preview نجح: نُرجع الصورة + العنوان فقط
     if (spEarly?.image) {
-        console.log("✅ Simple Preview standalone (API + Cheerio فشلا):", spEarly.image.substring(0, 60));
+        console.log("✅ Simple Preview standalone (API فشل):", spEarly.image.substring(0, 60));
         return {
             method: "Simple Preview",
             title: spEarly.title || `منتج AliExpress #${productId}`,
