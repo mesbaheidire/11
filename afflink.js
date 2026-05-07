@@ -198,20 +198,21 @@ async function fetchLinkPreview(productId) {
         }
     }
 
-    // 1) AliExpress API (الأسرع والأكثر موثوقية — يُرجع سعر/متجر/تقييم)
+    // ⭐ 0) Simple Preview أولاً (نفس ترتيب صفحة التجسس — الأكثر موثوقية للصورة)
+    const spEarly = await trySimplePreview();
+    if (spEarly?.image) {
+        console.log("✅ Simple Preview حصل على الصورة — جلب بيانات API للسعر");
+    }
+
+    // 1) AliExpress API (للحصول على السعر/المتجر/التقييم)
     try {
         const apiResult = await getProductDetails(productId);
         if (apiResult && apiResult.title) {
-            // إذا لم يُرجع API صورة، نحاول Simple Preview كاحتياط للصورة فقط
-            let finalImage = apiResult.image_url;
-            if (!finalImage) {
-                console.log("ℹ️ AliExpress API بدون صورة — محاولة Simple Preview للصورة");
-                const sp = await trySimplePreview();
-                if (sp?.image) finalImage = sp.image;
-            }
+            // الأولوية للصورة: Simple Preview > AliExpress API
+            const finalImage = spEarly?.image || apiResult.image_url || null;
             console.log("✅ Product fetched via AliExpress API - Title:", apiResult.title.substring(0, 50) + "...");
             return {
-                method: "AliExpress API",
+                method: spEarly?.image ? "Simple Preview + API" : "AliExpress API",
                 title: apiResult.title,
                 image_url: finalImage,
                 price: apiResult.sale_price || apiResult.price || "غير متوفر",
@@ -227,20 +228,16 @@ async function fetchLinkPreview(productId) {
         console.log("AliExpress API fetch failed:", apiErr.message);
     }
 
-    // ⭐ 1.5) Simple Preview — linkpreview.xyz + vi.aliexpress.com (الكود المُجرَّب)
-    // إذا فشل AliExpress API، نُجرِّبه قبل المصادر الأخرى
-    try {
-        const sp = await trySimplePreview();
-        if (sp && sp.image) {
-            console.log("✅ Simple Preview (linkpreview.xyz + vi) — Image:", sp.image.substring(0, 60));
-            return {
-                method: "Simple Preview",
-                title: sp.title || `منتج AliExpress #${productId}`,
-                image_url: sp.image,
-                price: "راجع الرابط"
-            };
-        }
-    } catch (_) {}
+    // إن فشل API لكن Simple Preview نجح: نُرجع الصورة + العنوان فقط
+    if (spEarly?.image) {
+        console.log("✅ Simple Preview standalone (API فشل):", spEarly.image.substring(0, 60));
+        return {
+            method: "Simple Preview",
+            title: spEarly.title || `منتج AliExpress #${productId}`,
+            image_url: spEarly.image,
+            price: "راجع الرابط"
+        };
+    }
 
     // 2) Microlink.io API (احتياط خارجي)
     try {
