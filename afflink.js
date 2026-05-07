@@ -180,15 +180,40 @@ async function idCatcher(input) {
 
 
 async function fetchLinkPreview(productId) {
-    // 1) AliExpress API (الأسرع والأكثر موثوقية — رسمي)
+    // دالة مساعدة للحصول على صورة من Simple Preview (linkpreview.xyz + vi.aliexpress.com)
+    async function trySimplePreview() {
+        try {
+            const spRes = await got("https://linkpreview.xyz/api/get-meta-tags", {
+                searchParams: { url: `https://vi.aliexpress.com/item/${productId}.html` },
+                responseType: "json",
+                timeout: { request: 12000 }
+            });
+            const spImage = spRes.body?.image || null;
+            let spTitle = spRes.body?.title || '';
+            spTitle = spTitle.replace(/ - AliExpress.*$/i, '').replace(/\s*-\s*AliExpress\s*\d*$/i, '').trim();
+            return spImage ? { image: spImage, title: spTitle } : null;
+        } catch (e) {
+            console.log("⚠️ Simple Preview failed:", e.message);
+            return null;
+        }
+    }
+
+    // 1) AliExpress API (الأسرع والأكثر موثوقية — يُرجع سعر/متجر/تقييم)
     try {
         const apiResult = await getProductDetails(productId);
         if (apiResult && apiResult.title) {
+            // إذا لم يُرجع API صورة، نحاول Simple Preview كاحتياط للصورة فقط
+            let finalImage = apiResult.image_url;
+            if (!finalImage) {
+                console.log("ℹ️ AliExpress API بدون صورة — محاولة Simple Preview للصورة");
+                const sp = await trySimplePreview();
+                if (sp?.image) finalImage = sp.image;
+            }
             console.log("✅ Product fetched via AliExpress API - Title:", apiResult.title.substring(0, 50) + "...");
             return {
                 method: "AliExpress API",
                 title: apiResult.title,
-                image_url: apiResult.image_url,
+                image_url: finalImage,
                 price: apiResult.sale_price || apiResult.price || "غير متوفر",
                 original_price: apiResult.original_price,
                 discount: apiResult.discount,
@@ -201,6 +226,21 @@ async function fetchLinkPreview(productId) {
     } catch (apiErr) {
         console.log("AliExpress API fetch failed:", apiErr.message);
     }
+
+    // ⭐ 1.5) Simple Preview — linkpreview.xyz + vi.aliexpress.com (الكود المُجرَّب)
+    // إذا فشل AliExpress API، نُجرِّبه قبل المصادر الأخرى
+    try {
+        const sp = await trySimplePreview();
+        if (sp && sp.image) {
+            console.log("✅ Simple Preview (linkpreview.xyz + vi) — Image:", sp.image.substring(0, 60));
+            return {
+                method: "Simple Preview",
+                title: sp.title || `منتج AliExpress #${productId}`,
+                image_url: sp.image,
+                price: "راجع الرابط"
+            };
+        }
+    } catch (_) {}
 
     // 2) Microlink.io API (احتياط خارجي)
     try {
