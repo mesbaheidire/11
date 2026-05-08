@@ -98,34 +98,82 @@ function postPhotoToPage(token, pageId, message, imageUrl) {
   });
 }
 
-async function verifyPageToken(pageAccessToken, pageId) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: FB_GRAPH_URL,
-      path: `/${FB_API_VERSION}/${pageId}?fields=name,id&access_token=${encodeURIComponent(pageAccessToken)}`,
-      method: 'GET'
-    };
-
+function fbGet(path) {
+  return new Promise((resolve) => {
+    const options = { hostname: FB_GRAPH_URL, path: `/${FB_API_VERSION}${path}`, method: 'GET' };
     const req = https.request(options, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.error) {
-            resolve({ valid: false, error: parsed.error.message });
-          } else {
-            resolve({ valid: true, pageName: parsed.name, pageId: parsed.id });
-          }
-        } catch (e) {
-          resolve({ valid: false, error: 'Invalid response' });
-        }
+        try { resolve(JSON.parse(data)); }
+        catch (e) { resolve({ error: { message: 'Invalid JSON response from Facebook' } }); }
       });
     });
-
-    req.on('error', (e) => resolve({ valid: false, error: e.message }));
+    req.on('error', (e) => resolve({ error: { message: e.message } }));
     req.end();
   });
+}
+
+async function verifyPageToken(pageAccessToken, pageId) {
+  // الخطوة 1: اختبر التوكن نفسه (لمن يعود؟)
+  const me = await fbGet(`/me?fields=id,name&access_token=${encodeURIComponent(pageAccessToken)}`);
+  if (me.error) {
+    return { valid: false, error: `توكن غير صالح: ${me.error.message}` };
+  }
+
+  // الخطوة 2: تحقّق إن كان توكن User أم Page
+  // إذا me.id == pageId → هذا Page Access Token صحيح
+  // إذا me.id != pageId → هذا User Token (لن ينشر على الصفحة)
+  const isUserToken = String(me.id) !== String(pageId);
+
+  // الخطوة 3: اطلب tasks من الصفحة لمعرفة الصلاحيات
+  const pageInfo = await fbGet(`/${pageId}?fields=name,id,access_token,tasks&access_token=${encodeURIComponent(pageAccessToken)}`);
+  if (pageInfo.error) {
+    return {
+      valid: false,
+      error: `الصفحة غير قابلة للوصول: ${pageInfo.error.message}`,
+      hint: isUserToken ? 'يبدو أنك تستخدم User Access Token. يجب استبداله بـ Page Access Token من /me/accounts' : null,
+      isUserToken
+    };
+  }
+
+  const tasks = pageInfo.tasks || [];
+  const canCreate = tasks.includes('CREATE_CONTENT');
+  const canManage = tasks.includes('MANAGE');
+
+  if (isUserToken && !canCreate) {
+    return {
+      valid: false,
+      pageName: pageInfo.name,
+      error: 'هذا User Access Token لا Page Token. لا يستطيع النشر على الصفحة.',
+      hint: `استبدله بـ Page Access Token عبر: GET /${pageId}?fields=access_token (أو من Graph API Explorer → Get Page Access Token)`,
+      tasks,
+      isUserToken: true
+    };
+  }
+
+  if (!canCreate && !canManage && tasks.length > 0) {
+    return {
+      valid: false,
+      pageName: pageInfo.name,
+      error: `التوكن صالح لكن بدون صلاحية نشر. الصلاحيات الحالية: [${tasks.join(', ')}]`,
+      hint: 'أضف pages_manage_posts و pages_read_engagement من Facebook Login for Business → Permissions',
+      tasks,
+      isUserToken: false
+    };
+  }
+
+  return {
+    valid: true,
+    pageName: pageInfo.name,
+    pageId: pageInfo.id,
+    tasks,
+    canCreate,
+    canManage,
+    isUserToken: false,
+    hasPageTokenField: !!pageInfo.access_token,
+    suggestedPageToken: pageInfo.access_token || null
+  };
 }
 
 function formatFacebookMessage(title, price, affiliateLink, coupon, template) {

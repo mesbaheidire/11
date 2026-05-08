@@ -2860,7 +2860,16 @@ app.post('/api/facebook/verify', async (req, res) => {
       return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
     }
     const result = await verifyPageToken(pageAccessToken, pageId);
-    res.json({ success: result.valid, pageName: result.pageName, error: result.error });
+    res.json({
+      success: result.valid,
+      pageName: result.pageName,
+      error: result.error,
+      hint: result.hint,
+      tasks: result.tasks,
+      isUserToken: result.isUserToken,
+      suggestedPageToken: result.suggestedPageToken,
+      canCreate: result.canCreate
+    });
   } catch (e) {
     res.json({ success: false, error: e.message });
   }
@@ -2872,9 +2881,18 @@ app.post('/api/facebook/test-post', async (req, res) => {
     if (!pageAccessToken || !pageId) {
       return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
     }
+    // أولاً: تحقّق سريع قبل المحاولة (نستخرج رسالة خطأ أوضح)
+    const verify = await verifyPageToken(pageAccessToken, pageId);
+    if (!verify.valid) {
+      return res.json({ success: false, error: verify.error, hint: verify.hint, isUserToken: verify.isUserToken, tasks: verify.tasks });
+    }
     const testMsg = message || '✅ هذا منشور تجريبي من AffiliDz — تم ربط الصفحة بنجاح!';
-    const result = await postToFacebookPage(pageAccessToken, pageId, testMsg, null, null);
-    res.json({ success: true, postId: result.postId });
+    try {
+      const result = await postToFacebookPage(pageAccessToken, pageId, testMsg, null, null);
+      res.json({ success: true, postId: result.postId, pageName: verify.pageName });
+    } catch (postErr) {
+      res.json({ success: false, error: postErr.message, hint: 'فشل النشر رغم اجتياز التحقق — قد يكون التوكن منتهي الصلاحية أو الصفحة مقيّدة.' });
+    }
   } catch (e) {
     res.json({ success: false, error: e.message });
   }

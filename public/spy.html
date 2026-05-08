@@ -453,6 +453,11 @@
             return d.innerHTML;
         }
 
+        function appendLine(el, text) {
+            if (el.childNodes.length > 0) el.appendChild(document.createElement('br'));
+            el.appendChild(document.createTextNode(text));
+        }
+
         function showToast(msg, type) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
@@ -930,19 +935,33 @@
                     body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
                 });
                 const d = await r.json();
+                statusEl.textContent = '';
                 if (d.success) {
                     statusEl.style.background = '#1a3d1a';
                     statusEl.style.color = '#6bff6b';
-                    statusEl.textContent = '✅ تم التحقق — الصفحة: ' + (d.pageName || pageId);
+                    appendLine(statusEl, '✅ تم التحقق — الصفحة: ' + (d.pageName || pageId));
+                    if (d.tasks && d.tasks.length) appendLine(statusEl, '🛡️ الصلاحيات: ' + d.tasks.join(', '));
                 } else {
                     statusEl.style.background = '#3d1a1a';
                     statusEl.style.color = '#ff6b6b';
-                    statusEl.textContent = '❌ فشل التحقق: التوكن الحالي لا يملك الصلاحيات المطلوبة. تحتاج pages_manage_posts و pages_read_engagement أو Facebook Page Access مفعّل للتطبيق.';
+                    appendLine(statusEl, '❌ ' + (d.error || 'فشل التحقق'));
+                    if (d.hint) appendLine(statusEl, '💡 ' + d.hint);
+                    if (d.suggestedPageToken) {
+                        const btn = document.createElement('button');
+                        btn.textContent = '🔄 استبدله بـ Page Access Token الصحيح';
+                        btn.style.cssText = 'margin-top:8px;background:#22c55e;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700';
+                        btn.onclick = () => {
+                            document.getElementById('facebookPageToken').value = d.suggestedPageToken;
+                            showToast('تم استبدال التوكن — اضغط تحقق مرة أخرى', 'success');
+                        };
+                        statusEl.appendChild(document.createElement('br'));
+                        statusEl.appendChild(btn);
+                    }
                 }
             } catch (e) {
                 statusEl.style.background = '#3d1a1a';
                 statusEl.style.color = '#ff6b6b';
-                statusEl.textContent = '❌ خطأ في الاتصال';
+                statusEl.textContent = '❌ خطأ في الاتصال: ' + e.message;
             }
         }
 
@@ -968,20 +987,25 @@
                     body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
                 });
                 const d = await r.json();
+                statusEl.textContent = '';
                 if (d.success) {
                     statusEl.style.background = '#1a3d1a';
                     statusEl.style.color = '#6bff6b';
-                    statusEl.textContent = '✅ تم النشر بنجاح! تحقق من صفحتك على فيسبوك';
+                    appendLine(statusEl, '✅ تم النشر بنجاح على ' + (d.pageName || 'صفحتك') + '!');
+                    appendLine(statusEl, '🔗 Post ID: ' + (d.postId || '-'));
                     showToast('تم النشر التجريبي على فيسبوك!', 'success');
                 } else {
                     statusEl.style.background = '#3d1a1a';
                     statusEl.style.color = '#ff6b6b';
-                    statusEl.textContent = '❌ فشل النشر: التوكن الحالي لا يملك صلاحية النشر على الصفحة. فعّل pages_manage_posts و pages_read_engagement من Facebook Developer واستخدم Page Access Token صالح.';
+                    appendLine(statusEl, '❌ فشل النشر: ' + (d.error || 'سبب غير معروف'));
+                    if (d.hint) appendLine(statusEl, '💡 ' + d.hint);
+                    if (d.tasks && d.tasks.length) appendLine(statusEl, '🛡️ الصلاحيات الموجودة: ' + d.tasks.join(', '));
+                    if (d.isUserToken) appendLine(statusEl, '⚠️ تستخدم User Token — يجب التبديل لـ Page Access Token.');
                 }
             } catch (e) {
                 statusEl.style.background = '#3d1a1a';
                 statusEl.style.color = '#ff6b6b';
-                statusEl.textContent = '❌ خطأ في الاتصال';
+                statusEl.textContent = '❌ خطأ في الاتصال: ' + e.message;
             }
         }
 
