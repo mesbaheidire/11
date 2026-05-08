@@ -1368,12 +1368,14 @@ async function executePublish(review) {
     incrementDailyCount();
     console.log(`📊 النشر اليومي: ${getDailyCount()}`);
 
-    if (config.facebookEnabled && config.facebookPageToken && config.facebookPageId) {
+    const fbToken = process.env.FACEBOOK_PAGE_TOKEN || config.facebookPageToken;
+    const fbPageId = process.env.FACEBOOK_PAGE_ID || config.facebookPageId;
+    if (config.facebookEnabled && fbToken && fbPageId) {
       try {
         const fbMessage = message.replace(/<[^>]*>/g, '');
         const fbResult = await postToFacebookPage(
-          config.facebookPageToken,
-          config.facebookPageId,
+          fbToken,
+          fbPageId,
           fbMessage,
           logImage,
           affiliateLink || originalLink

@@ -275,6 +275,7 @@
                         <label>تفعيل النشر على فيسبوك</label>
                         <label class="switch"><input type="checkbox" id="facebookEnabled"><span class="slider"></span></label>
                     </div>
+                    <span id="fbEnvBadge" style="display:none;margin-top:6px;background:#1a3d1a;color:#6bff6b;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;"></span>
                     <div id="fbSettings" style="display:none;margin-top:10px;">
                         <div class="form-group">
                             <label style="font-size:12px;color:#aaa;margin-bottom:4px;display:block;">Page ID (معرف الصفحة)</label>
@@ -620,13 +621,40 @@
             document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'grid' : 'none';
             selectLinkType(config.linkType || 'coin');
             document.getElementById('facebookEnabled').checked = !!config.facebookEnabled;
-            document.getElementById('facebookPageId').value = config.facebookPageId || '';
+            const fbPageIdField = document.getElementById('facebookPageId');
             const fbTokenField = document.getElementById('facebookPageToken');
+            const fromEnv = config.facebookFromEnv || {};
+            fbPageIdField.value = config.facebookPageId || '';
+            if (fromEnv.pageId) {
+                fbPageIdField.readOnly = true;
+                fbPageIdField.style.opacity = '0.7';
+                fbPageIdField.title = '🔒 محمّل من متغير البيئة FACEBOOK_PAGE_ID (Render)';
+            }
             if (config.facebookPageToken && !config.facebookPageToken.includes('****')) {
                 fbTokenField.value = config.facebookPageToken;
             } else if (config.facebookPageToken && config.facebookPageToken.includes('****')) {
                 fbTokenField.value = '';
-                fbTokenField.placeholder = '●●●● توكن محفوظ — أدخل توكن جديد للتحديث';
+                fbTokenField.placeholder = fromEnv.pageToken
+                    ? '🔒 توكن محمّل من متغير البيئة FACEBOOK_PAGE_TOKEN'
+                    : '●●●● توكن محفوظ — أدخل توكن جديد للتحديث';
+            }
+            if (fromEnv.pageToken) {
+                fbTokenField.readOnly = true;
+                fbTokenField.style.opacity = '0.7';
+                fbTokenField.title = '🔒 محمّل من متغير البيئة FACEBOOK_PAGE_TOKEN (Render)';
+            }
+            // أظهر شارة "مرتبط بـ Render" إن كانت أي قيمة من البيئة
+            const envBadge = document.getElementById('fbEnvBadge');
+            if (envBadge) {
+                if (fromEnv.pageId || fromEnv.pageToken) {
+                    const parts = [];
+                    if (fromEnv.pageId) parts.push('Page ID');
+                    if (fromEnv.pageToken) parts.push('Token');
+                    envBadge.textContent = '🔒 ' + parts.join(' + ') + ' من متغيرات Render';
+                    envBadge.style.display = 'inline-block';
+                } else {
+                    envBadge.style.display = 'none';
+                }
             }
             document.getElementById('fbSettings').style.display = config.facebookEnabled ? 'block' : 'none';
             renderChannels('source');

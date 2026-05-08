@@ -115,64 +115,73 @@ function fbGet(path) {
 }
 
 async function verifyPageToken(pageAccessToken, pageId) {
-  // الخطوة 1: اختبر التوكن نفسه (لمن يعود؟)
+  // الخطوة 1: اعرف لمن يعود التوكن
   const me = await fbGet(`/me?fields=id,name&access_token=${encodeURIComponent(pageAccessToken)}`);
   if (me.error) {
     return { valid: false, error: `توكن غير صالح: ${me.error.message}` };
   }
-
-  // الخطوة 2: تحقّق إن كان توكن User أم Page
-  // إذا me.id == pageId → هذا Page Access Token صحيح
-  // إذا me.id != pageId → هذا User Token (لن ينشر على الصفحة)
   const isUserToken = String(me.id) !== String(pageId);
 
-  // الخطوة 3: اطلب tasks من الصفحة لمعرفة الصلاحيات
-  const pageInfo = await fbGet(`/${pageId}?fields=name,id,access_token,tasks&access_token=${encodeURIComponent(pageAccessToken)}`);
+  // الخطوة 2-أ: إذا توكن User → استخرج قائمة الصفحات + Page Token الصحيح
+  if (isUserToken) {
+    const accounts = await fbGet(`/me/accounts?fields=id,name,access_token,tasks&access_token=${encodeURIComponent(pageAccessToken)}`);
+    if (accounts.error) {
+      return {
+        valid: false,
+        error: `User Token بدون صلاحية pages_show_list: ${accounts.error.message}`,
+        hint: 'أضف صلاحية pages_show_list + pages_manage_posts للتطبيق',
+        isUserToken: true
+      };
+    }
+    const pages = (accounts.data || []);
+    const match = pages.find(p => String(p.id) === String(pageId));
+    if (!match) {
+      return {
+        valid: false,
+        error: `الصفحة ${pageId} ليست ضمن صفحاتك. الصفحات المتاحة: ${pages.map(p => p.id + '(' + p.name + ')').join(', ') || 'لا شيء'}`,
+        hint: 'تأكد أنك مدير على هذه الصفحة بنفس حساب فيسبوك المستخدم لإنشاء التوكن',
+        isUserToken: true,
+        availablePages: pages.map(p => ({ id: p.id, name: p.name }))
+      };
+    }
+    const tasks = match.tasks || [];
+    const canCreate = tasks.includes('CREATE_CONTENT') || tasks.includes('MANAGE');
+    if (!match.access_token) {
+      return {
+        valid: false,
+        pageName: match.name,
+        error: 'لم يتمّ إرجاع Page Access Token (ربما تنقص صلاحية pages_show_list)',
+        isUserToken: true,
+        tasks
+      };
+    }
+    return {
+      valid: false, // ما زلنا User Token — يجب الاستبدال
+      pageName: match.name,
+      error: 'تستخدم User Token. تم العثور على Page Token الصحيح — اضغط الزر للاستبدال.',
+      hint: 'سيُستبدل التوكن تلقائياً بـ Page Access Token الذي يستطيع النشر',
+      isUserToken: true,
+      tasks,
+      canCreate,
+      suggestedPageToken: match.access_token
+    };
+  }
+
+  // الخطوة 2-ب: إذا me.id == pageId → هذا Page Access Token. يكفي التحقق من الاسم.
+  const pageInfo = await fbGet(`/${pageId}?fields=name,id&access_token=${encodeURIComponent(pageAccessToken)}`);
   if (pageInfo.error) {
     return {
       valid: false,
       error: `الصفحة غير قابلة للوصول: ${pageInfo.error.message}`,
-      hint: isUserToken ? 'يبدو أنك تستخدم User Access Token. يجب استبداله بـ Page Access Token من /me/accounts' : null,
-      isUserToken
-    };
-  }
-
-  const tasks = pageInfo.tasks || [];
-  const canCreate = tasks.includes('CREATE_CONTENT');
-  const canManage = tasks.includes('MANAGE');
-
-  if (isUserToken && !canCreate) {
-    return {
-      valid: false,
-      pageName: pageInfo.name,
-      error: 'هذا User Access Token لا Page Token. لا يستطيع النشر على الصفحة.',
-      hint: `استبدله بـ Page Access Token عبر: GET /${pageId}?fields=access_token (أو من Graph API Explorer → Get Page Access Token)`,
-      tasks,
-      isUserToken: true
-    };
-  }
-
-  if (!canCreate && !canManage && tasks.length > 0) {
-    return {
-      valid: false,
-      pageName: pageInfo.name,
-      error: `التوكن صالح لكن بدون صلاحية نشر. الصلاحيات الحالية: [${tasks.join(', ')}]`,
-      hint: 'أضف pages_manage_posts و pages_read_engagement من Facebook Login for Business → Permissions',
-      tasks,
       isUserToken: false
     };
   }
-
   return {
     valid: true,
     pageName: pageInfo.name,
     pageId: pageInfo.id,
-    tasks,
-    canCreate,
-    canManage,
     isUserToken: false,
-    hasPageTokenField: !!pageInfo.access_token,
-    suggestedPageToken: pageInfo.access_token || null
+    tokenType: 'PAGE'
   };
 }
 

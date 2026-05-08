@@ -6,7 +6,7 @@ An automated AliExpress affiliate marketing platform for Telegram channel owners
 
 - **Start**: `npm start` (runs `node server.js`)
 - **Required secrets**: `DATABASE_URL` (auto-set by Replit DB), `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `cook` (AliExpress session cookie)
-- **Optional**: `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET`, `ALIEXPRESS_TRACK_ID`, `TELEGRAM_CHANNEL_ID`
+- **Optional**: `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET`, `ALIEXPRESS_TRACK_ID`, `TELEGRAM_CHANNEL_ID`, `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_TOKEN` (override DB-stored Facebook credentials; recommended for Render deployment)
 
 ## Stack
 

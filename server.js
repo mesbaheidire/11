@@ -2902,8 +2902,8 @@ app.post('/api/publish-facebook', async (req, res) => {
   try {
     const { title, price, link, coupon, image, message: customMessage, settings } = req.body;
     const spyCfg = await loadSpyConfigCached();
-    const fbToken = spyCfg.facebookPageToken;
-    const fbPageId = spyCfg.facebookPageId;
+    const fbToken = process.env.FACEBOOK_PAGE_TOKEN || spyCfg.facebookPageToken;
+    const fbPageId = process.env.FACEBOOK_PAGE_ID || spyCfg.facebookPageId;
     if (!fbToken || !fbPageId) {
       return res.json({ success: false, error: 'إعدادات فيسبوك غير مكتملة — أضف Page Token و Page ID من إعدادات التجسس' });
     }
@@ -2945,6 +2945,15 @@ app.get('/api/spy/config', async (req, res) => {
   try {
     const config = await loadSpyConfig();
     const safeConfig = { ...config };
+    // متغيرات البيئة (Render) لها الأولوية على ما هو محفوظ في DB
+    const envFbPageId = process.env.FACEBOOK_PAGE_ID || '';
+    const envFbToken = process.env.FACEBOOK_PAGE_TOKEN || '';
+    if (envFbPageId) safeConfig.facebookPageId = envFbPageId;
+    if (envFbToken) safeConfig.facebookPageToken = envFbToken;
+    safeConfig.facebookFromEnv = {
+      pageId: !!envFbPageId,
+      pageToken: !!envFbToken
+    };
     if (safeConfig.facebookPageToken) {
       const t = safeConfig.facebookPageToken;
       safeConfig.facebookPageToken = t.length > 8 ? t.substring(0, 4) + '****' + t.substring(t.length - 4) : '****';
