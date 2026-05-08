@@ -2855,9 +2855,12 @@ app.delete('/api/saved-posts/before', async (req, res) => {
 
 app.post('/api/facebook/verify', async (req, res) => {
   try {
-    const { pageAccessToken, pageId } = req.body;
+    const body = req.body || {};
+    const spyCfg = await loadSpyConfigCached();
+    const pageAccessToken = body.pageAccessToken || process.env.FACEBOOK_PAGE_TOKEN || spyCfg.facebookPageToken;
+    const pageId = body.pageId || process.env.FACEBOOK_PAGE_ID || spyCfg.facebookPageId;
     if (!pageAccessToken || !pageId) {
-      return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
+      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Render)' });
     }
     const result = await verifyPageToken(pageAccessToken, pageId);
     res.json({
@@ -2877,9 +2880,13 @@ app.post('/api/facebook/verify', async (req, res) => {
 
 app.post('/api/facebook/test-post', async (req, res) => {
   try {
-    const { pageAccessToken, pageId, message } = req.body;
+    const body = req.body || {};
+    const spyCfg = await loadSpyConfigCached();
+    const pageAccessToken = body.pageAccessToken || process.env.FACEBOOK_PAGE_TOKEN || spyCfg.facebookPageToken;
+    const pageId = body.pageId || process.env.FACEBOOK_PAGE_ID || spyCfg.facebookPageId;
+    const message = body.message;
     if (!pageAccessToken || !pageId) {
-      return res.json({ success: false, error: 'Token و Page ID مطلوبان' });
+      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Render)' });
     }
     // أولاً: تحقّق سريع قبل المحاولة (نستخرج رسالة خطأ أوضح)
     const verify = await verifyPageToken(pageAccessToken, pageId);

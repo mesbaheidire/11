@@ -277,30 +277,16 @@
                     </div>
                     <span id="fbEnvBadge" style="display:none;margin-top:6px;background:#1a3d1a;color:#6bff6b;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;"></span>
                     <div id="fbSettings" style="display:none;margin-top:10px;">
-                        <div class="form-group">
-                            <label style="font-size:12px;color:#aaa;margin-bottom:4px;display:block;">Page ID (معرف الصفحة)</label>
-                            <input type="text" id="facebookPageId" placeholder="مثال: 123456789012345" style="width:100%;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:13px;">
+                        <div id="fbCredsSummary" style="padding:10px;background:#1a1a2e;border-radius:8px;border:1px solid #333;font-size:12px;color:#aaa;margin-bottom:10px;">
+                            <i class="fas fa-shield-alt" style="color:#22c55e;"></i> المعرّفات محمّلة من <b style="color:#fff;">متغيرات البيئة (Render)</b>:<br>
+                            <span style="color:#888;font-size:11px;">FACEBOOK_PAGE_ID</span> &nbsp;•&nbsp; <span style="color:#888;font-size:11px;">FACEBOOK_PAGE_TOKEN</span>
+                            <div id="fbCredsStatus" style="margin-top:6px;font-size:11px;"></div>
                         </div>
-                        <div class="form-group" style="margin-top:8px;">
-                            <label style="font-size:12px;color:#aaa;margin-bottom:4px;display:block;">Page Access Token</label>
-                            <input type="password" id="facebookPageToken" placeholder="الصق توكن الصفحة هنا" style="width:100%;background:#2d2d3d;color:#fff;border:1px solid #444;border-radius:8px;padding:10px;font-size:13px;">
-                        </div>
-                        <div style="display:flex;gap:8px;margin-top:10px;">
+                        <div style="display:flex;gap:8px;">
                             <button onclick="verifyFacebook()" style="flex:1;background:#1877F2;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;"><i class="fas fa-check-circle"></i> تحقق</button>
                             <button onclick="testFacebookPost()" style="flex:1;background:#42b72a;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;"><i class="fas fa-paper-plane"></i> نشر تجريبي</button>
                         </div>
                         <div id="fbStatus" style="margin-top:8px;font-size:12px;padding:8px;border-radius:8px;display:none;"></div>
-                        <div style="margin-top:10px;padding:10px;background:#1a1a2e;border-radius:8px;border:1px solid #333;">
-                            <p style="font-size:11px;color:#aaa;margin:0 0 6px 0;"><i class="fas fa-info-circle" style="color:#1877F2;"></i> المطلوب للتوكن:</p>
-                            <ol style="font-size:11px;color:#888;margin:0;padding-right:20px;line-height:1.8;">
-                                <li>ادخل على <a href="https://developers.facebook.com" target="_blank" style="color:#1877F2;">developers.facebook.com</a></li>
-                                <li>أنشئ تطبيق جديد (نوع Business)</li>
-                                <li>أضف منتج "Facebook Login for Business"</li>
-                                <li>استخدم <b>Page Access Token</b> وليس User Token</li>
-                                <li>اطلب صلاحيات: <code style="background:#2d2d3d;padding:2px 4px;border-radius:3px;">pages_manage_posts</code> و <code style="background:#2d2d3d;padding:2px 4px;border-radius:3px;">pages_read_engagement</code></li>
-                                <li>تأكد أن الصفحة التي اخترتها هي نفسها صفحة النشر</li>
-                            </ol>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -578,8 +564,8 @@
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
             config.facebookEnabled = document.getElementById('facebookEnabled').checked;
-            config.facebookPageId = document.getElementById('facebookPageId').value.trim();
-            const fbTokenVal = document.getElementById('facebookPageToken').value.trim();
+            // facebookPageId و facebookPageToken يأتيان من متغيرات Render — لا تُحفظ من الواجهة
+            const fbTokenVal = '';
             if (fbTokenVal && !fbTokenVal.includes('****')) {
                 config.facebookPageToken = fbTokenVal;
             }
@@ -621,36 +607,26 @@
             document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'grid' : 'none';
             selectLinkType(config.linkType || 'coin');
             document.getElementById('facebookEnabled').checked = !!config.facebookEnabled;
-            const fbPageIdField = document.getElementById('facebookPageId');
-            const fbTokenField = document.getElementById('facebookPageToken');
             const fromEnv = config.facebookFromEnv || {};
-            fbPageIdField.value = config.facebookPageId || '';
-            if (fromEnv.pageId) {
-                fbPageIdField.readOnly = true;
-                fbPageIdField.style.opacity = '0.7';
-                fbPageIdField.title = '🔒 محمّل من متغير البيئة FACEBOOK_PAGE_ID (Render)';
-            }
-            if (config.facebookPageToken && !config.facebookPageToken.includes('****')) {
-                fbTokenField.value = config.facebookPageToken;
-            } else if (config.facebookPageToken && config.facebookPageToken.includes('****')) {
-                fbTokenField.value = '';
-                fbTokenField.placeholder = fromEnv.pageToken
-                    ? '🔒 توكن محمّل من متغير البيئة FACEBOOK_PAGE_TOKEN'
-                    : '●●●● توكن محفوظ — أدخل توكن جديد للتحديث';
-            }
-            if (fromEnv.pageToken) {
-                fbTokenField.readOnly = true;
-                fbTokenField.style.opacity = '0.7';
-                fbTokenField.title = '🔒 محمّل من متغير البيئة FACEBOOK_PAGE_TOKEN (Render)';
-            }
-            // أظهر شارة "مرتبط بـ Render" إن كانت أي قيمة من البيئة
+            const credsStatus = document.getElementById('fbCredsStatus');
             const envBadge = document.getElementById('fbEnvBadge');
+            if (credsStatus) {
+                credsStatus.textContent = '';
+                const idOk = fromEnv.pageId, tokOk = fromEnv.pageToken;
+                if (idOk && tokOk) {
+                    credsStatus.style.color = '#6bff6b';
+                    credsStatus.textContent = '✅ كلا المتغيرين مضبوطان في Render';
+                } else if (!idOk && !tokOk) {
+                    credsStatus.style.color = '#ff9b6b';
+                    credsStatus.textContent = '⚠️ لم يتم ضبط المتغيرات في Render — أضف FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN';
+                } else {
+                    credsStatus.style.color = '#ffcc66';
+                    credsStatus.textContent = '⚠️ ناقص: ' + (!idOk ? 'FACEBOOK_PAGE_ID' : 'FACEBOOK_PAGE_TOKEN');
+                }
+            }
             if (envBadge) {
-                if (fromEnv.pageId || fromEnv.pageToken) {
-                    const parts = [];
-                    if (fromEnv.pageId) parts.push('Page ID');
-                    if (fromEnv.pageToken) parts.push('Token');
-                    envBadge.textContent = '🔒 ' + parts.join(' + ') + ' من متغيرات Render';
+                if (fromEnv.pageId && fromEnv.pageToken) {
+                    envBadge.textContent = '🔒 مرتبط بمتغيرات Render';
                     envBadge.style.display = 'inline-block';
                 } else {
                     envBadge.style.display = 'none';
@@ -942,32 +918,24 @@
         });
 
         async function verifyFacebook() {
-            const token = document.getElementById('facebookPageToken').value.trim();
-            const pageId = document.getElementById('facebookPageId').value.trim();
             const statusEl = document.getElementById('fbStatus');
-            if (!token || !pageId) {
-                statusEl.style.display = 'block';
-                statusEl.style.background = '#3d1a1a';
-                statusEl.style.color = '#ff6b6b';
-                statusEl.textContent = '❌ أدخل Page ID و Access Token أولاً';
-                return;
-            }
             statusEl.style.display = 'block';
             statusEl.style.background = '#1a2a3d';
             statusEl.style.color = '#88c0ff';
             statusEl.textContent = '⏳ جاري التحقق...';
             try {
+                // لا نُرسل أي توكن — السيرفر يستخدم متغيرات Render
                 const r = await fetch('/api/facebook/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
+                    body: '{}'
                 });
                 const d = await r.json();
                 statusEl.textContent = '';
                 if (d.success) {
                     statusEl.style.background = '#1a3d1a';
                     statusEl.style.color = '#6bff6b';
-                    appendLine(statusEl, '✅ تم التحقق — الصفحة: ' + (d.pageName || pageId));
+                    appendLine(statusEl, '✅ تم التحقق — الصفحة: ' + (d.pageName || ''));
                     if (d.tasks && d.tasks.length) appendLine(statusEl, '🛡️ الصلاحيات: ' + d.tasks.join(', '));
                 } else {
                     statusEl.style.background = '#3d1a1a';
@@ -975,15 +943,13 @@
                     appendLine(statusEl, '❌ ' + (d.error || 'فشل التحقق'));
                     if (d.hint) appendLine(statusEl, '💡 ' + d.hint);
                     if (d.suggestedPageToken) {
-                        const btn = document.createElement('button');
-                        btn.textContent = '🔄 استبدله بـ Page Access Token الصحيح';
-                        btn.style.cssText = 'margin-top:8px;background:#22c55e;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;font-weight:700';
-                        btn.onclick = () => {
-                            document.getElementById('facebookPageToken').value = d.suggestedPageToken;
-                            showToast('تم استبدال التوكن — اضغط تحقق مرة أخرى', 'success');
-                        };
-                        statusEl.appendChild(document.createElement('br'));
-                        statusEl.appendChild(btn);
+                        appendLine(statusEl, '🔑 Page Token الصحيح (انسخه إلى FACEBOOK_PAGE_TOKEN في Render):');
+                        const codeBox = document.createElement('textarea');
+                        codeBox.value = d.suggestedPageToken;
+                        codeBox.readOnly = true;
+                        codeBox.style.cssText = 'width:100%;margin-top:6px;background:#0a0a14;color:#6bff6b;border:1px solid #444;border-radius:6px;padding:8px;font-family:monospace;font-size:11px;height:60px;direction:ltr;';
+                        codeBox.onclick = () => { codeBox.select(); document.execCommand('copy'); showToast('تم النسخ', 'success'); };
+                        statusEl.appendChild(codeBox);
                     }
                 }
             } catch (e) {
@@ -994,16 +960,7 @@
         }
 
         async function testFacebookPost() {
-            const token = document.getElementById('facebookPageToken').value.trim();
-            const pageId = document.getElementById('facebookPageId').value.trim();
             const statusEl = document.getElementById('fbStatus');
-            if (!token || !pageId) {
-                statusEl.style.display = 'block';
-                statusEl.style.background = '#3d1a1a';
-                statusEl.style.color = '#ff6b6b';
-                statusEl.textContent = '❌ أدخل Page ID و Access Token أولاً';
-                return;
-            }
             statusEl.style.display = 'block';
             statusEl.style.background = '#1a2a3d';
             statusEl.style.color = '#88c0ff';
@@ -1012,7 +969,7 @@
                 const r = await fetch('/api/facebook/test-post', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pageAccessToken: token, pageId: pageId })
+                    body: '{}'
                 });
                 const d = await r.json();
                 statusEl.textContent = '';
