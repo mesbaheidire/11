@@ -2692,15 +2692,64 @@ app.get('/api/saved-posts', async (req, res) => {
   }
 });
 
+const SAVED_IMG_MAX_BYTES = 3 * 1024 * 1024; // 3MB
+const SAVED_IMG_ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+function detectImageMimeFromMagic(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 4) return null;
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return 'image/jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return 'image/gif';
+  if (buf.length >= 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'image/webp';
+  return null;
+}
+
 app.post('/api/saved-posts', async (req, res) => {
   try {
-    const { id, title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink } = req.body;
-    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink };
+    const { id, title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink, imageBase64, imageMime } = req.body;
+    let safeBase64 = '';
+    let safeMime = '';
+    if (typeof imageBase64 === 'string' && imageBase64.length > 0) {
+      // Reject if base64 is obviously too large before decoding (base64 is ~4/3 of bytes)
+      if (imageBase64.length > Math.ceil(SAVED_IMG_MAX_BYTES * 4 / 3) + 16) {
+        return res.status(413).json({ success: false, error: 'الصورة كبيرة جداً (حد أقصى 3MB)' });
+      }
+      let buf;
+      try { buf = Buffer.from(imageBase64, 'base64'); } catch (e) {
+        return res.status(400).json({ success: false, error: 'imageBase64 غير صالح' });
+      }
+      if (!buf || buf.length === 0) {
+        return res.status(400).json({ success: false, error: 'imageBase64 فارغ أو غير صالح' });
+      }
+      if (buf.length > SAVED_IMG_MAX_BYTES) {
+        return res.status(413).json({ success: false, error: 'الصورة كبيرة جداً (حد أقصى 3MB)' });
+      }
+      const detected = detectImageMimeFromMagic(buf);
+      if (!detected) {
+        return res.status(400).json({ success: false, error: 'نوع الصورة غير مدعوم' });
+      }
+      const claimed = (typeof imageMime === 'string' && imageMime) ? imageMime.toLowerCase() : detected;
+      const finalMime = SAVED_IMG_ALLOWED_MIMES.has(claimed) ? claimed : detected;
+      safeBase64 = imageBase64;
+      safeMime = finalMime;
+    }
+    const post = { id: id || Date.now().toString(), title, price, link, coupon, image, message, hook, createdAt, savedAt, channelId, affiliateLink, imageBase64: safeBase64 || undefined, imageMime: safeMime || undefined };
     const ok = await db.addSavedPost(post);
     if (!ok) return res.status(500).json({ success: false, error: 'Failed to save' });
-    res.json({ success: true, post });
+    res.json({ success: true, post: { ...post, imageBase64: undefined } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/saved-posts/:id/image', async (req, res) => {
+  try {
+    const img = await db.getSavedPostImage(req.params.id);
+    if (!img) return res.status(404).send('Not found');
+    res.setHeader('Content-Type', img.mime || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.end(img.buffer);
+  } catch (e) {
+    res.status(500).send('Error');
   }
 });
 

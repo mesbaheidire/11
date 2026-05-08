@@ -127,6 +127,12 @@ async function initDatabase() {
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='created_at') THEN
           ALTER TABLE saved_posts ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='image_data') THEN
+          ALTER TABLE saved_posts ADD COLUMN image_data BYTEA;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='image_mime') THEN
+          ALTER TABLE saved_posts ADD COLUMN image_mime TEXT;
+        END IF;
       END $$;
     `);
     await pool.query(`
@@ -408,9 +414,21 @@ async function addSavedPost(post) {
     const postId = post.id || post.post_id || Date.now().toString();
     const savedAt = post.savedAt || post.createdAt || new Date().toISOString();
     if (post.message) post.message = stripIntroBlockquote(post.message);
+    let imageBuffer = null;
+    let imageMime = post.imageMime || post.image_mime || null;
+    if (post.imageBuffer && Buffer.isBuffer(post.imageBuffer)) {
+      imageBuffer = post.imageBuffer;
+    } else if (typeof post.imageBase64 === 'string' && post.imageBase64.length > 0) {
+      try { imageBuffer = Buffer.from(post.imageBase64, 'base64'); } catch (e) {}
+    }
+    if (imageBuffer && !imageMime) imageMime = 'image/jpeg';
+    const persistedRef = post.image || post.imageUrl || post.image_url || null;
+    const dataPayload = { ...post };
+    delete dataPayload.imageBuffer;
+    delete dataPayload.imageBase64;
     await query(
-      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, created_at, data) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
+      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, created_at, data, image_data, image_mime) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14)
        ON CONFLICT (post_id) DO NOTHING`,
       [
         postId,
@@ -419,12 +437,14 @@ async function addSavedPost(post) {
         post.price,
         post.link,
         post.affiliateLink || post.affiliate_link || null,
-        post.image || post.imageUrl || post.image_url || null,
+        persistedRef,
         post.coupon || null,
         post.message || null,
         post.hook || null,
         savedAt,
-        JSON.stringify(post)
+        JSON.stringify(dataPayload),
+        imageBuffer,
+        imageMime
       ]
     );
     return true;
@@ -439,18 +459,27 @@ async function getSavedPosts(limit = null) {
     const sql = limit ? 'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1' : 'SELECT * FROM saved_posts ORDER BY saved_at DESC';
     const params = limit ? [limit] : [];
     const result = await query(sql, params);
-    return result.rows.map(row => ({
-      id: row.post_id || String(row.id),
-      title: row.title,
-      price: row.price,
-      link: row.link,
-      image: row.image_url,
-      coupon: row.coupon,
-      message: row.message,
-      hook: row.hook,
-      createdAt: row.created_at || row.saved_at,
-      savedAt: row.saved_at,
-    }));
+    return result.rows.map(row => {
+      const postId = row.post_id || String(row.id);
+      const hasBlob = row.image_data && row.image_data.length > 0;
+      const image = hasBlob
+        ? `/api/saved-posts/${encodeURIComponent(postId)}/image`
+        : row.image_url;
+      return {
+        id: postId,
+        title: row.title,
+        price: row.price,
+        link: row.link,
+        image,
+        imageOriginal: row.image_url,
+        hasImageBlob: !!hasBlob,
+        coupon: row.coupon,
+        message: row.message,
+        hook: row.hook,
+        createdAt: row.created_at || row.saved_at,
+        savedAt: row.saved_at,
+      };
+    });
   } catch (e) {
     console.log('⚠️ Failed to load saved posts:', e.message);
     return [];
@@ -599,6 +628,36 @@ async function deleteRepublishCampaign(id) {
   return true;
 }
 
+async function getSavedPostImage(postId) {
+  try {
+    const r = await query(
+      'SELECT image_data, image_mime FROM saved_posts WHERE post_id = $1 LIMIT 1',
+      [postId]
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0];
+    if (!row.image_data || row.image_data.length === 0) return null;
+    return { buffer: row.image_data, mime: row.image_mime || 'image/jpeg' };
+  } catch (e) {
+    console.log('⚠️ Failed to load saved post image:', e.message);
+    return null;
+  }
+}
+
+async function setSavedPostImage(postId, buffer, mime) {
+  try {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+    await query(
+      'UPDATE saved_posts SET image_data = $1, image_mime = $2 WHERE post_id = $3',
+      [buffer, mime || 'image/jpeg', postId]
+    );
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to update saved post image:', e.message);
+    return false;
+  }
+}
+
 async function logRepublish(campaignId, savedPostId, status, error) {
   try {
     await query(
@@ -636,6 +695,8 @@ module.exports = {
   getGeminiKeys,
   addSavedPost,
   getSavedPosts,
+  getSavedPostImage,
+  setSavedPostImage,
   updateSavedPost,
   deleteSavedPost,
   deleteSavedPostsBefore,

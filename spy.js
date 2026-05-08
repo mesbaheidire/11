@@ -1387,6 +1387,12 @@ async function executePublish(review) {
     }
 
     try {
+      let imageBase64 = '';
+      let imageMime = '';
+      if (productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
+        imageBase64 = productImage.source.toString('base64');
+        imageMime = 'image/jpeg';
+      }
       const postData = JSON.stringify({
         id: `spy_${Date.now()}`,
         title: productTitle || '',
@@ -1394,7 +1400,9 @@ async function executePublish(review) {
         link: affiliateLink || originalLink || '',
         image: logImage || '',
         message: message || '',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        imageBase64,
+        imageMime
       });
       const options = {
         hostname: '127.0.0.1',
