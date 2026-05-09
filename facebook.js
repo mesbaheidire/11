@@ -4,16 +4,72 @@ const http = require('http');
 const FB_GRAPH_URL = 'graph.facebook.com';
 const FB_API_VERSION = 'v19.0';
 
-async function postToFacebookPage(pageAccessToken, pageId, message, imageUrl, link) {
+async function postToFacebookPage(pageAccessToken, pageId, message, imageUrl, link, imageBuffer, imageMime) {
   if (!pageAccessToken || !pageId) {
     throw new Error('Facebook Page Access Token و Page ID مطلوبان');
   }
 
-  if (imageUrl) {
-    return postPhotoToPage(pageAccessToken, pageId, message, imageUrl);
-  } else {
-    return postTextToPage(pageAccessToken, pageId, message, link);
+  if (imageBuffer && Buffer.isBuffer(imageBuffer) && imageBuffer.length > 0) {
+    return postPhotoBufferToPage(pageAccessToken, pageId, message, imageBuffer, imageMime || 'image/jpeg');
   }
+  if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+    return postPhotoToPage(pageAccessToken, pageId, message, imageUrl);
+  }
+  return postTextToPage(pageAccessToken, pageId, message, link);
+}
+
+function postPhotoBufferToPage(token, pageId, message, buffer, mime) {
+  return new Promise((resolve, reject) => {
+    const boundary = '----FB' + Date.now().toString(16) + Math.random().toString(16).slice(2);
+    const ext = (mime || '').includes('png') ? 'png'
+              : (mime || '').includes('webp') ? 'webp'
+              : (mime || '').includes('gif') ? 'gif'
+              : 'jpg';
+    const filename = `image.${ext}`;
+    const CRLF = '\r\n';
+    const partHeader = (name, extra = '') =>
+      `--${boundary}${CRLF}Content-Disposition: form-data; name="${name}"${extra}${CRLF}`;
+    const parts = [];
+    parts.push(Buffer.from(partHeader('access_token') + CRLF + token + CRLF, 'utf8'));
+    parts.push(Buffer.from(partHeader('message') + CRLF + (message || '') + CRLF, 'utf8'));
+    parts.push(Buffer.from(
+      partHeader('source', `; filename="${filename}"`) +
+      `Content-Type: ${mime || 'image/jpeg'}${CRLF}${CRLF}`,
+      'utf8'
+    ));
+    parts.push(buffer);
+    parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`, 'utf8'));
+    const body = Buffer.concat(parts);
+
+    const options = {
+      hostname: FB_GRAPH_URL,
+      path: `/${FB_API_VERSION}/${pageId}/photos`,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length
+      }
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) {
+            reject(new Error(parsed.error.message || 'Facebook API error'));
+          } else {
+            resolve({ success: true, postId: parsed.post_id || parsed.id });
+          }
+        } catch (e) {
+          reject(new Error('Invalid Facebook API response'));
+        }
+      });
+    });
+    req.on('error', (e) => reject(e));
+    req.write(body);
+    req.end();
+  });
 }
 
 function postTextToPage(token, pageId, message, link) {

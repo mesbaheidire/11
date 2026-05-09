@@ -2976,10 +2976,42 @@ app.post('/api/publish-facebook', async (req, res) => {
       fbMessage = fbMessage.trim();
     }
     let imageUrl = image;
+    let imageBuffer = null;
+    let imageMime = null;
     if (imageUrl && imageUrl.startsWith('data:image')) {
+      const m = imageUrl.match(/^data:(image\/[a-z+]+);base64,(.+)$/i);
+      if (m) {
+        try { imageBuffer = Buffer.from(m[2], 'base64'); imageMime = m[1]; } catch (e) {}
+      }
+      imageUrl = null;
+    } else if (imageUrl && imageUrl.startsWith('/api/saved-posts/')) {
+      // رابط داخلي يستخرج الصورة من DB — حمّلها كـ buffer ليرفعها فيسبوك مباشرة
+      const m = imageUrl.match(/^\/api\/saved-posts\/([^/]+)\/image/);
+      if (m) {
+        try {
+          const img = await db.getSavedPostImage(decodeURIComponent(m[1]));
+          if (img) { imageBuffer = img.buffer; imageMime = img.mime; }
+        } catch (e) {}
+      }
+      imageUrl = null;
+    } else if (imageUrl && imageUrl.startsWith('/spy-cache/')) {
+      // ملف محلي — اقرأه كـ buffer
+      try {
+        const path = require('path');
+        const fs = require('fs');
+        const safeName = path.basename(imageUrl);
+        const filePath = path.join(__dirname, 'public', 'spy-cache', safeName);
+        if (fs.existsSync(filePath)) {
+          imageBuffer = fs.readFileSync(filePath);
+          imageMime = 'image/jpeg';
+        }
+      } catch (e) {}
+      imageUrl = null;
+    } else if (imageUrl && imageUrl.startsWith('/')) {
+      // أي رابط نسبي آخر — تجاهله (فيسبوك يرفض الروابط النسبية)
       imageUrl = null;
     }
-    const result = await postToFacebookPage(fbToken, fbPageId, fbMessage, imageUrl, link);
+    const result = await postToFacebookPage(fbToken, fbPageId, fbMessage, imageUrl, link, imageBuffer, imageMime);
     res.json({ success: true, postId: result.postId, message: 'تم النشر على فيسبوك بنجاح!' });
   } catch (e) {
     res.json({ success: false, error: e.message });
