@@ -77,3 +77,9 @@ id = "WSX28c6S6n8mwnhOgPy3H"
 uri = "file://public/ads/ad4_deals_16x9.png"
 type = "image"
 title = "إعلان جديد — خلفية صفراء (16:9)"
+
+[[outputs]]
+id = "VRVHJcmtPpGPCMIMvtI0-"
+uri = "file://public/ads/ad5_persuasive_16x9.png"
+type = "image"
+title = "إعلان إقناعي (16:9) - خصم 70% + مقارنة أسعار"
