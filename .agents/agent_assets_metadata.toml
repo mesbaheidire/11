@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "KxeTI8UDjDK5Ipt5iE-e4"
@@ -12,3 +11,39 @@ id = "pm3kZM4Bvd7wdJPls43Lm"
 uri = "file://public/icon-192.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "eyTleERf_rpX-xRUdZbL9"
+uri = "file://public/ads/bg1_deals.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "O05aL5auYY_uT2p1NPYuF"
+uri = "file://public/ads/bg2_lifestyle.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "WsIga-aleFhIrwHBdHPYq"
+uri = "file://public/ads/bg3_explosion.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "G2_6Xy36iWlLvTDbY98iB"
+uri = "file://public/ads/ad1_deals.png"
+type = "image"
+title = "إعلان 1 — تخفيضات 70%"
+
+[[outputs]]
+id = "9RjMaPXRR57y4Wmvjl2Qd"
+uri = "file://public/ads/ad2_lifestyle.png"
+type = "image"
+title = "إعلان 2 — أفضل العروض كل يوم"
+
+[[outputs]]
+id = "cpYhb6I6N9kV9H5MUbmeU"
+uri = "file://public/ads/ad3_explosion.png"
+type = "image"
+title = "إعلان 3 — كوبونات حصرية"
