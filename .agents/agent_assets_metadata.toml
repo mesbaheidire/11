@@ -30,6 +30,12 @@ uri = "file://public/ads/bg3_explosion.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "mD-OeFaKpFL2_0-Q1HT9B"
+uri = "file://attached_assets/generated_images/vibrant_yellow_flat_lay_0f57.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "G2_6Xy36iWlLvTDbY98iB"
 uri = "file://public/ads/ad1_deals.png"
@@ -65,3 +71,9 @@ id = "LOusHrHrZs3AKdZmDi5S6"
 uri = "file://public/ads/ad3_explosion_16x9.png"
 type = "image"
 title = "إعلان 3 — انفجار العروض (16:9)"
+
+[[outputs]]
+id = "WSX28c6S6n8mwnhOgPy3H"
+uri = "file://public/ads/ad4_deals_16x9.png"
+type = "image"
+title = "إعلان جديد — خلفية صفراء (16:9)"
