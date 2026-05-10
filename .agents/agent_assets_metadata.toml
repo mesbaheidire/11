@@ -47,3 +47,21 @@ id = "cpYhb6I6N9kV9H5MUbmeU"
 uri = "file://public/ads/ad3_explosion.png"
 type = "image"
 title = "إعلان 3 — كوبونات حصرية"
+
+[[outputs]]
+id = "FpJCSWDOSHafTSTMKdpF-"
+uri = "file://public/ads/ad1_deals_16x9.png"
+type = "image"
+title = "إعلان 1 — تخفيضات (16:9)"
+
+[[outputs]]
+id = "gt5AJ3MnVK9vQ55ycW7ob"
+uri = "file://public/ads/ad2_lifestyle_16x9.png"
+type = "image"
+title = "إعلان 2 — لايف ستايل (16:9)"
+
+[[outputs]]
+id = "LOusHrHrZs3AKdZmDi5S6"
+uri = "file://public/ads/ad3_explosion_16x9.png"
+type = "image"
+title = "إعلان 3 — انفجار العروض (16:9)"
