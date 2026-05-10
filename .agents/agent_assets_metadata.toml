@@ -83,3 +83,9 @@ id = "VRVHJcmtPpGPCMIMvtI0-"
 uri = "file://public/ads/ad5_persuasive_16x9.png"
 type = "image"
 title = "إعلان إقناعي (16:9) - خصم 70% + مقارنة أسعار"
+
+[[outputs]]
+id = "aAKL-JN9E64bSfCAWAIq4"
+uri = "file://public/ads/ad6_secret_16x9.png"
+type = "image"
+title = "إعلان السر (16:9) - AliExpress بنصف السعر"
