@@ -333,6 +333,13 @@
                         <label class="switch"><input type="checkbox" id="manualReview"><span class="slider"></span></label>
                     </div>
                     <div class="toggle-row">
+                        <label class="toggle-row-label" for="applyFrame"><i class="fas fa-image"></i> تطبيق إطار الصور</label>
+                        <label class="switch"><input type="checkbox" id="applyFrame"><span class="slider"></span></label>
+                    </div>
+                    <div id="applyFrameHint" style="display:none; padding: 4px 0 8px; font-size: 12px; color: #9ca3af;">
+                        <i class="fas fa-info-circle"></i> سيُطبَّق الإطار + اللوقو على كل صورة قبل النشر (يُضاف ~1-2 ثانية لكل منشور). يمكنك تغيير الإطار/اللوقو من <a href="/" style="color:#FFC424;">الإعدادات الرئيسية</a>.
+                    </div>
+                    <div class="toggle-row">
                         <label class="toggle-row-label" for="notifyOwner"><i class="fas fa-bell"></i> إشعارات فورية</label>
                         <label class="switch"><input type="checkbox" id="notifyOwner"><span class="slider"></span></label>
                     </div>
@@ -421,6 +428,7 @@
             manualReview: false,
             dailyLimit: 0,
             useTypedLinks: false,
+            applyFrame: false,
             linkType: 'coin',
             facebookEnabled: false,
             facebookPageId: '',
@@ -482,6 +490,10 @@
 
         document.getElementById('publishDelay').addEventListener('change', function() {
             document.getElementById('delayRange').style.display = this.checked ? 'block' : 'none';
+        });
+
+        document.getElementById('applyFrame').addEventListener('change', function() {
+            document.getElementById('applyFrameHint').style.display = this.checked ? 'block' : 'none';
         });
 
         function renderChannels(type) {
@@ -563,6 +575,11 @@
             config.manualReview = document.getElementById('manualReview').checked;
             config.dailyLimit = parseInt(document.getElementById('dailyLimit').value) || 0;
             config.useTypedLinks = document.getElementById('useTypedLinks').checked;
+            config.applyFrame = document.getElementById('applyFrame').checked;
+            // اقرأ إعدادات الإطار/اللوقو من الإعدادات الرئيسية المخزَّنة محلياً
+            const _ms = JSON.parse(localStorage.getItem('appSettings') || '{}');
+            config.watermarkPosition = _ms.watermarkPosition || 'bottom-right';
+            config.watermarkSize = _ms.watermarkSize || 'medium';
             config.facebookEnabled = document.getElementById('facebookEnabled').checked;
             // facebookPageId و facebookPageToken يأتيان من متغيرات Render — لا تُحفظ من الواجهة
             const fbTokenVal = '';
@@ -604,6 +621,8 @@
             document.getElementById('manualReview').checked = !!config.manualReview;
             document.getElementById('dailyLimit').value = config.dailyLimit || 0;
             document.getElementById('useTypedLinks').checked = !!config.useTypedLinks;
+            document.getElementById('applyFrame').checked = !!config.applyFrame;
+            document.getElementById('applyFrameHint').style.display = config.applyFrame ? 'block' : 'none';
             document.getElementById('linkTypeGrid').style.display = config.useTypedLinks ? 'grid' : 'none';
             selectLinkType(config.linkType || 'coin');
             document.getElementById('facebookEnabled').checked = !!config.facebookEnabled;
@@ -730,6 +749,7 @@
                     config.manualReview = !!c.manualReview;
                     config.dailyLimit = c.dailyLimit || 0;
                     config.useTypedLinks = !!c.useTypedLinks;
+                    config.applyFrame = !!c.applyFrame;
                     config.linkType = c.linkType || 'coin';
                     config.facebookEnabled = !!c.facebookEnabled;
                     config.facebookPageId = c.facebookPageId || '';

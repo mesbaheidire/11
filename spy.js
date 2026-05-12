@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
 const { getProductDetails } = require('./aliexpress-api');
 const http = require('http');
@@ -443,6 +444,67 @@ function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
     req.on('error', () => resolve(null));
     req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
   });
+}
+
+// تطبيق الإطار + اللوقو على صورة منتج (Buffer أو URL)
+async function applyFrameToImage(productImage, imageUrl, watermark) {
+  let buffer = null;
+  try {
+    if (productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
+      buffer = productImage.source;
+    } else if (typeof productImage === 'string' && /^https?:\/\//i.test(productImage)) {
+      buffer = await downloadImageAsBuffer(productImage);
+    } else if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+      buffer = await downloadImageAsBuffer(imageUrl);
+    }
+    if (!buffer) return null;
+
+    const customFramePath = path.join(__dirname, 'public', 'custom_frame.jpg');
+    const framePath = path.join(__dirname, 'public', 'frame.jpg');
+    const useFramePath = fs.existsSync(customFramePath) ? customFramePath : framePath;
+    if (!fs.existsSync(useFramePath)) return null;
+
+    const meta = await sharp(useFramePath).metadata();
+    const fW = meta.width, fH = meta.height;
+    const innerLeft = Math.round(fW * 0.02);
+    const innerTop = Math.round(fH * 0.02);
+    const innerW = Math.round(fW * 0.96);
+    const innerH = Math.round(fH * 0.85);
+
+    const resizedProduct = await sharp(buffer)
+      .resize(innerW, innerH, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+      .toBuffer();
+
+    const composites = [{ input: resizedProduct, left: innerLeft, top: innerTop, blend: 'over' }];
+
+    const logoPath = path.join(__dirname, 'public', 'watermark_logo.png');
+    if (fs.existsSync(logoPath) && watermark) {
+      try {
+        const logoSize = watermark.size === 'small' ? 80 : watermark.size === 'large' ? 160 : 120;
+        const padding = 20;
+        const resizedLogo = await sharp(logoPath).resize(logoSize, logoSize, { fit: 'inside' }).png().toBuffer();
+        const logoMeta = await sharp(resizedLogo).metadata();
+        const lW = logoMeta.width, lH = logoMeta.height;
+        let left, top;
+        switch (watermark.position) {
+          case 'top-left': left = padding; top = padding; break;
+          case 'top-right': left = fW - lW - padding; top = padding; break;
+          case 'bottom-left': left = padding; top = fH - lH - padding; break;
+          case 'center': left = Math.round((fW - lW) / 2); top = Math.round((fH - lH) / 2); break;
+          case 'bottom-right':
+          default: left = fW - lW - padding; top = fH - lH - padding;
+        }
+        composites.push({ input: resizedLogo, left, top, blend: 'over' });
+      } catch (logoErr) {
+        console.log('⚠️ تطبيق اللوقو فشل:', logoErr.message);
+      }
+    }
+
+    return await sharp(useFramePath).composite(composites).jpeg({ quality: 90 }).toBuffer();
+  } catch (e) {
+    console.log('⚠️ applyFrameToImage فشل:', e.message);
+    return null;
+  }
 }
 
 // تنظيف رابط صور AliExpress من لاحقات .avif/.webp غير المدعومة في تيليغرام
@@ -1342,6 +1404,24 @@ async function executePublish(review) {
   let publishedCount = 0;
   const textMessage = message.length > 4096 ? message.substring(0, 4090) + '...' : message;
   const captionMessage = message.length > 1000 ? message.substring(0, 997) + '...' : message;
+
+  // تطبيق الإطار + اللوقو إذا كان مفعّلاً
+  if (config.applyFrame) {
+    try {
+      const framedBuf = await applyFrameToImage(productImage, logImage, {
+        position: config.watermarkPosition || 'bottom-right',
+        size: config.watermarkSize || 'medium'
+      });
+      if (framedBuf) {
+        productImage = { source: framedBuf };
+        console.log('🖼️ تم تطبيق الإطار على صورة المنشور');
+      } else {
+        console.log('⚠️ تعذّر تطبيق الإطار — سيُنشر بالصورة الأصلية');
+      }
+    } catch (frameErr) {
+      console.log('⚠️ خطأ في تطبيق الإطار:', frameErr.message);
+    }
+  }
 
   for (const target of targetIds) {
     try {
