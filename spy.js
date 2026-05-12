@@ -466,11 +466,12 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
 
     const meta = await sharp(useFramePath).metadata();
     const fW = meta.width, fH = meta.height;
-    // Geometry: المنتج يحتل المنطقة العلوية، السعر بالأسفل في بطاقة صغيرة
-    const innerLeft = Math.round(fW * 0.10);
-    const innerTop = Math.round(fH * 0.10);
-    const innerW = Math.round(fW * 0.80);
-    const innerH = Math.round(fH * 0.55);
+    // Geometry: المنتج داخل المساحة البيضاء، تحت تبويبة الشعار وفوق شريط الشراء
+    // إطار 1024px: حدود 36 جانبي + 28 علوي + شريط سفلي 150، تبويبة شعار حتى y=130
+    const innerLeft = Math.round(fW * (106 / 1024));   // 36 + 70 padding
+    const innerTop = Math.round(fH * (158 / 1024));    // 28 + 130 (تحت اللوقو)
+    const innerW = Math.round(fW * (812 / 1024));      // 1024 - 2*106
+    const innerH = Math.round(fH * (676 / 1024));      // (1024-150) - 158 - 20
 
     // إزالة خلفية المنتج إذا مفعّلة
     let productBuf = buffer;
@@ -532,13 +533,10 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
       let price = opts.price || null;
       if (!price && opts.postText) price = extractPrice(opts.postText);
       if (price) {
-        // السعر داخل البطاقة الصغيرة بالأسفل (240x90 فوق الشعار)
-        const PRICE_W = 240;
-        const PRICE_X = Math.round((fW - PRICE_W) / 2);
-        const PRICE_Y = fH - 290;
-        const priceFontSize = 60;
-        const priceX = PRICE_X + 50;
-        const priceY = PRICE_Y + 8;
+        // السعر بخط يدوي في أعلى-يمين المساحة البيضاء (بعيد عن لوقو الوسط)
+        const priceFontSize = Math.round(fH * (70 / 1024));
+        const priceX = fW - Math.round(fW * (280 / 1024));
+        const priceY = Math.round(fH * (50 / 1024));
         result = await overlayPrice(result, String(price).replace(',', '.'), {
           x: priceX, y: priceY, fontSize: priceFontSize
         });
