@@ -685,6 +685,53 @@ app.post('/api/store/popup-config', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Remove.bg / Photoroom / Clipdrop Keys Management API
+// ═══════════════════════════════════════════════════════════════
+const _imgProc = require('./imageProcessor');
+
+app.post('/api/removebg-keys', (req, res) => {
+  try {
+    const { keys } = req.body;
+    if (!keys || typeof keys !== 'string') {
+      return res.status(400).json({ success: false, error: 'Keys required' });
+    }
+    const parsed = keys.split(',').map(s => _imgProc.parseKeyEntry(s)).filter(Boolean);
+    if (parsed.length === 0) {
+      return res.status(400).json({ success: false, error: 'لا توجد مفاتيح صالحة' });
+    }
+    const ok = _imgProc.saveRemoveBgKeys({ keys: parsed, currentIndex: 0 });
+    if (!ok) return res.status(500).json({ success: false, error: 'فشل الحفظ' });
+    console.log(`✅ Saved ${parsed.length} remove-bg keys`);
+    res.json({ success: true, count: parsed.length });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/removebg-status', (req, res) => {
+  try {
+    const data = _imgProc.loadRemoveBgKeys();
+    const envKeys = _imgProc.getEnvRemoveBgKeys();
+    const all = [...data.keys, ...envKeys];
+    const masked = all.map((k, i) => ({
+      provider: k.provider,
+      key: (k.key.length > 10 ? k.key.substring(0, 6) + '…' + k.key.substring(k.key.length - 4) : '••••'),
+      source: i < data.keys.length ? 'saved' : 'env',
+    }));
+    res.json({
+      success: true,
+      fileCount: data.keys.length,
+      envCount: envKeys.length,
+      totalAvailable: all.length,
+      nextIndex: all.length ? (data.currentIndex || 0) % all.length : 0,
+      keys: masked,
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Gemini Keys Management API
 app.post('/api/gemini-keys', (req, res) => {
   try {

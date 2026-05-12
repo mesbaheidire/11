@@ -446,6 +446,20 @@
                     </div>
                     <p id="geminiStatus" style="font-size: 12px; color: #4CAF50; margin-top: 10px;"></p>
                 </div>
+
+                <hr>
+                <h3 style="color: #FFC424; margin-bottom: 15px; font-size: 16px;">🎨 مفاتيح إزالة الخلفية (Remove.bg / Photoroom / Clipdrop)</h3>
+
+                <div class="form-group">
+                    <label>🔑 مفاتيح API (افصل بفاصلة، مع البادئة الاختيارية):</label>
+                    <textarea id="settingRemoveBgKeys" rows="3" placeholder="key1, removebg:key2, photoroom:key3, clipdrop:key4" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #2d2d44; background: #16213e; color: #fff; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
+                    <p class="settings-hint">مفتاح بدون بادئة = remove.bg. يدور النظام تلقائياً بين كل المفاتيح.</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button type="button" onclick="saveRemoveBgKeys()" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #FFC424, #E5A800); border: none; border-radius: 8px; color: #0F0F1A; font-weight: bold; font-family: 'Cairo', sans-serif; cursor: pointer;"><i class="fas fa-key"></i> حفظ المفاتيح</button>
+                        <button type="button" onclick="checkRemoveBgStatus()" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; border-radius: 8px; color: #fff; font-family: 'Cairo', sans-serif; cursor: pointer;"><i class="fas fa-sync"></i> الحالة</button>
+                    </div>
+                    <p id="removeBgStatus" style="font-size: 12px; color: #FFC424; margin-top: 10px;"></p>
+                </div>
             </div>
             
             <button class="save-btn" onclick="saveSettings()"><i class="fas fa-save"></i> حفظ جميع التغييرات</button>
@@ -514,8 +528,44 @@
             document.getElementById('settingChannelId').value = settings.channelId || '';
             document.getElementById('settingChannelId2').value = settings.channelId2 || '';
             document.getElementById('settingGeminiKeys').value = '';
+            document.getElementById('settingRemoveBgKeys').value = '';
             checkGeminiStatus();
+            checkRemoveBgStatus();
             document.getElementById('settingsModal').classList.add('show');
+        }
+
+        async function saveRemoveBgKeys() {
+            const keys = document.getElementById('settingRemoveBgKeys').value.trim();
+            if (!keys) { showToast('الرجاء إدخال مفتاح واحد على الأقل', 'error'); return; }
+            try {
+                const res = await fetch('/api/removebg-keys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    showToast(`تم حفظ ${result.count} مفتاح ✅`);
+                    document.getElementById('settingRemoveBgKeys').value = '';
+                    checkRemoveBgStatus();
+                } else { showToast(result.error || 'فشل الحفظ', 'error'); }
+            } catch (e) { showToast('خطأ في الاتصال', 'error'); }
+        }
+
+        async function checkRemoveBgStatus() {
+            try {
+                const res = await fetch('/api/removebg-status');
+                const r = await res.json();
+                const el = document.getElementById('removeBgStatus');
+                if (r.totalAvailable > 0) {
+                    const list = (r.keys || []).map(k => `${k.provider}:${k.key}`).join(' • ');
+                    el.innerHTML = `✅ ${r.totalAvailable} مفتاح متاح (${r.fileCount} محفوظ + ${r.envCount} من البيئة) — التالي: ${r.nextIndex + 1}<br><span style="opacity:0.7; font-size:11px;">${list}</span>`;
+                    el.style.color = '#4CAF50';
+                } else {
+                    el.innerHTML = '⚠️ لا توجد مفاتيح — أضِف على الأقل مفتاح واحد';
+                    el.style.color = '#FF9800';
+                }
+            } catch (e) {}
         }
         
         async function saveGeminiKeys() {
