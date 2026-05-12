@@ -466,11 +466,11 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
 
     const meta = await sharp(useFramePath).metadata();
     const fW = meta.width, fH = meta.height;
-    // RT-DEALS-style geometry: المنتج في النصف الأيمن (38% left, 15% top, 58% wide, 68% tall)
-    const innerLeft = Math.round(fW * 0.38);
-    const innerTop = Math.round(fH * 0.15);
-    const innerW = Math.round(fW * 0.58);
-    const innerH = Math.round(fH * 0.68);
+    // Geometry: المنتج في النصف الأيمن (يتجنّب بطاقة السعر الصفراء يسار)
+    const innerLeft = Math.round(fW * 0.36);
+    const innerTop = Math.round(fH * 0.12);
+    const innerW = Math.round(fW * 0.60);
+    const innerH = Math.round(fH * 0.60);
 
     // إزالة خلفية المنتج إذا مفعّلة
     let productBuf = buffer;
@@ -532,10 +532,10 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
       let price = opts.price || null;
       if (!price && opts.postText) price = extractPrice(opts.postText);
       if (price) {
-        // موضع السعر يسار-وسط (بأسلوب RT DEALS)
-        const priceX = Math.round(fW * 0.055);
+        // السعر يُكتب داخل البطاقة الصفراء (top-left ~ x=80, y=410, font 110)
+        const priceX = Math.round(fW * 0.078);
         const priceY = Math.round(fH * 0.40);
-        const priceFontSize = Math.round(fH * 0.14);
+        const priceFontSize = Math.round(fH * 0.107);
         result = await overlayPrice(result, String(price).replace(',', '.'), {
           x: priceX, y: priceY, fontSize: priceFontSize
         });
