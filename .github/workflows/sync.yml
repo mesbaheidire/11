@@ -10,9 +10,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
           
-      - name: Push to Hugging Face Spaces
+      - name: Push to HF
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force https://IDHIR:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/IDHIR/Aliexpress-Api-Bot main:main
+          git push --force https://mesbaheidire:$HF_TOKEN@huggingface.co/spaces/mesbaheidire/aliexpress-aps main
+
