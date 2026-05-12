@@ -466,10 +466,11 @@ async function applyFrameToImage(productImage, imageUrl, watermark) {
 
     const meta = await sharp(useFramePath).metadata();
     const fW = meta.width, fH = meta.height;
+    // New geometry for RT DEALS-style frame: top header 15%, product 70%, bottom 15%
     const innerLeft = Math.round(fW * 0.02);
-    const innerTop = Math.round(fH * 0.02);
+    const innerTop = Math.round(fH * 0.15);
     const innerW = Math.round(fW * 0.96);
-    const innerH = Math.round(fH * 0.85);
+    const innerH = Math.round(fH * 0.70);
 
     const resizedProduct = await sharp(buffer)
       .resize(innerW, innerH, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })

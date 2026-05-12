@@ -107,3 +107,9 @@ id = "bzVxqQbo5SdA3MWOZObbR"
 uri = "file://public/frame-options/preview_bold.jpg"
 type = "image"
 title = "3) Bold Sale — جذّاب مع شارات تخفيض"
+
+[[outputs]]
+id = "otLT-9xiMmrANE880OQxL"
+uri = "file://public/preview_yellow.jpg"
+type = "image"
+title = "الإطار الجديد — أسلوب الأصفر مع إطار السعر"
