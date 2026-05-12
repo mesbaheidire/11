@@ -982,11 +982,11 @@ app.post('/api/frame-image', async (req, res) => {
     const frameWidth = frameMetadata.width;
     const frameHeight = frameMetadata.height;
     
-    // New geometry for RT DEALS-style frame: top header 15%, product 70%, bottom 15%
-    const innerLeft = Math.round(frameWidth * 0.02);
-    const innerTop = Math.round(frameHeight * 0.15);
-    const innerWidth = Math.round(frameWidth * 0.96);
-    const innerHeight = Math.round(frameHeight * 0.70);
+    // Elegant frame geometry: top header 18% (logo+swoosh), product 64%, bottom 18% (price+brand)
+    const innerLeft = Math.round(frameWidth * 0.04);
+    const innerTop = Math.round(frameHeight * 0.18);
+    const innerWidth = Math.round(frameWidth * 0.92);
+    const innerHeight = Math.round(frameHeight * 0.64);
     
     const resizedProduct = await sharp(productImageBuffer)
       .resize(innerWidth, innerHeight, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
