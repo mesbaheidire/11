@@ -87,16 +87,29 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
   <line x1="0" y1="${SIZE - BUY_BAR_H}" x2="${SIZE}" y2="${SIZE - BUY_BAR_H}"
         stroke="${YELLOW_DARK}" stroke-width="2" opacity="0.5"/>
 
-  <!-- ░ زر السعر الأنيق أسفل-يسار ░ -->
-  <g filter="url(#softShadow)" transform="translate(50, ${SIZE - BUY_BAR_H/2 - 42})">
-    <!-- خلفية الزر بتدرّج بنفسجي أنيق -->
-    <rect x="0" y="0" width="280" height="84" rx="42" fill="url(#gradPurple)"/>
-    <!-- لمعة علوية رفيعة -->
-    <rect x="20" y="6" width="240" height="12" rx="6" fill="#FFFFFF" opacity="0.18"/>
-    <!-- أيقونة سعر دائرية صفراء -->
-    <circle cx="42" cy="42" r="26" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="2"/>
-    <text x="42" y="54" font-family="Arial Black, sans-serif" font-size="32"
+  <!-- ░ زر السعر الفخم أسفل-يسار ░ -->
+  <g transform="translate(50, ${SIZE - BUY_BAR_H/2 - 55})">
+    <!-- ظل عميق -->
+    <rect x="4" y="6" width="380" height="110" rx="55" fill="${BLACK}" opacity="0.35"/>
+    <!-- خلفية الزر بتدرّج بنفسجي -->
+    <rect x="0" y="0" width="380" height="110" rx="55" fill="url(#gradPurple)"/>
+    <!-- إطار ذهبي رفيع -->
+    <rect x="0" y="0" width="380" height="110" rx="55" fill="none"
+          stroke="${YELLOW}" stroke-width="3"/>
+    <!-- لمعة علوية -->
+    <rect x="30" y="8" width="320" height="16" rx="8" fill="#FFFFFF" opacity="0.22"/>
+
+    <!-- أيقونة سعر دائرية صفراء كبيرة -->
+    <circle cx="55" cy="55" r="36" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="3"/>
+    <text x="55" y="70" font-family="Arial Black, sans-serif" font-size="42"
           font-weight="900" fill="${BLACK}" text-anchor="middle">$</text>
+
+    <!-- شريط "PRICE" صغير فوق الزر -->
+    <g transform="translate(120, -16)">
+      <rect x="0" y="0" width="100" height="26" rx="13" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="2"/>
+      <text x="50" y="18" font-family="Arial Black, sans-serif" font-size="14"
+            font-weight="900" fill="${BLACK}" text-anchor="middle" letter-spacing="3">PRICE</text>
+    </g>
   </g>
 </svg>`;
 
@@ -140,13 +153,12 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
     .jpeg({ quality: 92 })
     .toBuffer();
 
-  // السعر بخط يدوي داخل الزر البنفسجي الأنيق (أسفل-يسار)
-  // الزر في (50, SIZE-117), المقاس 280x84، الأيقونة الدائرية بقطر 52 يسار
-  // النص يبدأ بعد الأيقونة عند x≈130, y≈SIZE-100, lineHeight ≈ 60
+  // السعر بخط يدوي داخل الزر البنفسجي الفخم (أسفل-يسار)
+  // الزر في (50, SIZE-130), المقاس 380x110، الأيقونة الدائرية بقطر 72 يسار حتى x=110
   preview = await overlayPrice(preview, '16.5', {
-    x: 130,
-    y: SIZE - 130,
-    fontSize: 56,
+    x: 155,
+    y: SIZE - 145,
+    fontSize: 76,
     color: '#FFFFFF',
     accent: YELLOW,
   });
