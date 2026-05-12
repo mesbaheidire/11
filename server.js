@@ -1203,25 +1203,51 @@ app.post('/api/publish-telegram', async (req, res) => {
       }
     }
 
-    // تنظيف رابط الصورة قبل الإرسال (إزالة .avif/.webp اللواحق)
-    if (resolvedImage && !resolvedImage.startsWith('data:')) {
+    // معالجة الروابط النسبية أو data: قبل الإرسال
+    let preBuffer = null;
+    if (resolvedImage && resolvedImage.startsWith('data:image')) {
+      const m = resolvedImage.match(/^data:image\/\w+;base64,(.+)$/);
+      if (m) { try { preBuffer = Buffer.from(m[1], 'base64'); } catch (e) {} }
+      resolvedImage = null;
+    } else if (resolvedImage && resolvedImage.startsWith('/api/saved-posts/')) {
+      // صورة محفوظة في DB — استخرجها كـ buffer
+      const m = resolvedImage.match(/^\/api\/saved-posts\/([^/]+)\/image/);
+      if (m) {
+        try {
+          const img = await db.getSavedPostImage(decodeURIComponent(m[1]));
+          if (img && img.buffer) preBuffer = img.buffer;
+        } catch (e) { console.log('⚠️ getSavedPostImage failed:', e.message); }
+      }
+      resolvedImage = null;
+    } else if (resolvedImage && resolvedImage.startsWith('/spy-cache/')) {
+      try {
+        const path = require('path');
+        const fs = require('fs');
+        const safeName = path.basename(resolvedImage);
+        const filePath = path.join(__dirname, 'public', 'spy-cache', safeName);
+        if (fs.existsSync(filePath)) preBuffer = fs.readFileSync(filePath);
+      } catch (e) {}
+      resolvedImage = null;
+    } else if (resolvedImage && resolvedImage.startsWith('/')) {
+      // أي رابط نسبي آخر غير معروف — تجاهله (يسبّب "wrong remote file identifier")
+      console.log('⚠️ تجاهل رابط صورة نسبي غير مدعوم:', resolvedImage);
+      resolvedImage = null;
+    } else if (resolvedImage) {
+      // تنظيف رابط الصورة (إزالة .avif/.webp اللواحق)
       resolvedImage = sanitizeAliImageUrl(resolvedImage);
     }
+
     for (const ch of channels) {
-      if (resolvedImage) {
-        if (resolvedImage.startsWith('data:image')) {
-          const base64Data = resolvedImage.replace(/^data:image\/\w+;base64,/, '');
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: finalMessage, ...sendOpts });
+      if (preBuffer) {
+        await bot.telegram.sendPhoto(ch, { source: preBuffer }, { caption: finalMessage, ...sendOpts });
+      } else if (resolvedImage) {
+        // محاولة 1: تحميل كـ Buffer (الأكثر موثوقية)
+        const buf = await downloadImageBuffer(resolvedImage);
+        if (buf) {
+          await bot.telegram.sendPhoto(ch, { source: buf }, { caption: finalMessage, ...sendOpts });
         } else {
-          // محاولة 1: تحميل كـ Buffer (الأكثر موثوقية)
-          const buf = await downloadImageBuffer(resolvedImage);
-          if (buf) {
-            await bot.telegram.sendPhoto(ch, { source: buf }, { caption: finalMessage, ...sendOpts });
-          } else {
-            // fallback: تيليغرام يجلب الرابط مباشرة
-            await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage, ...sendOpts });
-          }
+          // fallback: تيليغرام يجلب الرابط مباشرة
+          await bot.telegram.sendPhoto(ch, resolvedImage, { caption: finalMessage, ...sendOpts });
         }
       } else {
         await bot.telegram.sendMessage(ch, finalMessage, sendOpts);
@@ -1266,15 +1292,36 @@ app.post('/api/publish-collection', async (req, res) => {
     
     if (channels.length === 0) return res.status(500).json({ success: false, error: 'الرجاء إدخال معرف القناة في الإعدادات' });
     
+    // حلّ رابط الصورة إن كان داخلياً (data: / /api/saved-posts/ / /spy-cache/)
+    let collBuffer = null;
+    let collUrl = null;
+    if (image && image.startsWith('data:image')) {
+      try { collBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64'); } catch (e) {}
+    } else if (image && image.startsWith('/api/saved-posts/')) {
+      const m = image.match(/^\/api\/saved-posts\/([^/]+)\/image/);
+      if (m) {
+        try {
+          const img = await db.getSavedPostImage(decodeURIComponent(m[1]));
+          if (img && img.buffer) collBuffer = img.buffer;
+        } catch (e) {}
+      }
+    } else if (image && image.startsWith('/spy-cache/')) {
+      try {
+        const path = require('path');
+        const fs = require('fs');
+        const safeName = path.basename(image);
+        const filePath = path.join(__dirname, 'public', 'spy-cache', safeName);
+        if (fs.existsSync(filePath)) collBuffer = fs.readFileSync(filePath);
+      } catch (e) {}
+    } else if (image && !image.startsWith('/')) {
+      collUrl = image;
+    }
+
     for (const ch of channels) {
-      if (image) {
-        if (image.startsWith('data:image')) {
-          const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: message });
-        } else {
-          await bot.telegram.sendPhoto(ch, image, { caption: message });
-        }
+      if (collBuffer) {
+        await bot.telegram.sendPhoto(ch, { source: collBuffer }, { caption: message });
+      } else if (collUrl) {
+        await bot.telegram.sendPhoto(ch, collUrl, { caption: message });
       } else {
         await bot.telegram.sendMessage(ch, message);
       }

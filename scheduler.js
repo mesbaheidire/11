@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Telegraf } = require('telegraf');
+const db = require('./db');
 
 const SCHEDULED_FILE = path.join(__dirname, 'scheduled_posts.json');
 
@@ -14,6 +15,38 @@ function sanitizeAliImg(url) {
     u = u.replace(/_+$/, '');
     return u;
   } catch (e) { return url; }
+}
+
+// حلّ رابط الصورة إلى buffer إذا كان داخلياً (data: / /api/saved-posts/ / /spy-cache/)
+// يُرجع: { buffer, url } — أحدهما null
+async function resolveImageInput(image) {
+  if (!image) return { buffer: null, url: null };
+  if (image.startsWith('data:image')) {
+    try {
+      const buf = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      return { buffer: buf, url: null };
+    } catch (e) { return { buffer: null, url: null }; }
+  }
+  if (image.startsWith('/api/saved-posts/')) {
+    const m = image.match(/^\/api\/saved-posts\/([^/]+)\/image/);
+    if (m) {
+      try {
+        const img = await db.getSavedPostImage(decodeURIComponent(m[1]));
+        if (img && img.buffer) return { buffer: img.buffer, url: null };
+      } catch (e) {}
+    }
+    return { buffer: null, url: null };
+  }
+  if (image.startsWith('/spy-cache/')) {
+    try {
+      const safeName = path.basename(image);
+      const filePath = path.join(__dirname, 'public', 'spy-cache', safeName);
+      if (fs.existsSync(filePath)) return { buffer: fs.readFileSync(filePath), url: null };
+    } catch (e) {}
+    return { buffer: null, url: null };
+  }
+  if (image.startsWith('/')) return { buffer: null, url: null }; // رابط نسبي غير مدعوم
+  return { buffer: null, url: sanitizeAliImg(image) };
 }
 
 class PostScheduler {
@@ -122,14 +155,11 @@ class PostScheduler {
         throw new Error('Channel ID not configured');
       }
 
-      if (image) {
-        if (image.startsWith('data:image')) {
-          const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          await bot.telegram.sendPhoto(envChannelId, { source: imageBuffer }, { caption: message });
-        } else {
-          await bot.telegram.sendPhoto(envChannelId, sanitizeAliImg(image), { caption: message });
-        }
+      const resolved = await resolveImageInput(image);
+      if (resolved.buffer) {
+        await bot.telegram.sendPhoto(envChannelId, { source: resolved.buffer }, { caption: message });
+      } else if (resolved.url) {
+        await bot.telegram.sendPhoto(envChannelId, resolved.url, { caption: message });
       } else {
         await bot.telegram.sendMessage(envChannelId, message);
       }
@@ -151,15 +181,12 @@ class PostScheduler {
       throw new Error('No channels specified');
     }
     
+    const resolved2 = await resolveImageInput(image);
     for (const ch of channels) {
-      if (image) {
-        if (image.startsWith('data:image')) {
-          const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-          const imageBuffer = Buffer.from(base64Data, 'base64');
-          await bot.telegram.sendPhoto(ch, { source: imageBuffer }, { caption: message });
-        } else {
-          await bot.telegram.sendPhoto(ch, sanitizeAliImg(image), { caption: message });
-        }
+      if (resolved2.buffer) {
+        await bot.telegram.sendPhoto(ch, { source: resolved2.buffer }, { caption: message });
+      } else if (resolved2.url) {
+        await bot.telegram.sendPhoto(ch, resolved2.url, { caption: message });
       } else {
         await bot.telegram.sendMessage(ch, message);
       }

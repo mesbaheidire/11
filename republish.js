@@ -200,20 +200,47 @@ class RepublishManager {
     if (!channels.length) throw new Error('No destination channel configured');
 
     const message = this.buildMessage(post);
-    const image = post.image;
+    let image = post.image;
+    let preBuffer = null;
+
+    if (image && image.startsWith('data:image')) {
+      try { preBuffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64'); } catch (e) {}
+      image = null;
+    } else if (image && image.startsWith('/api/saved-posts/')) {
+      const m = image.match(/^\/api\/saved-posts\/([^/]+)\/image/);
+      if (m) {
+        try {
+          const img = await db.getSavedPostImage(decodeURIComponent(m[1]));
+          if (img && img.buffer) preBuffer = img.buffer;
+        } catch (e) {}
+      }
+      image = null;
+    } else if (image && image.startsWith('/spy-cache/')) {
+      try {
+        const path = require('path');
+        const fs = require('fs');
+        const safeName = path.basename(image);
+        const filePath = path.join(__dirname, 'public', 'spy-cache', safeName);
+        if (fs.existsSync(filePath)) preBuffer = fs.readFileSync(filePath);
+      } catch (e) {}
+      image = null;
+    } else if (image && image.startsWith('/')) {
+      // أي رابط نسبي آخر — تجاهله
+      image = null;
+    }
 
     for (const ch of channels) {
-      if (image) {
-        if (image.startsWith('data:image')) {
-          const buf = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-          await bot.telegram.sendPhoto(ch, { source: buf }, { caption: message });
-        } else {
-          try {
-            await bot.telegram.sendPhoto(ch, sanitizeAliImg(image), { caption: message });
-          } catch (e) {
-            // fallback to text-only if image fails
-            await bot.telegram.sendMessage(ch, message);
-          }
+      if (preBuffer) {
+        try {
+          await bot.telegram.sendPhoto(ch, { source: preBuffer }, { caption: message });
+        } catch (e) {
+          await bot.telegram.sendMessage(ch, message);
+        }
+      } else if (image) {
+        try {
+          await bot.telegram.sendPhoto(ch, sanitizeAliImg(image), { caption: message });
+        } catch (e) {
+          await bot.telegram.sendMessage(ch, message);
         }
       } else {
         await bot.telegram.sendMessage(ch, message);
