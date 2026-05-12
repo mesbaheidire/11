@@ -98,18 +98,6 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
           stroke="${YELLOW}" stroke-width="3"/>
     <!-- لمعة علوية -->
     <rect x="30" y="8" width="320" height="16" rx="8" fill="#FFFFFF" opacity="0.22"/>
-
-    <!-- أيقونة سعر دائرية صفراء كبيرة -->
-    <circle cx="55" cy="55" r="36" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="3"/>
-    <text x="55" y="70" font-family="Arial Black, sans-serif" font-size="42"
-          font-weight="900" fill="${BLACK}" text-anchor="middle">$</text>
-
-    <!-- شريط "PRICE" صغير فوق الزر -->
-    <g transform="translate(120, -16)">
-      <rect x="0" y="0" width="100" height="26" rx="13" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="2"/>
-      <text x="50" y="18" font-family="Arial Black, sans-serif" font-size="14"
-            font-weight="900" fill="${BLACK}" text-anchor="middle" letter-spacing="3">PRICE</text>
-    </g>
   </g>
 </svg>`;
 
@@ -153,10 +141,9 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
     .jpeg({ quality: 92 })
     .toBuffer();
 
-  // السعر بخط يدوي داخل الزر البنفسجي الفخم (أسفل-يسار)
-  // الزر في (50, SIZE-130), المقاس 380x110، الأيقونة الدائرية بقطر 72 يسار حتى x=110
+  // السعر بخط يدوي مركّز داخل الزر البنفسجي (380x110 في 50, SIZE-130)
   preview = await overlayPrice(preview, '16.5', {
-    x: 155,
+    x: 110,
     y: SIZE - 145,
     fontSize: 76,
     color: '#FFFFFF',

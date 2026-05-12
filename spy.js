@@ -533,9 +533,9 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
       let price = opts.price || null;
       if (!price && opts.postText) price = extractPrice(opts.postText);
       if (price) {
-        // السعر بخط يدوي داخل الزر البنفسجي الفخم (380x110 في 50,SIZE-130)
+        // السعر بخط يدوي مركّز داخل الزر البنفسجي (380x110 في 50,SIZE-130)
         const priceFontSize = Math.round(fH * (76 / 1024));
-        const priceX = Math.round(fW * (155 / 1024));
+        const priceX = Math.round(fW * (110 / 1024));
         const priceY = fH - Math.round(fH * (145 / 1024));
         result = await overlayPrice(result, String(price).replace(',', '.'), {
           x: priceX, y: priceY, fontSize: priceFontSize,
