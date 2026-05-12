@@ -87,23 +87,16 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
   <line x1="0" y1="${SIZE - BUY_BAR_H}" x2="${SIZE}" y2="${SIZE - BUY_BAR_H}"
         stroke="${YELLOW_DARK}" stroke-width="2" opacity="0.5"/>
 
-  <!-- ░ "BEST COUPONS" يسار + أيقونة حقيبة ░ -->
-  <g transform="translate(50, ${SIZE - BUY_BAR_H/2})">
-    <!-- أيقونة حقيبة تسوق -->
-    <g transform="translate(0, -28)">
-      <path d="M 8 18 L 8 50 L 52 50 L 52 18 Z" fill="${BLACK}"/>
-      <path d="M 18 18 L 18 12 Q 18 4 30 4 Q 42 4 42 12 L 42 18"
-            stroke="${BLACK}" stroke-width="4" fill="none"/>
-    </g>
-    <text x="80" y="10" font-family="Arial Black, sans-serif" font-size="32"
-          font-weight="900" fill="${BLACK}" letter-spacing="1">BEST COUPONS</text>
-  </g>
-
-  <!-- ░ زر "BUY NOW" بنفسجي يمين ░ -->
-  <g filter="url(#softShadow)" transform="translate(${SIZE - 290}, ${SIZE - BUY_BAR_H/2 - 38})">
-    <rect x="0" y="0" width="240" height="76" rx="38" fill="url(#gradPurple)"/>
-    <text x="120" y="50" font-family="Arial Black, sans-serif" font-size="32"
-          font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="2">BUY NOW</text>
+  <!-- ░ زر السعر الأنيق أسفل-يسار ░ -->
+  <g filter="url(#softShadow)" transform="translate(50, ${SIZE - BUY_BAR_H/2 - 42})">
+    <!-- خلفية الزر بتدرّج بنفسجي أنيق -->
+    <rect x="0" y="0" width="280" height="84" rx="42" fill="url(#gradPurple)"/>
+    <!-- لمعة علوية رفيعة -->
+    <rect x="20" y="6" width="240" height="12" rx="6" fill="#FFFFFF" opacity="0.18"/>
+    <!-- أيقونة سعر دائرية صفراء -->
+    <circle cx="42" cy="42" r="26" fill="${YELLOW}" stroke="${YELLOW_DARK}" stroke-width="2"/>
+    <text x="42" y="54" font-family="Arial Black, sans-serif" font-size="32"
+          font-weight="900" fill="${BLACK}" text-anchor="middle">$</text>
   </g>
 </svg>`;
 
@@ -147,13 +140,15 @@ const logoY = -10;             // الشعار يبرز فوق حافة الإط
     .jpeg({ quality: 92 })
     .toBuffer();
 
-  // السعر بخط يدوي في أعلى-يمين المساحة البيضاء (بعيد عن اللوقو وسط)
+  // السعر بخط يدوي داخل الزر البنفسجي الأنيق (أسفل-يسار)
+  // الزر في (50, SIZE-117), المقاس 280x84، الأيقونة الدائرية بقطر 52 يسار
+  // النص يبدأ بعد الأيقونة عند x≈130, y≈SIZE-100, lineHeight ≈ 60
   preview = await overlayPrice(preview, '16.5', {
-    x: SIZE - 280,
-    y: 50,
-    fontSize: 70,
-    color: BLACK,
-    accent: '#E63946',
+    x: 130,
+    y: SIZE - 130,
+    fontSize: 56,
+    color: '#FFFFFF',
+    accent: YELLOW,
   });
 
   await sharp(preview).jpeg({ quality: 92 }).toFile(path.join(__dirname, '..', 'public', 'preview_yellow.jpg'));

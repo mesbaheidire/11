@@ -533,12 +533,13 @@ async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
       let price = opts.price || null;
       if (!price && opts.postText) price = extractPrice(opts.postText);
       if (price) {
-        // السعر بخط يدوي في أعلى-يمين المساحة البيضاء (بعيد عن لوقو الوسط)
-        const priceFontSize = Math.round(fH * (70 / 1024));
-        const priceX = fW - Math.round(fW * (280 / 1024));
-        const priceY = Math.round(fH * (50 / 1024));
+        // السعر بخط يدوي داخل الزر البنفسجي أسفل-يسار
+        const priceFontSize = Math.round(fH * (56 / 1024));
+        const priceX = Math.round(fW * (130 / 1024));
+        const priceY = fH - Math.round(fH * (130 / 1024));
         result = await overlayPrice(result, String(price).replace(',', '.'), {
-          x: priceX, y: priceY, fontSize: priceFontSize
+          x: priceX, y: priceY, fontSize: priceFontSize,
+          color: '#FFFFFF', accent: '#FFC424',
         });
         console.log(`💰 السعر اليدوي: ${price}$`);
       }
