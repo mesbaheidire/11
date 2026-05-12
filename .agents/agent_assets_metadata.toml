@@ -112,10 +112,10 @@ title = "3) Bold Sale — جذّاب مع شارات تخفيض"
 id = "otLT-9xiMmrANE880OQxL"
 uri = "file://public/preview_yellow.jpg"
 type = "image"
-title = "الإطار الجديد — أسلوب الأصفر مع إطار السعر"
+title = "معاينة الإطار الجديد + سعر يدوي"
 
 [[outputs]]
 id = "CfZlHJz6r4m9h5vXKxVbP"
 uri = "file://public/custom_frame.jpg"
 type = "image"
-title = "custom_frame.jpg — الإطار النهائي (1080×1080)"
+title = "الإطار الجاهز للنشر"

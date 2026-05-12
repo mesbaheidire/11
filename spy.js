@@ -446,8 +446,8 @@ function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
   });
 }
 
-// تطبيق الإطار + اللوقو على صورة منتج (Buffer أو URL)
-async function applyFrameToImage(productImage, imageUrl, watermark) {
+// تطبيق الإطار + إزالة الخلفية + سعر يدوي ديناميكي
+async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
   let buffer = null;
   try {
     if (productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
@@ -466,17 +466,40 @@ async function applyFrameToImage(productImage, imageUrl, watermark) {
 
     const meta = await sharp(useFramePath).metadata();
     const fW = meta.width, fH = meta.height;
-    // Elegant frame geometry: top header 18% (logo+swoosh), product 64%, bottom 18% (price+brand)
-    const innerLeft = Math.round(fW * 0.04);
+    // Bold frame geometry: white stage at 7% left, 18% top, 86% wide, 65% tall
+    const innerLeft = Math.round(fW * 0.07);
     const innerTop = Math.round(fH * 0.18);
-    const innerW = Math.round(fW * 0.92);
-    const innerH = Math.round(fH * 0.64);
+    const innerW = Math.round(fW * 0.86);
+    const innerH = Math.round(fH * 0.65);
 
-    const resizedProduct = await sharp(buffer)
-      .resize(innerW, innerH, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-      .toBuffer();
+    // إزالة خلفية المنتج إذا مفعّلة
+    let productBuf = buffer;
+    let hasTransparency = false;
+    if (opts.removeBg) {
+      try {
+        const { removeBackground } = require('./imageProcessor');
+        const transparent = await removeBackground(buffer);
+        if (transparent) {
+          productBuf = transparent;
+          hasTransparency = true;
+          console.log('🎨 تمت إزالة خلفية المنتج');
+        }
+      } catch (e) {
+        console.log('⚠️ إزالة الخلفية فشلت — سنستعمل الصورة الأصلية:', e.message);
+      }
+    }
 
-    const composites = [{ input: resizedProduct, left: innerLeft, top: innerTop, blend: 'over' }];
+    // تركيب المنتج: شفّاف بدون خلفية، أو ضمن مسرح أبيض
+    const resizedProduct = hasTransparency
+      ? await sharp(productBuf).resize(innerW, innerH, { fit: 'inside', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()
+      : await sharp(productBuf).resize(innerW, innerH, { fit: 'inside', background: { r: 255, g: 255, b: 255, alpha: 1 } }).toBuffer();
+
+    // توسيط داخل المسرح
+    const pMeta = await sharp(resizedProduct).metadata();
+    const offX = innerLeft + Math.round((innerW - (pMeta.width || innerW)) / 2);
+    const offY = innerTop + Math.round((innerH - (pMeta.height || innerH)) / 2);
+
+    const composites = [{ input: resizedProduct, left: offX, top: offY, blend: 'over' }];
 
     const logoPath = path.join(__dirname, 'public', 'watermark_logo.png');
     if (fs.existsSync(logoPath) && watermark) {
@@ -501,7 +524,28 @@ async function applyFrameToImage(productImage, imageUrl, watermark) {
       }
     }
 
-    return await sharp(useFramePath).composite(composites).jpeg({ quality: 90 }).toBuffer();
+    let result = await sharp(useFramePath).composite(composites).jpeg({ quality: 92 }).toBuffer();
+
+    // طبقة السعر اليدوي الديناميكي
+    try {
+      const { extractPrice, overlayPrice } = require('./imageProcessor');
+      let price = opts.price || null;
+      if (!price && opts.postText) price = extractPrice(opts.postText);
+      if (price) {
+        // موضع السعر داخل المسرح أسفل-يسار
+        const priceX = Math.round(fW * 0.075);
+        const priceY = Math.round(fH * 0.62);
+        const priceFontSize = Math.round(fH * 0.13);
+        result = await overlayPrice(result, String(price).replace(',', '.'), {
+          x: priceX, y: priceY, fontSize: priceFontSize
+        });
+        console.log(`💰 السعر اليدوي: ${price}$`);
+      }
+    } catch (priceErr) {
+      console.log('⚠️ تركيب السعر فشل:', priceErr.message);
+    }
+
+    return result;
   } catch (e) {
     console.log('⚠️ applyFrameToImage فشل:', e.message);
     return null;
@@ -1360,7 +1404,8 @@ function stopReviewBot() {
 }
 
 async function executePublish(review) {
-  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
+  const { message, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
+  let productImage = review.productImage;
   const botToken = await getBotToken();
   if (!botToken) {
     console.log('❌ فشل النشر: لا يوجد توكن بوت');
@@ -1412,6 +1457,10 @@ async function executePublish(review) {
       const framedBuf = await applyFrameToImage(productImage, logImage, {
         position: config.watermarkPosition || 'bottom-right',
         size: config.watermarkSize || 'medium'
+      }, {
+        removeBg: !!config.removeBackground,
+        postText: message,
+        price: productPrice || null
       });
       if (framedBuf) {
         productImage = { source: framedBuf };

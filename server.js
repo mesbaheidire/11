@@ -3126,6 +3126,7 @@ app.post('/api/spy/config', async (req, res) => {
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.applyFrame !== undefined) config.applyFrame = !!incoming.applyFrame;
+    if (incoming.removeBackground !== undefined) config.removeBackground = !!incoming.removeBackground;
     if (incoming.watermarkPosition !== undefined) config.watermarkPosition = incoming.watermarkPosition;
     if (incoming.watermarkSize !== undefined) config.watermarkSize = incoming.watermarkSize;
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
@@ -3166,6 +3167,7 @@ app.post('/api/spy/start', async (req, res) => {
     if (incoming.dailyLimit !== undefined) config.dailyLimit = Math.max(0, parseInt(incoming.dailyLimit) || 0);
     if (incoming.useTypedLinks !== undefined) config.useTypedLinks = incoming.useTypedLinks;
     if (incoming.applyFrame !== undefined) config.applyFrame = !!incoming.applyFrame;
+    if (incoming.removeBackground !== undefined) config.removeBackground = !!incoming.removeBackground;
     if (incoming.watermarkPosition !== undefined) config.watermarkPosition = incoming.watermarkPosition;
     if (incoming.watermarkSize !== undefined) config.watermarkSize = incoming.watermarkSize;
     if (incoming.facebookEnabled !== undefined) config.facebookEnabled = incoming.facebookEnabled;
