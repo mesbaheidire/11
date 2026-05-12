@@ -89,3 +89,21 @@ id = "aAKL-JN9E64bSfCAWAIq4"
 uri = "file://public/ads/ad6_secret_16x9.png"
 type = "image"
 title = "إعلان السر (16:9) - AliExpress بنصف السعر"
+
+[[outputs]]
+id = "34_1wltL14rFshls02HzP"
+uri = "file://public/frame-options/preview_premium.jpg"
+type = "image"
+title = "1) Premium Gold — أنيق وفخم"
+
+[[outputs]]
+id = "s5wk3QOqTge4HDWI_l1nQ"
+uri = "file://public/frame-options/preview_minimal.jpg"
+type = "image"
+title = "2) Minimal Clean — بسيط ومتناسق"
+
+[[outputs]]
+id = "bzVxqQbo5SdA3MWOZObbR"
+uri = "file://public/frame-options/preview_bold.jpg"
+type = "image"
+title = "3) Bold Sale — جذّاب مع شارات تخفيض"
