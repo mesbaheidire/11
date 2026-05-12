@@ -14,7 +14,8 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git push --force https://mesbaheidire:$HF_TOKEN@huggingface.co/spaces/mesbaheidire/aliexpress-aps main:main
+          git push --force https://mesbaheidire:$HF_TOKEN@huggingface.co/spaces/mesbaheidire/aliexpress-aps-bot main
+
 
 
 
