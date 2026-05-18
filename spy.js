@@ -2016,13 +2016,21 @@ async function analyzePostFull(text) {
 }
 
 // التحقق البصري من الصورة عبر Gemini — يتصل بـ /api/ai-validate-image
-async function validateImageMatchesPost(buffer, postText, productTitle) {
+// strict=true → عند فشل/timeout/no_ai نرفض الصورة (للمصادر غير الموثوقة)
+// strict=false → نقبل افتراضياً عند الفشل (للمصدر الاحتياطي فقط)
+async function validateImageMatchesPost(buffer, postText, productTitle, strict = true) {
   return new Promise((resolve) => {
-    if (!Buffer.isBuffer(buffer) || buffer.length < 1000) return resolve(true);
-    // حد أقصى 5MB raw — base64 سيزيد ~33% فيظل تحت حد express.json (10mb)
+    let settled = false;
+    const safeResolve = (val) => { if (!settled) { settled = true; resolve(val); } };
+
+    if (!Buffer.isBuffer(buffer) || buffer.length < 1000) {
+      console.log(`⚠️ [validate-image] صورة صغيرة جداً (${buffer?.length || 0}b) — ${strict ? 'رفض' : 'قبول'}`);
+      return safeResolve(!strict);
+    }
+    // الصور الكبيرة جداً: في الوضع الصارم نرفض (لا bypass)
     if (buffer.length > 5 * 1024 * 1024) {
-      console.log(`⏭ [validate-image] تخطّي صورة كبيرة (${Math.round(buffer.length/1024)}KB) — قبول افتراضي`);
-      return resolve(true);
+      console.log(`⚠️ [validate-image] صورة كبيرة جداً (${Math.round(buffer.length/1024)}KB) — ${strict ? 'رفض (وضع صارم)' : 'قبول'}`);
+      return safeResolve(!strict);
     }
     const imageBase64 = buffer.toString('base64');
     const ext = detectImageExt(buffer);
@@ -2041,13 +2049,33 @@ async function validateImageMatchesPost(buffer, postText, productTitle) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          // إذا فشل AI أو لا يوجد مفتاح، نقبل الصورة (لا نحظر بدون سبب)
-          resolve(parsed && parsed.matches !== false);
-        } catch { resolve(true); }
+          // إذا الـ AI فحص فعلاً وأجاب بـ yes → تطابق
+          if (parsed && parsed.matches === true && !parsed.reason) {
+            return safeResolve(true);
+          }
+          // إذا الـ AI أجاب بـ no صريحاً → رفض
+          if (parsed && parsed.matches === false) {
+            return safeResolve(false);
+          }
+          // غير ذلك: الـ AI لم يفحص (no_ai, no_text, ai_error, no_image, exception)
+          const reason = (parsed && parsed.reason) || 'unknown';
+          console.log(`⚠️ [validate-image] الفحص لم يُجرَ — السبب: ${reason} → ${strict ? '❌ رفض (وضع صارم)' : '✅ قبول (وضع متساهل)'}`);
+          safeResolve(!strict);
+        } catch {
+          console.log(`⚠️ [validate-image] فشل JSON parse → ${strict ? 'رفض' : 'قبول'}`);
+          safeResolve(!strict);
+        }
       });
     });
-    req.on('error', () => resolve(true));
-    req.setTimeout(12000, () => { req.destroy(); resolve(true); });
+    req.on('error', () => {
+      console.log(`⚠️ [validate-image] خطأ شبكة → ${strict ? 'رفض' : 'قبول'}`);
+      safeResolve(!strict);
+    });
+    req.setTimeout(15000, () => {
+      req.destroy();
+      console.log(`⏱ [validate-image] timeout بعد 15s → ${strict ? 'رفض' : 'قبول'}`);
+      safeResolve(!strict);
+    });
     req.write(postData);
     req.end();
   });
@@ -2394,14 +2422,29 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 5) صورة المنشور الأصلي من تيليجرام (آخر احتياط — مع blacklist check فقط)
-  if (!productImage && sourceImage) {
+  // 5) صورة المنشور الأصلي من تيليجرام — الآن بفحص كامل (كانت تتجاوز كل شيء سابقاً!)
+  if (!productImage && sourceImage && Buffer.isBuffer(sourceImage)) {
+    console.log(`🖼 [5/5] محاولة صورة المنشور الأصلي من تيليغرام...`);
+    // فحص blacklist
     if (isImageBlacklisted(sourceImage)) {
-      console.log(`🚫 صورة المنشور الأصلي مرفوضة (في القائمة السوداء)`);
+      console.log(`🚫 صورة المنشور الأصلي في القائمة السوداء — رفض`);
     } else {
-      console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام (آخر احتياط)`);
-      productImage = { source: sourceImage };
-      finalImageSource = 'Telegram Source';
+      // فحص Gemini البصري بوضع متساهل (لا نرفض عند فشل AI)
+      const matches = await validateImageMatchesPost(sourceImage, text, titleHintForValidation, false);
+      if (!matches) {
+        console.log(`❌ [Telegram Source] Gemini رفض صورة المصدر صراحةً — لن تُنشر صورة`);
+      } else {
+        // تتبّع التكرار (إذا كانت قناة التجسس تستخدم نفس الصورة لمنتجات مختلفة)
+        const firstOriginalLink = convertedLinks && convertedLinks[0] ? convertedLinks[0].originalLink : null;
+        const tracking = trackImageUsage(sourceImage, firstProductId, firstOriginalLink, 'Telegram Source');
+        if (tracking.duplicated) {
+          console.log(`⚠️ [Telegram Source] صورة استُخدمت لمنتجات أخرى — رفض احتياطي`);
+        } else {
+          productImage = { source: sourceImage };
+          finalImageSource = 'Telegram Source';
+          console.log(`✅ [Telegram Source] صورة مقبولة (آخر احتياط)`);
+        }
+      }
     }
   }
 
