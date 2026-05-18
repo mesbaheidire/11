@@ -2080,39 +2080,17 @@ async function processPost(config, text, sourceImage, sourceName) {
     return true;
   };
 
-  // ⭐ -1) الكود البسيط المُجرَّب في بوتات أخرى — linkpreview.xyz + vi.aliexpress.com
-  // بدون تحقق Gemini (مثل بوتاتك الأخرى التي تعمل بسلاسة)
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [⭐] محاولة Simple Preview (الكود المُجرَّب)...`);
-    try {
-      const sp = await fetchImageViaSimplePreview(firstProductId);
-      if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
-        const spBuf = await downloadImageAsBuffer(sp.image);
-        if (spBuf && Buffer.isBuffer(spBuf)) {
-          productImage = { source: spBuf };
-          productImageUrl = sp.image;
-          if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
-          console.log(`✅ [Simple Preview] صورة مقبولة بدون تحقق (مصدر موثوق)`);
-        }
-      }
-    } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
+  // ⭐ [1/5] أولوية مطلقة: صورة المنشور الأصلية من تيليجرام
+  // هذه هي بالضبط الصورة التي اختارها صاحب القناة المتجسس عليها لهذا المنتج
+  // → لا يمكن أن تكون "صورة منتج آخر" — هي مرتبطة بنفس المنشور والرابط
+  if (!productImage && sourceImage && Buffer.isBuffer(sourceImage) && sourceImage.length > 1000) {
+    console.log(`🖼 [1/5] استخدام صورة المنشور الأصلية من تيليجرام (${Math.round(sourceImage.length/1024)}KB) — المصدر الأوثق`);
+    productImage = { source: sourceImage };
   }
 
-  // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
-  // مصدر موثوق: نسمح بأي CDN (Gemini سيتحقق بصرياً)
-  if (!productImage && firstProductImage) {
-    console.log(`🖼 [0/4] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
-    try {
-      if (!isLikelyVideoUrl(firstProductImage)) {
-        const lpBuf = await downloadImageAsBuffer(firstProductImage);
-        if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
-      }
-    } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
-  }
-
-  // 1) AliExpress API (مباشرة)
+  // [2/5] AliExpress API (CDN رسمي + تحقق Gemini)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [1/4] محاولة AliExpress API...`);
+    console.log(`🖼 [2/5] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -2129,9 +2107,20 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 2) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
+  // [3/5] fetchLinkPreview (صفحة المنتج)
+  if (!productImage && firstProductImage) {
+    console.log(`🖼 [3/5] محاولة صورة fetchLinkPreview...`);
+    try {
+      if (!isLikelyVideoUrl(firstProductImage)) {
+        const lpBuf = await downloadImageAsBuffer(firstProductImage);
+        if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
+      }
+    } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
+  }
+
+  // [4/5] كشط صفحة AliExpress بـ Cheerio (og:image — alicdn فقط)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/4] محاولة Cheerio scraper (صفحة AliExpress)...`);
+    console.log(`🖼 [4/5] محاولة Cheerio scraper...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -2143,24 +2132,18 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) Microlink.io (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
-  if (!productImage && previewLink) {
-    console.log(`🖼 [3/4] محاولة Microlink.io...`);
+  // [5/5] Simple Preview (آخر احتياط — مع تحقق Gemini الآن لمنع صور غير المنتج)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [5/5] محاولة Simple Preview (مع تحقق Gemini)...`);
     try {
-      const mlResult = await fetchImageViaMicrolink(previewLink);
-      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
-        const mlBuffer = await downloadImageAsBuffer(mlResult.image);
-        if (mlBuffer && await tryAcceptImage('Microlink', mlBuffer, mlResult.image)) {
-          if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+      const sp = await fetchImageViaSimplePreview(firstProductId);
+      if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
+        const spBuf = await downloadImageAsBuffer(sp.image);
+        if (spBuf && await tryAcceptImage('Simple Preview', spBuf, sp.image)) {
+          if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
         }
       }
-    } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
-  }
-
-  // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
-  if (!productImage && sourceImage) {
-    console.log(`🖼 [4/4] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
-    productImage = { source: sourceImage };
+    } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
   }
 
   // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
