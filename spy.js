@@ -2080,17 +2080,12 @@ async function processPost(config, text, sourceImage, sourceName) {
     return true;
   };
 
-  // ⭐ [1/5] أولوية مطلقة: صورة المنشور الأصلية من تيليجرام
-  // هذه هي بالضبط الصورة التي اختارها صاحب القناة المتجسس عليها لهذا المنتج
-  // → لا يمكن أن تكون "صورة منتج آخر" — هي مرتبطة بنفس المنشور والرابط
-  if (!productImage && sourceImage && Buffer.isBuffer(sourceImage) && sourceImage.length > 1000) {
-    console.log(`🖼 [1/5] استخدام صورة المنشور الأصلية من تيليجرام (${Math.round(sourceImage.length/1024)}KB) — المصدر الأوثق`);
-    productImage = { source: sourceImage };
-  }
+  // ⚠️ ملاحظة: صورة المنشور الأصلية من تيليجرام لا تُستخدم أبداً لأنها تحتوي
+  // لوقو/علامة مائية للقناة المنافسة. كل الصور تُجلب من AliExpress فقط.
 
-  // [2/5] AliExpress API (CDN رسمي + تحقق Gemini)
+  // [1/6] AliExpress API الرسمي (أوثق مصدر — CDN رسمي)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1/6] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -2107,9 +2102,24 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // [3/5] fetchLinkPreview (صفحة المنتج)
+  // 🆕 [2/6] Mobile JSON Page — يقرأ imagePathList من صفحة المنتج (موثوق جداً)
+  // هذا المصدر يجلب القائمة الكاملة لصور المنتج من JSON المضمن في صفحة AliExpress
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [2/6] محاولة Mobile JSON Page (imagePathList)...`);
+    try {
+      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
+      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
+        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
+        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
+          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ Mobile JSON فشل: ${e.message}`); }
+  }
+
+  // [3/6] fetchLinkPreview (صفحة المنتج)
   if (!productImage && firstProductImage) {
-    console.log(`🖼 [3/5] محاولة صورة fetchLinkPreview...`);
+    console.log(`🖼 [3/6] محاولة صورة fetchLinkPreview...`);
     try {
       if (!isLikelyVideoUrl(firstProductImage)) {
         const lpBuf = await downloadImageAsBuffer(firstProductImage);
@@ -2118,9 +2128,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
   }
 
-  // [4/5] كشط صفحة AliExpress بـ Cheerio (og:image — alicdn فقط)
+  // [4/6] Cheerio scraper (og:image من alicdn فقط)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [4/5] محاولة Cheerio scraper...`);
+    console.log(`🖼 [4/6] محاولة Cheerio scraper...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -2132,9 +2142,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // [5/5] Simple Preview (آخر احتياط — مع تحقق Gemini الآن لمنع صور غير المنتج)
+  // [5/6] Simple Preview (vi.aliexpress.com — مع تحقق Gemini)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [5/5] محاولة Simple Preview (مع تحقق Gemini)...`);
+    console.log(`🖼 [5/6] محاولة Simple Preview...`);
     try {
       const sp = await fetchImageViaSimplePreview(firstProductId);
       if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
@@ -2144,6 +2154,25 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
     } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
+  }
+
+  // [6/6] Microlink.io (آخر احتياط)
+  if (!productImage && previewLink) {
+    console.log(`🖼 [6/6] محاولة Microlink.io...`);
+    try {
+      const mlResult = await fetchImageViaMicrolink(previewLink);
+      if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
+        const mlBuffer = await downloadImageAsBuffer(mlResult.image);
+        if (mlBuffer && await tryAcceptImage('Microlink', mlBuffer, mlResult.image)) {
+          if (!firstApiTitle && mlResult.title) firstApiTitle = mlResult.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
+  }
+
+  // ⛔ صورة المنشور الأصلية من تيليجرام: مرفوضة دائماً (تحتوي لوقو القناة المنافسة)
+  if (!productImage && sourceImage) {
+    console.log(`⛔ تم تجاهل صورة المنشور الأصلية (تحتوي لوقو القناة المنافسة)`);
   }
 
   // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
