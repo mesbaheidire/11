@@ -67,6 +67,74 @@ let processedLinksCache = null;
 let processedLinksCacheTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// تتبّع تكرار الصور عبر منتجات/روابط مختلفة (لكشف الصور الافتراضية/الخاطئة)
+const imageUsageTracker = new Map(); // fp -> Set of identifiers
+const blacklistedImageHashes = new Map(); // fp -> { ts, count, source }
+const MAX_TRACKER_ENTRIES = 500;
+const MAX_BLACKLIST_ENTRIES = 300;
+const BLACKLIST_TTL_MS = 72 * 60 * 60 * 1000; // 72 ساعة
+const REPEAT_THRESHOLD = 3; // ثلاث منتجات مختلفة لتجنب false positives (variants/relist)
+
+function getImageFingerprint(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 1000) return null;
+  const chunk = Buffer.concat([
+    buffer.slice(0, Math.min(8192, buffer.length)),
+    buffer.slice(Math.floor(buffer.length / 2), Math.floor(buffer.length / 2) + Math.min(4096, buffer.length)),
+    buffer.slice(Math.max(0, buffer.length - 4096)),
+  ]);
+  return crypto.createHash('sha1').update(chunk).digest('hex').slice(0, 16);
+}
+
+function pruneBlacklist() {
+  const now = Date.now();
+  // إزالة المنتهية صلاحيتها
+  for (const [fp, info] of blacklistedImageHashes) {
+    if (now - info.ts > BLACKLIST_TTL_MS) blacklistedImageHashes.delete(fp);
+  }
+  // حد أقصى للحجم (أقدم أولاً)
+  while (blacklistedImageHashes.size > MAX_BLACKLIST_ENTRIES) {
+    const firstKey = blacklistedImageHashes.keys().next().value;
+    blacklistedImageHashes.delete(firstKey);
+  }
+}
+
+function isImageBlacklisted(buffer) {
+  pruneBlacklist();
+  const fp = getImageFingerprint(buffer);
+  return fp && blacklistedImageHashes.has(fp);
+}
+
+function trackImageUsage(buffer, productId, originalLink, sourceName) {
+  const fp = getImageFingerprint(buffer);
+  // معرّف بديل عند غياب productId: hash من الرابط الأصلي
+  const identifier = productId
+    ? `pid:${productId}`
+    : (originalLink ? `lnk:${crypto.createHash('sha1').update(String(originalLink)).digest('hex').slice(0, 12)}` : null);
+  if (!fp || !identifier) return { duplicated: false };
+
+  let set = imageUsageTracker.get(fp);
+  if (!set) {
+    set = new Set();
+    imageUsageTracker.set(fp, set);
+  }
+  set.add(identifier);
+  // تنظيف الذاكرة (FIFO)
+  if (imageUsageTracker.size > MAX_TRACKER_ENTRIES) {
+    const firstKey = imageUsageTracker.keys().next().value;
+    imageUsageTracker.delete(firstKey);
+  }
+  if (set.size >= REPEAT_THRESHOLD) {
+    if (!blacklistedImageHashes.has(fp)) {
+      blacklistedImageHashes.set(fp, { ts: Date.now(), count: set.size, source: sourceName });
+      console.log(`🚫 صورة افتراضية مكتشفة! نفس الصورة استُخدمت لـ ${set.size} منتجات/روابط مختلفة → blacklist (المصدر: ${sourceName})`);
+      console.log(`   ↳ Identifiers: ${[...set].join(', ')}`);
+      pruneBlacklist();
+    }
+    return { duplicated: true, count: set.size };
+  }
+  return { duplicated: false };
+}
+
 function isMessageProcessed(chatId, msgId) {
   const key = `${chatId}:${msgId}`;
   return processedMessageIds.has(key);
@@ -2162,32 +2230,50 @@ async function processPost(config, text, sourceImage, sourceName) {
   // عنوان المنتج للتحقق البصري (إن وُجد من AI أو سيُحدَّث لاحقاً)
   const titleHintForValidation = (aiResult && aiResult.productName) ? aiResult.productName : '';
 
-  // محاولة وضع صورة كمرشح + التحقق البصري عبر Gemini. ترجع true إن قُبلت.
+  // تتبّع المصدر النهائي للصورة (لكشف المصدر المسؤول عن صور خاطئة)
+  let finalImageSource = null;
+
+  // محاولة وضع صورة كمرشح + فحص blacklist + تحقق Gemini. ترجع true إن قُبلت.
   const tryAcceptImage = async (stepName, candidateBuffer, candidateUrl) => {
     if (!candidateBuffer || !Buffer.isBuffer(candidateBuffer)) return false;
-    const matches = await validateImageMatchesPost(candidateBuffer, text, titleHintForValidation);
-    if (!matches) {
-      console.log(`❌ [${stepName}] Gemini رفض الصورة (لا تتطابق مع المنتج) — انتقال للخطوة التالية`);
+
+    // 🚫 1) فحص القائمة السوداء (الصور المتكررة عبر منتجات مختلفة)
+    if (isImageBlacklisted(candidateBuffer)) {
+      console.log(`🚫 [${stepName}] الصورة في القائمة السوداء (افتراضية مكتشفة سابقاً) — رفض`);
       return false;
     }
+
+    // 🤖 2) تحقق Gemini البصري
+    const matches = await validateImageMatchesPost(candidateBuffer, text, titleHintForValidation);
+    if (!matches) {
+      console.log(`❌ [${stepName}] Gemini رفض الصورة (لا تتطابق مع المنتج)`);
+      return false;
+    }
+
+    // 📊 3) تتبّع التكرار (لكشف الصور الافتراضية مستقبلاً)
+    const firstOriginalLink = convertedLinks && convertedLinks[0] ? convertedLinks[0].originalLink : null;
+    const tracking = trackImageUsage(candidateBuffer, firstProductId, firstOriginalLink, stepName);
+    if (tracking.duplicated) {
+      console.log(`⚠️ [${stepName}] صورة استُخدمت من قبل لمنتج مختلف — رفض احتياطي`);
+      return false;
+    }
+
     productImage = { source: candidateBuffer };
     productImageUrl = candidateUrl || productImageUrl;
-    console.log(`✅ [${stepName}] صورة مقبولة (مرّت تحقق Gemini)`);
+    finalImageSource = stepName;
+    console.log(`✅ [${stepName}] صورة مقبولة (مرّت كل الفحوصات)`);
     return true;
   };
 
-  // ⭐ -1) Simple Preview (linkpreview.xyz + vi.aliexpress.com) — مصدر موثوق بدون تحقق
+  // ⭐ Simple Preview — الآن مع تحقق Gemini + blacklist (كان بدون تحقق سابقاً)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [⭐] محاولة Simple Preview (الكود المُجرَّب)...`);
+    console.log(`🖼 [⭐] محاولة Simple Preview...`);
     try {
       const sp = await fetchImageViaSimplePreview(firstProductId);
       if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
         const spBuf = await downloadImageAsBuffer(sp.image);
-        if (spBuf && Buffer.isBuffer(spBuf)) {
-          productImage = { source: spBuf };
-          productImageUrl = sp.image;
+        if (spBuf && await tryAcceptImage('Simple Preview', spBuf, sp.image)) {
           if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
-          console.log(`✅ [Simple Preview] صورة مقبولة بدون تحقق (مصدر موثوق)`);
         }
       }
     } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
@@ -2308,10 +2394,22 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 5) صورة المنشور الأصلي من تيليجرام (آخر احتياط)
+  // 5) صورة المنشور الأصلي من تيليجرام (آخر احتياط — مع blacklist check فقط)
   if (!productImage && sourceImage) {
-    console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
-    productImage = { source: sourceImage };
+    if (isImageBlacklisted(sourceImage)) {
+      console.log(`🚫 صورة المنشور الأصلي مرفوضة (في القائمة السوداء)`);
+    } else {
+      console.log(`🖼 [5/5] استخدام صورة المنشور الأصلي من تيليغرام (آخر احتياط)`);
+      productImage = { source: sourceImage };
+      finalImageSource = 'Telegram Source';
+    }
+  }
+
+  // 📊 سجل نهائي يكشف مصدر الصورة المختار
+  if (productImage && finalImageSource) {
+    console.log(`📌 المصدر النهائي للصورة: [${finalImageSource}] لمنتج ${firstProductId || 'بدون ID'}`);
+  } else if (!productImage) {
+    console.log(`❌ لم يتم العثور على أي صورة صالحة لهذا المنشور — سيُنشر بدون صورة`);
   }
 
   // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
