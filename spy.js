@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
-const { getProductDetails } = require('./aliexpress-api');
+const { getProductDetails, searchProducts } = require('./aliexpress-api');
 const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
@@ -902,6 +902,102 @@ function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
           if (imageUrl && /alicdn|aliexpress-media/.test(imageUrl)) {
             console.log(`✅ Mobile JSON وجد صورة: ${imageUrl.substring(0, 80)}...`);
             return resolve({ image: imageUrl, title });
+          }
+          tryNext();
+        });
+        res.on('error', () => tryNext());
+      });
+      req.on('error', () => tryNext());
+      req.setTimeout(timeoutMs, () => { req.destroy(); tryNext(); });
+    };
+    tryNext();
+  });
+}
+
+// ===== آلية جديدة A: Open Graph من رابط الأفليت (يتبع التحويلات) =====
+async function fetchImageViaAffOgImage(affLink, timeoutMs = 15000) {
+  if (!affLink || !/^https?:\/\//i.test(affLink)) return null;
+  try {
+    const img = await fetchOgImage(affLink, timeoutMs, 6);
+    if (img && /^https?:\/\//i.test(img) && /alicdn|aliexpress-media/i.test(img) && !isLikelyVideoUrl(img)) {
+      console.log(`✅ Aff OG وجد صورة: ${img.substring(0, 80)}...`);
+      return { image: img };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// ===== آلية جديدة B: بحث AliExpress بالعنوان (Affiliate Product Query API) =====
+async function fetchImageViaTitleSearch(title, timeoutMs = 20000) {
+  if (!title || title.length < 3) return null;
+  try {
+    const clean = title.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+    if (!clean) return null;
+    const result = await Promise.race([
+      searchProducts({ keywords: clean.substring(0, 100), limit: 5 }),
+      new Promise(r => setTimeout(() => r({ success: false }), timeoutMs)),
+    ]);
+    if (result && result.success && Array.isArray(result.products) && result.products.length > 0) {
+      const withImage = result.products.find(p => p.image_url && /alicdn|aliexpress-media/i.test(p.image_url) && !isLikelyVideoUrl(p.image_url));
+      if (withImage) {
+        console.log(`✅ بحث بالعنوان وجد صورة: ${withImage.image_url.substring(0, 80)}... (منتج: ${withImage.title?.substring(0, 50)})`);
+        return { image: withImage.image_url, title: withImage.title, productId: withImage.id };
+      }
+    }
+  } catch (e) { console.log(`⚠️ بحث بالعنوان: ${e.message}`); }
+  return null;
+}
+
+// ===== آلية جديدة C: JSON-LD من صفحة المنتج (Mobile/Structured Data API) =====
+function fetchImageViaJsonLd(productId, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!productId) return resolve(null);
+    const urls = [
+      `https://www.aliexpress.com/item/${productId}.html`,
+      `https://m.aliexpress.com/item/${productId}.html`,
+      `https://ar.aliexpress.com/item/${productId}.html`,
+    ];
+    let idx = 0;
+    const tryNext = () => {
+      if (idx >= urls.length) return resolve(null);
+      const url = urls[idx++];
+      if (!isSafeUrl(url)) return tryNext();
+      const req = https.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+          'Accept': 'text/html,application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: timeoutMs,
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume(); return tryNext();
+        }
+        if (res.statusCode !== 200) { res.resume(); return tryNext(); }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', c => { body += c; if (body.length > 600000) res.destroy(); });
+        res.on('end', () => {
+          // ابحث عن كل سكربتات JSON-LD
+          const ldMatches = body.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+          if (ldMatches) {
+            for (const block of ldMatches) {
+              const jsonText = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim();
+              try {
+                const data = JSON.parse(jsonText);
+                const candidates = Array.isArray(data) ? data : [data];
+                for (const item of candidates) {
+                  let img = null;
+                  if (typeof item.image === 'string') img = item.image;
+                  else if (Array.isArray(item.image) && item.image.length > 0) img = item.image[0];
+                  else if (item.image && item.image.url) img = item.image.url;
+                  if (img && /^https?:\/\//.test(img) && /alicdn|aliexpress-media/i.test(img) && !isLikelyVideoUrl(img)) {
+                    console.log(`✅ JSON-LD وجد صورة: ${img.substring(0, 80)}...`);
+                    return resolve({ image: img, title: item.name || null });
+                  }
+                }
+              } catch {}
+            }
           }
           tryNext();
         });
@@ -2097,7 +2193,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
   }
 
-  // 🆕 [0bis/5] Mobile JSON Page — يقرأ imagePathList من صفحة المنتج (آلية جديدة موثوقة)
+  // 🆕 [0bis/5] Mobile JSON Page — يقرأ imagePathList من صفحة المنتج
   if (!productImage && firstProductId) {
     console.log(`🖼 [0bis/5] محاولة Mobile JSON Page (imagePathList)...`);
     try {
@@ -2109,6 +2205,32 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
     } catch (e) { console.log(`⚠️ Mobile JSON فشل: ${e.message}`); }
+  }
+
+  // 🆕 [A] JSON-LD من صفحة المنتج (Structured Data — موثوق جداً)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [A] محاولة JSON-LD Structured Data...`);
+    try {
+      const jlResult = await fetchImageViaJsonLd(firstProductId);
+      if (jlResult && jlResult.image && isAliCdnImage(jlResult.image) && !isLikelyVideoUrl(jlResult.image)) {
+        const jlBuffer = await downloadImageAsBuffer(jlResult.image);
+        if (jlBuffer && await tryAcceptImage('JSON-LD', jlBuffer, jlResult.image)) {
+          if (!firstApiTitle && jlResult.title) firstApiTitle = jlResult.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ JSON-LD فشل: ${e.message}`); }
+  }
+
+  // 🆕 [B] Open Graph من رابط الأفليت مباشرة (يتبع التحويلات حتى الصفحة النهائية)
+  if (!productImage && previewLink) {
+    console.log(`🖼 [B] محاولة OG Image من رابط الأفليت...`);
+    try {
+      const ogResult = await fetchImageViaAffOgImage(previewLink);
+      if (ogResult && ogResult.image && isAliCdnImage(ogResult.image) && !isLikelyVideoUrl(ogResult.image)) {
+        const ogBuffer = await downloadImageAsBuffer(ogResult.image);
+        if (ogBuffer) await tryAcceptImage('Aff OG', ogBuffer, ogResult.image);
+      }
+    } catch (e) { console.log(`⚠️ Aff OG فشل: ${e.message}`); }
   }
 
   // 0) صورة من fetchLinkPreview
@@ -2167,6 +2289,23 @@ async function processPost(config, text, sourceImage, sourceName) {
         }
       }
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
+  }
+
+  // 🆕 [C] بحث AliExpress بالعنوان (مفيد عند فشل كل طرق Product ID)
+  if (!productImage) {
+    const searchTitle = (aiResult && aiResult.productName) || firstApiTitle || '';
+    if (searchTitle && searchTitle.length >= 3) {
+      console.log(`🖼 [C] محاولة بحث AliExpress بالعنوان: "${searchTitle.substring(0, 60)}"...`);
+      try {
+        const tsResult = await fetchImageViaTitleSearch(searchTitle);
+        if (tsResult && tsResult.image && isAliCdnImage(tsResult.image) && !isLikelyVideoUrl(tsResult.image)) {
+          const tsBuffer = await downloadImageAsBuffer(tsResult.image);
+          if (tsBuffer && await tryAcceptImage('Title Search', tsBuffer, tsResult.image)) {
+            if (!firstApiTitle && tsResult.title) firstApiTitle = tsResult.title;
+          }
+        }
+      } catch (e) { console.log(`⚠️ Title Search فشل: ${e.message}`); }
+    }
   }
 
   // 5) صورة المنشور الأصلي من تيليجرام (آخر احتياط)
