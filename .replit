@@ -1,4 +1,4 @@
-modules = ["web", "nodejs-20", "python-3.11", "postgresql-16"]
+modules = ["nodejs-20", "web"]
 [agent]
 expertMode = true
 integrations = ["javascript_gemini_ai_integrations:2.0.0"]
