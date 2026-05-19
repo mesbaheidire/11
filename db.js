@@ -498,12 +498,18 @@ async function updateSavedPost(postId, updates) {
       image: 'image_url', imageUrl: 'image_url', image_url: 'image_url',
       coupon: 'coupon', message: 'message', hook: 'hook'
     };
+    const imageKeys = ['image', 'imageUrl', 'image_url'];
+    const imageBeingUpdated = imageKeys.some(k => updates[k] !== undefined);
     for (const [k, col] of Object.entries(map)) {
       if (updates[k] !== undefined) {
         if (fields.find(f => f.startsWith(col + ' ='))) continue;
         fields.push(`${col} = $${i++}`);
         values.push(updates[k]);
       }
+    }
+    if (imageBeingUpdated) {
+      fields.push(`image_data = NULL`);
+      fields.push(`image_mime = NULL`);
     }
     if (fields.length === 0) return true;
     values.push(postId);
