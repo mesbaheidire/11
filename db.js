@@ -5,8 +5,8 @@ const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
 const pool = dbUrl ? new Pool({
   connectionString: dbUrl,
   ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
+  max: 3,
+  idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 5000,
 }) : null;
 

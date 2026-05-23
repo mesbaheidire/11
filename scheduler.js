@@ -207,7 +207,7 @@ class PostScheduler {
 
   start() {
     console.log('📅 Post scheduler started');
-    this.checkInterval = setInterval(() => this.checkAndPublish(), 30000);
+    this.checkInterval = setInterval(() => this.checkAndPublish(), 300000);
     this.checkAndPublish();
   }
 
