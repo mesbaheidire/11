@@ -1,231 +1,411 @@
-'use strict';
-const fs   = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
-const DATA_DIR   = process.env.DATA_DIR || path.join(__dirname, 'data');
-const IMAGES_DIR = path.join(DATA_DIR, 'images');
+const dbUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
 
-function ensureDirs() {
-  [DATA_DIR, IMAGES_DIR].forEach(d => {
-    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+const pool = dbUrl ? new Pool({
+  connectionString: dbUrl,
+  ssl: { rejectUnauthorized: false },
+  max: 3,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+}) : null;
+
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('❌ Unexpected error on idle client', err);
   });
 }
-ensureDirs();
 
-/* ── helpers ── */
-function fp(name) { return path.join(DATA_DIR, name + '.json'); }
-
-function readJSON(name, def) {
-  try {
-    const p = fp(name);
-    if (!fs.existsSync(p)) return def;
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch { return def; }
-}
-
-function writeJSON(name, data) {
-  const p   = fp(name);
-  const tmp = p + '.tmp.' + Date.now();
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-    fs.renameSync(tmp, p);
-  } catch (e) {
-    try { fs.unlinkSync(tmp); } catch (_) {}
-    throw e;
-  }
-}
-
-function imgPath(postId) { return path.join(IMAGES_DIR, postId + '.bin'); }
-function imgMetaPath(postId) { return path.join(IMAGES_DIR, postId + '.mime'); }
-
-/* ── init ── */
 async function initDatabase() {
-  ensureDirs();
-  console.log('✅ تم إنشاء/التحقق من مجلدات التخزين بنجاح');
-  return true;
-}
-
-/* ── query shim — handles the raw db.query() calls in server.js ── */
-async function query(text, params = []) {
-  const t = text.replace(/\s+/g, ' ').trim().toLowerCase();
-
-  // COUNT saved_posts with time filter
-  if (t.startsWith('select count') && t.includes('saved_posts') && t.includes('make_interval')) {
-    const posts  = readJSON('saved_posts', []);
-    const cutoff = new Date(Date.now() - Number(params[0]) * 3600000);
-    const cnt    = posts.filter(p => new Date(p.saved_at || p.createdAt) < cutoff).length;
-    return { rows: [{ cnt: String(cnt) }], rowCount: 1 };
+  if (!pool) {
+    console.log('⚠️ لا يوجد رابط قاعدة بيانات - التخزين سيكون مؤقتاً');
+    return false;
   }
-
-  // COUNT saved_posts (no filter)
-  if (t.startsWith('select count') && t.includes('saved_posts')) {
-    const posts = readJSON('saved_posts', []);
-    return { rows: [{ cnt: String(posts.length) }], rowCount: 1 };
-  }
-
-  // DELETE saved_posts with time filter
-  if (t.startsWith('delete') && t.includes('saved_posts') && t.includes('make_interval')) {
-    const posts   = readJSON('saved_posts', []);
-    const cutoff  = new Date(Date.now() - Number(params[0]) * 3600000);
-    const kept    = posts.filter(p => new Date(p.saved_at || p.createdAt) >= cutoff);
-    writeJSON('saved_posts', kept);
-    const keptIds = new Set(kept.map(p => p.id));
-    try {
-      fs.readdirSync(IMAGES_DIR).forEach(f => {
-        const id = f.replace(/\.(bin|mime)$/, '');
-        if (!keptIds.has(id)) try { fs.unlinkSync(path.join(IMAGES_DIR, f)); } catch (_) {}
-      });
-    } catch (_) {}
-    return { rows: [], rowCount: posts.length - kept.length };
-  }
-
-  console.log('⚠️ Unhandled query:', text.substring(0, 100));
-  return { rows: [], rowCount: 0 };
-}
-
-/* ── spy_config ── */
-async function getConfig() {
-  try { return readJSON('spy_config', {}); } catch { return {}; }
-}
-
-async function saveConfig(config) {
   try {
-    const existing = readJSON('spy_config', {});
-    writeJSON('spy_config', { ...existing, ...config });
-    console.log('✅ Saved config to file');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS spy_config (
+        id SERIAL PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS spy_auth_state (
+        id SERIAL PRIMARY KEY,
+        step TEXT,
+        phone_code_hash TEXT,
+        phone_number TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS spy_processed_links (
+        id SERIAL PRIMARY KEY,
+        link TEXT UNIQUE NOT NULL,
+        time BIGINT
+      );
+      CREATE TABLE IF NOT EXISTS spy_log (
+        id SERIAL PRIMARY KEY,
+        source TEXT,
+        original_link TEXT,
+        affiliate_link TEXT,
+        title TEXT,
+        price TEXT,
+        status TEXT,
+        error TEXT,
+        timestamp TIMESTAMP DEFAULT NOW(),
+        data JSONB
+      );
+      CREATE TABLE IF NOT EXISTS telegram_session (
+        id SERIAL PRIMARY KEY,
+        session_key TEXT UNIQUE NOT NULL,
+        session_data TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS gemini_keys (
+        id SERIAL PRIMARY KEY,
+        key_index INTEGER,
+        api_key TEXT
+      );
+      CREATE TABLE IF NOT EXISTS saved_posts (
+        id SERIAL PRIMARY KEY,
+        post_id TEXT UNIQUE,
+        channel_id TEXT,
+        title TEXT,
+        price TEXT,
+        link TEXT,
+        affiliate_link TEXT,
+        image_url TEXT,
+        coupon TEXT,
+        message TEXT,
+        hook TEXT,
+        saved_at TIMESTAMP DEFAULT NOW(),
+        data JSONB
+      );
+      CREATE TABLE IF NOT EXISTS app_storage (
+        id SERIAL PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS republish_campaigns (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        channel_choice TEXT DEFAULT 'both',
+        min_minutes INTEGER DEFAULT 30,
+        max_minutes INTEGER DEFAULT 90,
+        active_hours_start INTEGER,
+        active_hours_end INTEGER,
+        max_count INTEGER,
+        regenerate_ai BOOLEAN DEFAULT FALSE,
+        status TEXT DEFAULT 'active',
+        total_published INTEGER DEFAULT 0,
+        queue JSONB DEFAULT '[]'::jsonb,
+        position INTEGER DEFAULT 0,
+        next_run_at TIMESTAMP,
+        last_run_at TIMESTAMP,
+        credentials JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS republish_log (
+        id SERIAL PRIMARY KEY,
+        campaign_id INTEGER REFERENCES republish_campaigns(id) ON DELETE CASCADE,
+        saved_post_id TEXT,
+        status TEXT,
+        error TEXT,
+        published_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='post_id') THEN
+          ALTER TABLE saved_posts ADD COLUMN post_id TEXT UNIQUE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='message') THEN
+          ALTER TABLE saved_posts ADD COLUMN message TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='hook') THEN
+          ALTER TABLE saved_posts ADD COLUMN hook TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='created_at') THEN
+          ALTER TABLE saved_posts ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='image_data') THEN
+          ALTER TABLE saved_posts ADD COLUMN image_data BYTEA;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='saved_posts' AND column_name='image_mime') THEN
+          ALTER TABLE saved_posts ADD COLUMN image_mime TEXT;
+        END IF;
+      END $$;
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_spy_processed_links_time ON spy_processed_links(time DESC);
+      CREATE INDEX IF NOT EXISTS idx_spy_log_timestamp ON spy_log(timestamp DESC);
+      CREATE INDEX IF NOT EXISTS idx_saved_posts_saved_at ON saved_posts(saved_at DESC);
+    `);
+    console.log('✅ تم إنشاء/التحقق من جداول قاعدة البيانات بنجاح');
     return true;
   } catch (e) {
-    console.log('❌ Failed to save config:', e.message);
+    console.error('❌ فشل إنشاء الجداول:', e.message);
     return false;
   }
 }
 
-/* ── spy_auth_state ── */
+async function query(text, params) {
+  if (!pool) throw new Error('No database connection');
+  const start = Date.now();
+  try {
+    const result = await pool.query(text, params);
+    const duration = Date.now() - start;
+    if (duration > 1000) {
+      console.log(`⏱️  Slow query (${duration}ms): ${text.substring(0, 50)}...`);
+    }
+    return result;
+  } catch (error) {
+    console.error('❌ Database query error:', error.message);
+    throw error;
+  }
+}
+
+async function getConfig() {
+  try {
+    const result = await query('SELECT key, value FROM spy_config');
+    const config = {};
+    result.rows.forEach(row => {
+      try {
+        config[row.key] = JSON.parse(row.value);
+      } catch {
+        config[row.key] = row.value;
+      }
+    });
+    return config;
+  } catch (e) {
+    console.log('⚠️ Failed to load config from database:', e.message);
+    return {};
+  }
+}
+
+async function saveConfig(config) {
+  try {
+    let savedCount = 0;
+    for (const [key, value] of Object.entries(config)) {
+      const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
+      const result = await query(
+        'INSERT INTO spy_config (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()',
+        [key, valueStr]
+      );
+      savedCount++;
+    }
+    console.log(`✅ Saved ${savedCount} config entries to database`);
+    return true;
+  } catch (e) {
+    console.log('❌ Failed to save config to database:', e.message);
+    console.log('Error details:', e);
+    return false;
+  }
+}
+
 async function getAuthState() {
   try {
-    return readJSON('spy_auth_state', { step: 'idle', phoneCodeHash: null });
-  } catch { return { step: 'idle', phoneCodeHash: null }; }
+    const result = await query('SELECT * FROM spy_auth_state ORDER BY id DESC LIMIT 1');
+    if (result.rows.length === 0) {
+      return { step: 'idle', phoneCodeHash: null };
+    }
+    const row = result.rows[0];
+    return {
+      step: row.step,
+      phoneCodeHash: row.phone_code_hash,
+      phoneNumber: row.phone_number,
+    };
+  } catch (e) {
+    console.log('⚠️ Failed to load auth state:', e.message);
+    return { step: 'idle', phoneCodeHash: null };
+  }
 }
 
 async function saveAuthState(state) {
-  try { writeJSON('spy_auth_state', state); return true; }
-  catch (e) { console.log('⚠️ Failed to save auth state:', e.message); return false; }
+  try {
+    await query(
+      'INSERT INTO spy_auth_state (step, phone_code_hash, phone_number, updated_at) VALUES ($1, $2, $3, NOW())',
+      [state.step, state.phoneCodeHash, state.phoneNumber]
+    );
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to save auth state:', e.message);
+    return false;
+  }
 }
 
-/* ── spy_processed_links ── */
 async function getProcessedLinks() {
   try {
-    const now       = Date.now();
-    const cutoff    = now - 24 * 3600000;
-    const links     = readJSON('spy_processed_links', []).filter(l => l.time >= cutoff);
-    writeJSON('spy_processed_links', links);
-    return links.slice(0, 10000);
-  } catch { return []; }
+    const now = Date.now();
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    
+    // Delete old entries
+    await query('DELETE FROM spy_processed_links WHERE time < $1', [twentyFourHoursAgo]);
+    
+    // Get remaining
+    const result = await query('SELECT link, time FROM spy_processed_links ORDER BY time DESC LIMIT 10000');
+    return result.rows.map(row => ({ link: row.link, time: row.time }));
+  } catch (e) {
+    console.log('⚠️ Failed to load processed links:', e.message);
+    return [];
+  }
 }
 
 async function addProcessedLink(link) {
   try {
-    const links = readJSON('spy_processed_links', []);
-    if (!links.find(l => l.link === link)) {
-      links.push({ link, time: Date.now() });
-      writeJSON('spy_processed_links', links);
-    }
+    await query(
+      'INSERT INTO spy_processed_links (link, time) VALUES ($1, $2) ON CONFLICT (link) DO NOTHING',
+      [link, Date.now()]
+    );
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to add processed link:', e.message);
+    return false;
+  }
 }
 
 async function isLinkProcessed(link) {
   try {
-    return readJSON('spy_processed_links', []).some(l => l.link === link);
-  } catch { return false; }
-}
-
-/* ── spy_log ── */
-let _logIdCounter = null;
-function nextLogId() {
-  const log = readJSON('spy_log', []);
-  if (_logIdCounter === null) _logIdCounter = log.reduce((m, e) => Math.max(m, e.id || 0), 0);
-  return ++_logIdCounter;
+    const result = await query('SELECT id FROM spy_processed_links WHERE link = $1 LIMIT 1', [link]);
+    return result.rows.length > 0;
+  } catch (e) {
+    console.log('⚠️ Failed to check processed link:', e.message);
+    return false;
+  }
 }
 
 async function addLogEntry(entry) {
   try {
-    const log = readJSON('spy_log', []);
-    log.unshift({
-      id:            nextLogId(),
-      source:        entry.source,
-      originalLink:  entry.originalLink,
-      affiliateLink: entry.affiliateLink,
-      title:         entry.title,
-      price:         entry.price,
-      status:        entry.status,
-      error:         entry.error,
-      timestamp:     new Date().toISOString(),
-      image:         entry.image || null,
-      targets:       entry.targets || [],
-      message:       entry.message || null,
-    });
-    writeJSON('spy_log', log.slice(0, 5000));
+    await query(
+      `INSERT INTO spy_log (source, original_link, affiliate_link, title, price, status, error, timestamp, data) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)`,
+      [
+        entry.source,
+        entry.originalLink,
+        entry.affiliateLink,
+        entry.title,
+        entry.price,
+        entry.status,
+        entry.error,
+        JSON.stringify(entry)
+      ]
+    );
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to add log entry:', e.message);
+    return false;
+  }
 }
 
 async function deleteLogEntry(id) {
   try {
-    const log = readJSON('spy_log', []).filter(e => e.id !== id && e.id !== Number(id));
-    writeJSON('spy_log', log);
+    await query('DELETE FROM spy_log WHERE id = $1', [id]);
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to delete log entry:', e.message);
+    return false;
+  }
 }
 
 async function clearLog() {
-  try { writeJSON('spy_log', []); return true; } catch { return false; }
+  try {
+    await query('DELETE FROM spy_log', []);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to clear log:', e.message);
+    return false;
+  }
 }
 
 async function getLog(limit = 200) {
-  try { return readJSON('spy_log', []).slice(0, limit); } catch { return []; }
+  try {
+    const result = await query(
+      'SELECT * FROM spy_log ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    );
+    return result.rows.map(row => {
+      let extraData = {};
+      try {
+        if (row.data) {
+          extraData = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+        }
+      } catch {}
+      return {
+        id: row.id,
+        source: row.source,
+        originalLink: row.original_link,
+        affiliateLink: row.affiliate_link,
+        title: row.title,
+        price: row.price,
+        status: row.status,
+        error: row.error,
+        timestamp: row.timestamp,
+        image: extraData.image || null,
+        targets: extraData.targets || [],
+        message: extraData.message || null,
+      };
+    });
+  } catch (e) {
+    console.log('⚠️ Failed to load log:', e.message);
+    return [];
+  }
 }
 
-/* ── telegram_session ── */
 async function getTelegramSession(key = 'default') {
-  try { return readJSON('telegram_session', {})[key] || ''; } catch { return ''; }
+  try {
+    const result = await query('SELECT session_data FROM telegram_session WHERE session_key = $1', [key]);
+    if (result.rows.length === 0) return '';
+    return result.rows[0].session_data;
+  } catch (e) {
+    console.log('⚠️ Failed to load telegram session:', e.message);
+    return '';
+  }
 }
 
 async function saveTelegramSession(sessionData, key = 'default') {
   try {
-    const sessions = readJSON('telegram_session', {});
-    sessions[key] = sessionData;
-    writeJSON('telegram_session', sessions);
+    await query(
+      'INSERT INTO telegram_session (session_key, session_data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (session_key) DO UPDATE SET session_data = $2, updated_at = NOW()',
+      [key, sessionData]
+    );
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to save telegram session:', e.message);
+    return false;
+  }
 }
 
-/* ── gemini_keys ── */
 async function saveGeminiKeys(keys) {
-  try { writeJSON('gemini_keys', keys); return true; } catch { return false; }
+  try {
+    await query('BEGIN');
+    await query('DELETE FROM gemini_keys');
+    for (let i = 0; i < keys.length; i++) {
+      await query(
+        'INSERT INTO gemini_keys (key_index, api_key) VALUES ($1, $2)',
+        [i, keys[i]]
+      );
+    }
+    await query('COMMIT');
+    return true;
+  } catch (e) {
+    try { await query('ROLLBACK'); } catch (re) {}
+    console.log('⚠️ Failed to save gemini keys:', e.message);
+    return false;
+  }
 }
 
 async function getGeminiKeys() {
-  try { return readJSON('gemini_keys', []); } catch { return []; }
-}
-
-/* ── app_storage ── */
-async function setAppStorage(key, value) {
   try {
-    const store = readJSON('app_storage', {});
-    store[key] = value;
-    writeJSON('app_storage', store);
-    return true;
-  } catch { return false; }
+    const result = await query('SELECT api_key FROM gemini_keys ORDER BY key_index ASC');
+    return result.rows.map(row => row.api_key);
+  } catch (e) {
+    console.log('⚠️ Failed to load gemini keys:', e.message);
+    return [];
+  }
 }
 
-async function getAppStorage(key) {
-  try { return readJSON('app_storage', {})[key] ?? null; } catch { return null; }
-}
-
-/* ── saved_posts ── */
 function stripIntroBlockquote(text) {
   if (!text || typeof text !== 'string') return text;
+  // Remove the leading <blockquote>...</blockquote> intro (and its trailing blank lines)
   return text.replace(/^\s*<blockquote>[\s\S]*?<\/blockquote>\s*\n*/i, '').trimStart();
 }
 
@@ -234,45 +414,39 @@ async function addSavedPost(post) {
     const postId = post.id || post.post_id || Date.now().toString();
     const savedAt = post.savedAt || post.createdAt || new Date().toISOString();
     if (post.message) post.message = stripIntroBlockquote(post.message);
-
     let imageBuffer = null;
-    let imageMime   = post.imageMime || post.image_mime || null;
+    let imageMime = post.imageMime || post.image_mime || null;
     if (post.imageBuffer && Buffer.isBuffer(post.imageBuffer)) {
       imageBuffer = post.imageBuffer;
     } else if (typeof post.imageBase64 === 'string' && post.imageBase64.length > 0) {
-      try { imageBuffer = Buffer.from(post.imageBase64, 'base64'); } catch (_) {}
+      try { imageBuffer = Buffer.from(post.imageBase64, 'base64'); } catch (e) {}
     }
     if (imageBuffer && !imageMime) imageMime = 'image/jpeg';
-
-    if (imageBuffer) {
-      fs.writeFileSync(imgPath(postId), imageBuffer);
-      fs.writeFileSync(imgMetaPath(postId), imageMime || 'image/jpeg', 'utf8');
-    }
-
-    const posts = readJSON('saved_posts', []);
-    if (posts.find(p => p.id === postId)) return true;
-
+    const persistedRef = post.image || post.imageUrl || post.image_url || null;
     const dataPayload = { ...post };
     delete dataPayload.imageBuffer;
     delete dataPayload.imageBase64;
-
-    posts.unshift({
-      id:            postId,
-      channel_id:    post.channelId || post.channel_id || null,
-      title:         post.title || null,
-      price:         post.price || null,
-      link:          post.link || null,
-      affiliate_link: post.affiliateLink || post.affiliate_link || null,
-      image_url:     post.image || post.imageUrl || post.image_url || null,
-      coupon:        post.coupon || null,
-      message:       post.message || null,
-      hook:          post.hook || null,
-      saved_at:      savedAt,
-      createdAt:     savedAt,
-      has_image_bin: !!imageBuffer,
-      image_mime:    imageMime || null,
-    });
-    writeJSON('saved_posts', posts);
+    await query(
+      `INSERT INTO saved_posts (post_id, channel_id, title, price, link, affiliate_link, image_url, coupon, message, hook, saved_at, created_at, data, image_data, image_mime) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14)
+       ON CONFLICT (post_id) DO NOTHING`,
+      [
+        postId,
+        post.channelId || post.channel_id || null,
+        post.title,
+        post.price,
+        post.link,
+        post.affiliateLink || post.affiliate_link || null,
+        persistedRef,
+        post.coupon || null,
+        post.message || null,
+        post.hook || null,
+        savedAt,
+        JSON.stringify(dataPayload),
+        imageBuffer,
+        imageMime
+      ]
+    );
     return true;
   } catch (e) {
     console.log('⚠️ Failed to save post:', e.message);
@@ -282,207 +456,231 @@ async function addSavedPost(post) {
 
 async function getSavedPosts(limit = null) {
   try {
-    let posts = readJSON('saved_posts', []);
-    if (limit) posts = posts.slice(0, limit);
-    return posts.map(p => {
-      const hasBlob = p.has_image_bin && fs.existsSync(imgPath(p.id));
-      const image   = hasBlob
-        ? `/api/saved-posts/${encodeURIComponent(p.id)}/image`
-        : p.image_url;
+    const sql = limit ? 'SELECT * FROM saved_posts ORDER BY saved_at DESC LIMIT $1' : 'SELECT * FROM saved_posts ORDER BY saved_at DESC';
+    const params = limit ? [limit] : [];
+    const result = await query(sql, params);
+    return result.rows.map(row => {
+      const postId = row.post_id || String(row.id);
+      const hasBlob = row.image_data && row.image_data.length > 0;
+      const image = hasBlob
+        ? `/api/saved-posts/${encodeURIComponent(postId)}/image`
+        : row.image_url;
       return {
-        id:            p.id,
-        title:         p.title,
-        price:         p.price,
-        link:          p.link,
+        id: postId,
+        title: row.title,
+        price: row.price,
+        link: row.link,
         image,
-        imageOriginal: p.image_url,
-        hasImageBlob:  hasBlob,
-        coupon:        p.coupon,
-        message:       p.message,
-        hook:          p.hook,
-        createdAt:     p.createdAt || p.saved_at,
-        savedAt:       p.saved_at,
+        imageOriginal: row.image_url,
+        hasImageBlob: !!hasBlob,
+        coupon: row.coupon,
+        message: row.message,
+        hook: row.hook,
+        createdAt: row.created_at || row.saved_at,
+        savedAt: row.saved_at,
       };
     });
-  } catch { return []; }
-}
-
-async function getSavedPostImage(postId) {
-  try {
-    const p = imgPath(postId);
-    if (!fs.existsSync(p)) return null;
-    const buffer = fs.readFileSync(p);
-    const mime   = fs.existsSync(imgMetaPath(postId))
-      ? fs.readFileSync(imgMetaPath(postId), 'utf8')
-      : 'image/jpeg';
-    return { buffer, mime };
-  } catch { return null; }
-}
-
-async function setSavedPostImage(postId, buffer, mime) {
-  try {
-    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
-    fs.writeFileSync(imgPath(postId), buffer);
-    fs.writeFileSync(imgMetaPath(postId), mime || 'image/jpeg', 'utf8');
-    const posts = readJSON('saved_posts', []);
-    const idx   = posts.findIndex(p => p.id === postId);
-    if (idx !== -1) { posts[idx].has_image_bin = true; posts[idx].image_mime = mime; writeJSON('saved_posts', posts); }
-    return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to load saved posts:', e.message);
+    return [];
+  }
 }
 
 async function updateSavedPost(postId, updates) {
   try {
     if (updates && updates.message) updates.message = stripIntroBlockquote(updates.message);
-    const posts = readJSON('saved_posts', []);
-    const idx   = posts.findIndex(p => p.id === postId);
-    if (idx === -1) return false;
-    const p = posts[idx];
-    if (updates.title     !== undefined) p.title     = updates.title;
-    if (updates.price     !== undefined) p.price     = updates.price;
-    if (updates.link      !== undefined) p.link      = updates.link;
-    if (updates.coupon    !== undefined) p.coupon    = updates.coupon;
-    if (updates.message   !== undefined) p.message   = updates.message;
-    if (updates.hook      !== undefined) p.hook      = updates.hook;
-    if (updates.affiliateLink !== undefined) p.affiliate_link = updates.affiliateLink;
-    if (updates.affiliate_link !== undefined) p.affiliate_link = updates.affiliate_link;
-    const newImage = updates.image ?? updates.imageUrl ?? updates.image_url;
-    if (newImage !== undefined) {
-      p.image_url     = newImage;
-      p.has_image_bin = false;
-      try { if (fs.existsSync(imgPath(postId))) fs.unlinkSync(imgPath(postId)); } catch (_) {}
-      try { if (fs.existsSync(imgMetaPath(postId))) fs.unlinkSync(imgMetaPath(postId)); } catch (_) {}
+    const fields = [];
+    const values = [];
+    let i = 1;
+    const map = {
+      title: 'title', price: 'price', link: 'link',
+      affiliateLink: 'affiliate_link', affiliate_link: 'affiliate_link',
+      image: 'image_url', imageUrl: 'image_url', image_url: 'image_url',
+      coupon: 'coupon', message: 'message', hook: 'hook'
+    };
+    const imageKeys = ['image', 'imageUrl', 'image_url'];
+    const imageBeingUpdated = imageKeys.some(k => updates[k] !== undefined);
+    for (const [k, col] of Object.entries(map)) {
+      if (updates[k] !== undefined) {
+        if (fields.find(f => f.startsWith(col + ' ='))) continue;
+        fields.push(`${col} = $${i++}`);
+        values.push(updates[k]);
+      }
     }
-    writeJSON('saved_posts', posts);
+    if (imageBeingUpdated) {
+      fields.push(`image_data = NULL`);
+      fields.push(`image_mime = NULL`);
+    }
+    if (fields.length === 0) return true;
+    values.push(postId);
+    await query(`UPDATE saved_posts SET ${fields.join(', ')} WHERE post_id = $${i}`, values);
     return true;
-  } catch (e) { console.log('⚠️ Failed to update saved post:', e.message); return false; }
-}
-
-async function deleteSavedPost(postId) {
-  try {
-    const posts = readJSON('saved_posts', []).filter(p => p.id !== postId);
-    writeJSON('saved_posts', posts);
-    try { if (fs.existsSync(imgPath(postId))) fs.unlinkSync(imgPath(postId)); } catch (_) {}
-    try { if (fs.existsSync(imgMetaPath(postId))) fs.unlinkSync(imgMetaPath(postId)); } catch (_) {}
-    return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to update saved post:', e.message);
+    return false;
+  }
 }
 
 async function deleteSavedPostsBefore(date) {
   try {
-    const cutoff  = new Date(date);
-    const posts   = readJSON('saved_posts', []);
-    const kept    = posts.filter(p => new Date(p.saved_at || p.createdAt) >= cutoff);
-    const removed = posts.filter(p => new Date(p.saved_at || p.createdAt) < cutoff);
-    writeJSON('saved_posts', kept);
-    removed.forEach(p => {
-      try { if (fs.existsSync(imgPath(p.id))) fs.unlinkSync(imgPath(p.id)); } catch (_) {}
-      try { if (fs.existsSync(imgMetaPath(p.id))) fs.unlinkSync(imgMetaPath(p.id)); } catch (_) {}
-    });
+    await query('DELETE FROM saved_posts WHERE COALESCE(created_at, saved_at) < $1', [date]);
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to delete saved posts before date:', e.message);
+    return false;
+  }
+}
+
+async function deleteSavedPost(postId) {
+  try {
+    await query('DELETE FROM saved_posts WHERE post_id = $1', [postId]);
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to delete saved post:', e.message);
+    return false;
+  }
 }
 
 async function clearSavedPosts() {
   try {
-    writeJSON('saved_posts', []);
-    try { fs.readdirSync(IMAGES_DIR).forEach(f => { try { fs.unlinkSync(path.join(IMAGES_DIR, f)); } catch (_) {} }); } catch (_) {}
+    await query('DELETE FROM saved_posts');
     return true;
-  } catch { return false; }
+  } catch (e) {
+    console.log('⚠️ Failed to clear saved posts:', e.message);
+    return false;
+  }
 }
 
-/* ── republish_campaigns ── */
-function nextCampaignId() {
-  const campaigns = readJSON('republish_campaigns', []);
-  return campaigns.reduce((m, c) => Math.max(m, c.id || 0), 0) + 1;
+async function setAppStorage(key, value) {
+  try {
+    await query(
+      'INSERT INTO app_storage (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()',
+      [key, value]
+    );
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to set app storage:', e.message);
+    return false;
+  }
 }
 
+async function getAppStorage(key) {
+  try {
+    const result = await query('SELECT value FROM app_storage WHERE key = $1', [key]);
+    if (result.rows.length === 0) return null;
+    return result.rows[0].value;
+  } catch (e) {
+    console.log('⚠️ Failed to get app storage:', e.message);
+    return null;
+  }
+}
+
+// ===== Republish Campaigns =====
 async function createRepublishCampaign(c) {
-  const campaigns = readJSON('republish_campaigns', []);
-  const id = nextCampaignId();
-  const now = new Date().toISOString();
-  const campaign = {
-    id,
-    name:               c.name || `حملة ${new Date().toLocaleString('ar')}`,
-    channel_choice:     c.channelChoice || 'both',
-    min_minutes:        c.minMinutes || 30,
-    max_minutes:        c.maxMinutes || 90,
-    active_hours_start: c.activeHoursStart ?? null,
-    active_hours_end:   c.activeHoursEnd   ?? null,
-    max_count:          c.maxCount || null,
-    regenerate_ai:      !!c.regenerateAi,
-    status:             'active',
-    total_published:    0,
-    queue:              c.queue || [],
-    position:           0,
-    next_run_at:        c.nextRunAt || now,
-    last_run_at:        null,
-    credentials:        c.credentials || null,
-    created_at:         now,
-  };
-  campaigns.unshift(campaign);
-  writeJSON('republish_campaigns', campaigns);
-  return campaign;
+  const r = await query(
+    `INSERT INTO republish_campaigns
+       (name, channel_choice, min_minutes, max_minutes, active_hours_start, active_hours_end,
+        max_count, regenerate_ai, status, queue, position, next_run_at, credentials)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',$9::jsonb,0,$10,$11::jsonb)
+     RETURNING *`,
+    [
+      c.name || `حملة ${new Date().toLocaleString('ar')}`,
+      c.channelChoice || 'both',
+      c.minMinutes || 30,
+      c.maxMinutes || 90,
+      c.activeHoursStart ?? null,
+      c.activeHoursEnd ?? null,
+      c.maxCount || null,
+      !!c.regenerateAi,
+      JSON.stringify(c.queue || []),
+      c.nextRunAt || new Date(),
+      c.credentials ? JSON.stringify(c.credentials) : null,
+    ]
+  );
+  return r.rows[0];
 }
 
 async function listRepublishCampaigns() {
-  try { return readJSON('republish_campaigns', []); } catch { return []; }
+  const r = await query('SELECT * FROM republish_campaigns ORDER BY created_at DESC');
+  return r.rows;
 }
 
 async function getRepublishCampaign(id) {
-  try {
-    return readJSON('republish_campaigns', []).find(c => c.id === id || c.id === Number(id)) || null;
-  } catch { return null; }
+  const r = await query('SELECT * FROM republish_campaigns WHERE id=$1', [id]);
+  return r.rows[0] || null;
 }
 
 async function updateRepublishCampaign(id, updates) {
-  try {
-    const campaigns = readJSON('republish_campaigns', []);
-    const idx = campaigns.findIndex(c => c.id === id || c.id === Number(id));
-    if (idx === -1) return false;
-    const c = campaigns[idx];
-    const map = { status: 'status', position: 'position', total_published: 'total_published', next_run_at: 'next_run_at', last_run_at: 'last_run_at', queue: 'queue' };
-    for (const [k, col] of Object.entries(map)) {
-      if (updates[k] !== undefined) c[col] = updates[k];
+  const map = {
+    status: 'status', position: 'position', total_published: 'total_published',
+    next_run_at: 'next_run_at', last_run_at: 'last_run_at', queue: 'queue',
+  };
+  const fields = []; const values = []; let i = 1;
+  for (const [k, col] of Object.entries(map)) {
+    if (updates[k] !== undefined) {
+      const isJson = col === 'queue';
+      fields.push(`${col} = $${i++}${isJson ? '::jsonb' : ''}`);
+      values.push(isJson ? JSON.stringify(updates[k]) : updates[k]);
     }
-    writeJSON('republish_campaigns', campaigns);
-    return true;
-  } catch { return false; }
+  }
+  if (!fields.length) return true;
+  values.push(id);
+  await query(`UPDATE republish_campaigns SET ${fields.join(', ')} WHERE id=$${i}`, values);
+  return true;
 }
 
 async function deleteRepublishCampaign(id) {
-  try {
-    const campaigns = readJSON('republish_campaigns', []).filter(c => c.id !== id && c.id !== Number(id));
-    writeJSON('republish_campaigns', campaigns);
-    const log = readJSON('republish_log', []).filter(l => l.campaign_id !== id && l.campaign_id !== Number(id));
-    writeJSON('republish_log', log);
-    return true;
-  } catch { return false; }
+  await query('DELETE FROM republish_campaigns WHERE id=$1', [id]);
+  return true;
 }
 
-/* ── republish_log ── */
-let _rlogIdCounter = null;
-function nextRlogId() {
-  if (_rlogIdCounter === null) _rlogIdCounter = readJSON('republish_log', []).reduce((m, l) => Math.max(m, l.id || 0), 0);
-  return ++_rlogIdCounter;
+async function getSavedPostImage(postId) {
+  try {
+    const r = await query(
+      'SELECT image_data, image_mime FROM saved_posts WHERE post_id = $1 LIMIT 1',
+      [postId]
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0];
+    if (!row.image_data || row.image_data.length === 0) return null;
+    return { buffer: row.image_data, mime: row.image_mime || 'image/jpeg' };
+  } catch (e) {
+    console.log('⚠️ Failed to load saved post image:', e.message);
+    return null;
+  }
+}
+
+async function setSavedPostImage(postId, buffer, mime) {
+  try {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+    await query(
+      'UPDATE saved_posts SET image_data = $1, image_mime = $2 WHERE post_id = $3',
+      [buffer, mime || 'image/jpeg', postId]
+    );
+    return true;
+  } catch (e) {
+    console.log('⚠️ Failed to update saved post image:', e.message);
+    return false;
+  }
 }
 
 async function logRepublish(campaignId, savedPostId, status, error) {
   try {
-    const log = readJSON('republish_log', []);
-    log.unshift({ id: nextRlogId(), campaign_id: campaignId, saved_post_id: savedPostId, status, error: error || null, published_at: new Date().toISOString() });
-    writeJSON('republish_log', log.slice(0, 2000));
-  } catch (_) {}
+    await query(
+      'INSERT INTO republish_log (campaign_id, saved_post_id, status, error) VALUES ($1,$2,$3,$4)',
+      [campaignId, savedPostId, status, error || null]
+    );
+  } catch (e) { /* ignore */ }
 }
 
 async function getRepublishLog(campaignId, limit = 100) {
-  try {
-    const id = Number(campaignId);
-    return readJSON('republish_log', []).filter(l => l.campaign_id === id || l.campaign_id === campaignId).slice(0, limit);
-  } catch { return []; }
+  const r = await query(
+    'SELECT * FROM republish_log WHERE campaign_id=$1 ORDER BY published_at DESC LIMIT $2',
+    [campaignId, limit]
+  );
+  return r.rows;
 }
 
-/* ── exports ── */
 module.exports = {
   initDatabase,
   query,
@@ -518,5 +716,5 @@ module.exports = {
   getRepublishLog,
   setAppStorage,
   getAppStorage,
-  closePool: async () => { console.log('🔌 File-based storage — no pool to close'); },
+  closePool: async () => { if (pool) { await pool.end(); console.log('🔌 Database pool closed'); } },
 };
