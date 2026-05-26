@@ -857,7 +857,7 @@ async function loadSaved(){
       return;
     }
     grid.innerHTML=savedProducts.map((p,i)=>{
-      const rawPrice=p.price||'';
+      const rawPrice=String(p.price||'');
       const isDZD=/دج|DZD/i.test(rawPrice);
       let displayPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
       if(isDZD&&displayPrice){displayPrice=(parseFloat(displayPrice)/DZD).toFixed(2)}
@@ -876,7 +876,7 @@ async function loadSaved(){
       },i,savedProducts.length);
     }).join('');
     enrichSavedProducts();
-  }catch(e){document.getElementById('savedGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)">تعذر التحميل</div>'}
+  }catch(e){console.error('loadSaved error:',e);document.getElementById('savedGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--muted)"><p>تعذر التحميل</p><button onclick="loadSaved()" style="margin-top:10px;padding:8px 18px;background:var(--pri);color:#fff;border:none;border-radius:20px;font-family:Cairo,sans-serif;font-size:13px;cursor:pointer">إعادة المحاولة</button></div>'}
 }
 
 function cardHTML(p,i,total){
@@ -945,7 +945,7 @@ async function enrichSavedProducts(){
     if(changed){
       const grid=document.getElementById('savedGrid');
       grid.innerHTML=savedProducts.map((p,i)=>{
-        const rawPrice=p.price||'';
+        const rawPrice=String(p.price||'');
         const isDZD=/دج|DZD/i.test(rawPrice);
         let displayPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
         if(isDZD&&displayPrice){displayPrice=(parseFloat(displayPrice)/DZD).toFixed(2)}
@@ -969,7 +969,7 @@ async function enrichSavedProducts(){
 }
 
 async function openSaved(p){track('click',p?.title||'saved_product');
-  const rawPrice=p.price||'';
+  const rawPrice=String(p.price||'');
   const isDZD=/دج|DZD/i.test(rawPrice);
   let usdPrice=rawPrice.replace(/[^\d.,]/g,'').replace(',','.');
   if(isDZD&&usdPrice){usdPrice=(parseFloat(usdPrice)/DZD).toFixed(2)}
