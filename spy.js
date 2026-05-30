@@ -2293,74 +2293,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     return true;
   };
 
-  // ⭐ Simple Preview — الآن مع تحقق Gemini + blacklist (كان بدون تحقق سابقاً)
+  // 1) AliExpress API — أولاً لأنه يجلب صورة نظيفة بدون لوقو
   if (!productImage && firstProductId) {
-    console.log(`🖼 [⭐] محاولة Simple Preview...`);
-    try {
-      const sp = await fetchImageViaSimplePreview(firstProductId);
-      if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
-        const spBuf = await downloadImageAsBuffer(sp.image);
-        if (spBuf && await tryAcceptImage('Simple Preview', spBuf, sp.image)) {
-          if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
-  }
-
-  // 🆕 [0bis/5] Mobile JSON Page — يقرأ imagePathList من صفحة المنتج
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [0bis/5] محاولة Mobile JSON Page (imagePathList)...`);
-    try {
-      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
-      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
-        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
-        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
-          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ Mobile JSON فشل: ${e.message}`); }
-  }
-
-  // 🆕 [A] JSON-LD من صفحة المنتج (Structured Data — موثوق جداً)
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [A] محاولة JSON-LD Structured Data...`);
-    try {
-      const jlResult = await fetchImageViaJsonLd(firstProductId);
-      if (jlResult && jlResult.image && isAliCdnImage(jlResult.image) && !isLikelyVideoUrl(jlResult.image)) {
-        const jlBuffer = await downloadImageAsBuffer(jlResult.image);
-        if (jlBuffer && await tryAcceptImage('JSON-LD', jlBuffer, jlResult.image)) {
-          if (!firstApiTitle && jlResult.title) firstApiTitle = jlResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ JSON-LD فشل: ${e.message}`); }
-  }
-
-  // 🆕 [B] Open Graph من رابط الأفليت مباشرة (يتبع التحويلات حتى الصفحة النهائية)
-  if (!productImage && previewLink) {
-    console.log(`🖼 [B] محاولة OG Image من رابط الأفليت...`);
-    try {
-      const ogResult = await fetchImageViaAffOgImage(previewLink);
-      if (ogResult && ogResult.image && isAliCdnImage(ogResult.image) && !isLikelyVideoUrl(ogResult.image)) {
-        const ogBuffer = await downloadImageAsBuffer(ogResult.image);
-        if (ogBuffer) await tryAcceptImage('Aff OG', ogBuffer, ogResult.image);
-      }
-    } catch (e) { console.log(`⚠️ Aff OG فشل: ${e.message}`); }
-  }
-
-  // 0) صورة من fetchLinkPreview
-  if (!productImage && firstProductImage) {
-    console.log(`🖼 [0/5] محاولة صورة fetchLinkPreview...`);
-    try {
-      if (!isLikelyVideoUrl(firstProductImage)) {
-        const lpBuf = await downloadImageAsBuffer(firstProductImage);
-        if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
-      }
-    } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
-  }
-
-  // 1) AliExpress API
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [1/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -2377,9 +2312,37 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 2) Cheerio scraper
+  // 2) Mobile JSON Page — يقرأ imagePathList من صفحة المنتج
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة Cheerio scraper...`);
+    console.log(`🖼 [2] محاولة Mobile JSON Page (imagePathList)...`);
+    try {
+      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
+      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
+        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
+        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
+          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ Mobile JSON فشل: ${e.message}`); }
+  }
+
+  // 3) JSON-LD من صفحة المنتج (Structured Data — موثوق جداً)
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [3] محاولة JSON-LD Structured Data...`);
+    try {
+      const jlResult = await fetchImageViaJsonLd(firstProductId);
+      if (jlResult && jlResult.image && isAliCdnImage(jlResult.image) && !isLikelyVideoUrl(jlResult.image)) {
+        const jlBuffer = await downloadImageAsBuffer(jlResult.image);
+        if (jlBuffer && await tryAcceptImage('JSON-LD', jlBuffer, jlResult.image)) {
+          if (!firstApiTitle && jlResult.title) firstApiTitle = jlResult.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ JSON-LD فشل: ${e.message}`); }
+  }
+
+  // 4) Cheerio scraper
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [4] محاولة Cheerio scraper...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -2391,9 +2354,46 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) Microlink.io
+  // 5) Simple Preview
+  if (!productImage && firstProductId) {
+    console.log(`🖼 [5] محاولة Simple Preview...`);
+    try {
+      const sp = await fetchImageViaSimplePreview(firstProductId);
+      if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
+        const spBuf = await downloadImageAsBuffer(sp.image);
+        if (spBuf && await tryAcceptImage('Simple Preview', spBuf, sp.image)) {
+          if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
+        }
+      }
+    } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
+  }
+
+  // 6) Open Graph من رابط الأفليت مباشرة
   if (!productImage && previewLink) {
-    console.log(`🖼 [3/5] محاولة Microlink.io...`);
+    console.log(`🖼 [6] محاولة OG Image من رابط الأفليت...`);
+    try {
+      const ogResult = await fetchImageViaAffOgImage(previewLink);
+      if (ogResult && ogResult.image && isAliCdnImage(ogResult.image) && !isLikelyVideoUrl(ogResult.image)) {
+        const ogBuffer = await downloadImageAsBuffer(ogResult.image);
+        if (ogBuffer) await tryAcceptImage('Aff OG', ogBuffer, ogResult.image);
+      }
+    } catch (e) { console.log(`⚠️ Aff OG فشل: ${e.message}`); }
+  }
+
+  // 7) صورة من fetchLinkPreview
+  if (!productImage && firstProductImage) {
+    console.log(`🖼 [7] محاولة صورة fetchLinkPreview...`);
+    try {
+      if (!isLikelyVideoUrl(firstProductImage)) {
+        const lpBuf = await downloadImageAsBuffer(firstProductImage);
+        if (lpBuf) await tryAcceptImage('fetchLinkPreview', lpBuf, firstProductImage);
+      }
+    } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
+  }
+
+  // 8) Microlink.io
+  if (!productImage && previewLink) {
+    console.log(`🖼 [8] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
       if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
@@ -2405,11 +2405,11 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
 
-  // 🆕 [C] بحث AliExpress بالعنوان (مفيد عند فشل كل طرق Product ID)
+  // 9) بحث AliExpress بالعنوان (مفيد عند فشل كل طرق Product ID)
   if (!productImage) {
     const searchTitle = (aiResult && aiResult.productName) || firstApiTitle || '';
     if (searchTitle && searchTitle.length >= 3) {
-      console.log(`🖼 [C] محاولة بحث AliExpress بالعنوان: "${searchTitle.substring(0, 60)}"...`);
+      console.log(`🖼 [9] محاولة بحث AliExpress بالعنوان: "${searchTitle.substring(0, 60)}"...`);
       try {
         const tsResult = await fetchImageViaTitleSearch(searchTitle);
         if (tsResult && tsResult.image && isAliCdnImage(tsResult.image) && !isLikelyVideoUrl(tsResult.image)) {
