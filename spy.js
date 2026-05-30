@@ -1099,7 +1099,6 @@ function fetchImageViaBingSearch(query, timeoutMs = 12000) {
         if (body.length > 500000) res.destroy();
       });
       res.on('end', () => {
-        // Bing يخزّن بيانات الصور في سمة m="{...}" على كل عنصر
         const mMatch = body.match(/m="\{[^}]*?&quot;murl&quot;:&quot;([^&]+)&quot;/);
         let imageUrl = mMatch ? mMatch[1] : null;
         if (!imageUrl) {
@@ -1112,6 +1111,77 @@ function fetchImageViaBingSearch(query, timeoutMs = 12000) {
           return resolve({ image: imageUrl });
         }
         resolve(null);
+      });
+      res.on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+  });
+}
+
+// ===== DuckDuckGo Image Search — بحث عن صورة المنتج عبر DuckDuckGo =====
+function fetchImageViaDuckDuckGo(query, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!query || query.length < 3) return resolve(null);
+    // الخطوة 1: الحصول على vqd token المطلوب لـ DuckDuckGo Images
+    const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query + ' aliexpress')}&ia=images`;
+    const req = https.get(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve(null); }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { body += c; if (body.length > 300000) res.destroy(); });
+      res.on('end', () => {
+        // استخراج vqd token
+        const vqdMatch = body.match(/vqd=([\d-]+)/);
+        const vqd = vqdMatch ? vqdMatch[1] : null;
+        if (!vqd) return resolve(null);
+
+        // الخطوة 2: طلب نتائج الصور بالـ token
+        const imgUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(query + ' aliexpress')}&o=json&vqd=${vqd}&f=,,,,,&p=1`;
+        const imgReq = https.get(imgUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+            'Referer': 'https://duckduckgo.com/',
+            'Accept': 'application/json',
+          },
+          timeout: timeoutMs,
+        }, (imgRes) => {
+          if (imgRes.statusCode !== 200) { imgRes.resume(); return resolve(null); }
+          let imgBody = '';
+          imgRes.setEncoding('utf8');
+          imgRes.on('data', c => { imgBody += c; if (imgBody.length > 300000) imgRes.destroy(); });
+          imgRes.on('end', () => {
+            try {
+              const data = JSON.parse(imgBody);
+              if (!data.results || !Array.isArray(data.results)) return resolve(null);
+              // نبحث عن أول صورة من alicdn أو aliexpress
+              const aliResult = data.results.find(r =>
+                r.image && /alicdn\.com|aliexpress-media/i.test(r.image) && !isLikelyVideoUrl(r.image)
+              );
+              if (aliResult) {
+                console.log(`✅ DuckDuckGo وجد صورة AliCDN: ${aliResult.image.substring(0, 80)}...`);
+                return resolve({ image: aliResult.image, title: aliResult.title });
+              }
+              // إذا لم نجد alicdn، نأخذ أول نتيجة عامة
+              const first = data.results.find(r => r.image && /^https?:\/\//i.test(r.image) && !isLikelyVideoUrl(r.image));
+              if (first) {
+                console.log(`✅ DuckDuckGo وجد صورة عامة: ${first.image.substring(0, 80)}...`);
+                return resolve({ image: first.image, title: first.title });
+              }
+            } catch (e) { /* تجاهل خطأ JSON */ }
+            resolve(null);
+          });
+          imgRes.on('error', () => resolve(null));
+        });
+        imgReq.on('error', () => resolve(null));
+        imgReq.setTimeout(timeoutMs, () => { imgReq.destroy(); resolve(null); });
       });
       res.on('error', () => resolve(null));
     });
@@ -2422,7 +2492,39 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // 5) صورة المنشور الأصلي من تيليجرام — الآن بفحص كامل (كانت تتجاوز كل شيء سابقاً!)
+  // 10) Bing Image Search — بحث صور Bing بعنوان المنتج
+  if (!productImage) {
+    const bingQuery = (aiResult && aiResult.productName) || firstApiTitle || '';
+    if (bingQuery && bingQuery.length >= 3) {
+      console.log(`🖼 [10] محاولة Bing Image Search: "${bingQuery.substring(0, 60)}"...`);
+      try {
+        const bingResult = await fetchImageViaBingSearch(bingQuery);
+        if (bingResult && bingResult.image && !isLikelyVideoUrl(bingResult.image)) {
+          const bingBuffer = await downloadImageAsBuffer(bingResult.image);
+          if (bingBuffer) await tryAcceptImage('Bing Search', bingBuffer, bingResult.image);
+        }
+      } catch (e) { console.log(`⚠️ Bing Search فشل: ${e.message}`); }
+    }
+  }
+
+  // 11) DuckDuckGo Image Search — بحث صور DuckDuckGo بعنوان المنتج
+  if (!productImage) {
+    const ddgQuery = (aiResult && aiResult.productName) || firstApiTitle || '';
+    if (ddgQuery && ddgQuery.length >= 3) {
+      console.log(`🖼 [11] محاولة DuckDuckGo Image Search: "${ddgQuery.substring(0, 60)}"...`);
+      try {
+        const ddgResult = await fetchImageViaDuckDuckGo(ddgQuery);
+        if (ddgResult && ddgResult.image && !isLikelyVideoUrl(ddgResult.image)) {
+          const ddgBuffer = await downloadImageAsBuffer(ddgResult.image);
+          if (ddgBuffer && await tryAcceptImage('DuckDuckGo', ddgBuffer, ddgResult.image)) {
+            if (!firstApiTitle && ddgResult.title) firstApiTitle = ddgResult.title;
+          }
+        }
+      } catch (e) { console.log(`⚠️ DuckDuckGo Search فشل: ${e.message}`); }
+    }
+  }
+
+  // 12) صورة المنشور الأصلي من تيليجرام — الآن بفحص كامل (كانت تتجاوز كل شيء سابقاً!)
   if (!productImage && sourceImage && Buffer.isBuffer(sourceImage)) {
     console.log(`🖼 [5/5] محاولة صورة المنشور الأصلي من تيليغرام...`);
     // فحص blacklist
