@@ -1715,8 +1715,13 @@ async function executePublish(review) {
         console.log('❌ معرف القناة فارغ');
         continue;
       }
+      // نسخ الـ Buffer قبل كل إرسال — الـ Buffer يُستهلك بعد الإرسال الأول ولا يُعاد استخدامه
+      let targetImage = productImage;
+      if (productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
+        targetImage = { source: Buffer.from(productImage.source) };
+      }
       // النظام الذكي: 5 محاولات قبل اللجوء للنص فقط
-      const result = await smartSendPostSpy(publishBot, target, captionMessage, textMessage, productImage, logImage);
+      const result = await smartSendPostSpy(publishBot, target, captionMessage, textMessage, targetImage, logImage);
       console.log(`✅ تم النشر في ${target} (via=${result.via})`);
       // إن كانت الرسالة طويلة جداً وأُرسلت كصورة (caption < 1000)، أرسل النص الكامل في رسالة منفصلة
       if (message.length > 1000 && ['primary', 'buffer', 'url_retry'].includes(result.via)) {
