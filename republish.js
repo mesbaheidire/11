@@ -56,7 +56,7 @@ class RepublishManager {
 
   async start() {
     console.log('🔁 Republish manager started');
-    this.timer = setInterval(() => this.tick().catch(e => console.error('Republish tick error:', e.message)), 900000);
+    this.timer = setInterval(() => this.tick().catch(e => console.error('Republish tick error:', e.message)), 30000);
     setTimeout(() => this.tick().catch(() => {}), 3000);
   }
 
