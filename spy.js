@@ -2656,7 +2656,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (sellerCouponLines.length > 0) {
     const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-    message += `🎁 إحجز قسيمة البائع: ${escH(couponDisplay)}\n`;
+    message += `🎟 إحجز قسيمة البائع: ${escH(couponDisplay)}\n`;
   }
 
   message += '\n';
