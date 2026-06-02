@@ -2521,7 +2521,28 @@ async function processPost(config, text, sourceImage, sourceName) {
     console.log(`✂️ بعد التقصير: ${productTitle}`);
   }
 
-  const t = config.messageTemplate || {};
+  const t = Object.assign({}, config.messageTemplate || {});
+  // Override with latest main settings from DB (so changes in settings page take effect immediately)
+  try {
+    const [dbPrefix, dbSalePrice, dbLinkText, dbCouponText, dbFooter, dbBotLink, dbHashtags] = await Promise.all([
+      db.getAppStorage('MSG_prefix'),
+      db.getAppStorage('MSG_salePrice'),
+      db.getAppStorage('MSG_linkText'),
+      db.getAppStorage('MSG_couponText'),
+      db.getAppStorage('MSG_footer'),
+      db.getAppStorage('MSG_botLink'),
+      db.getAppStorage('MSG_hashtags')
+    ]);
+    if (dbPrefix)    t.prefix    = dbPrefix;
+    if (dbSalePrice) t.priceLabel = dbSalePrice;
+    if (dbLinkText)  t.linkLabel  = dbLinkText;
+    if (dbCouponText) t.couponLabel = dbCouponText;
+    if (dbFooter)    t.footer    = dbFooter;
+    if (dbBotLink)   t.botLink   = dbBotLink;
+    if (dbHashtags)  t.hashtags  = dbHashtags;
+  } catch (e) {
+    console.log('⚠️ تعذّر تحميل إعدادات الرسالة من DB:', e.message);
+  }
   const productPrice = firstProductPrice;
 
   let extractedCoupon = null;

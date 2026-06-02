@@ -3124,6 +3124,20 @@ app.get('/api/spy/status', async (req, res) => {
   }
 });
 
+app.post('/api/settings/message', async (req, res) => {
+  try {
+    const keys = ['prefix', 'salePrice', 'linkText', 'couponText', 'footer', 'botLink', 'hashtags'];
+    for (const key of keys) {
+      if (req.body[key] !== undefined) {
+        await db.setAppStorage('MSG_' + key, req.body[key]);
+      }
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.get('/api/spy/config', async (req, res) => {
   try {
     const config = await loadSpyConfig();
