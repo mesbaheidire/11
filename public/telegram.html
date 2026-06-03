@@ -339,6 +339,9 @@
             message += `${s.linkText}\n${link}\n`;
             if (coupon) {
                 const couponCodes = coupon.split(/\s*\|\s*/).map(c => c.trim()).filter(Boolean);
+                const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
+                const maxVal = Math.max(...couponValues);
+                if (maxVal > 0) message += `${s.couponText} [ $${maxVal} ]\n`;
                 couponCodes.forEach(code => { message += `✂️ <code>${code}</code>\n`; });
             }
             message += `\n${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;

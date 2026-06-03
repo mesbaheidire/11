@@ -463,6 +463,9 @@ function buildMessageFromSettings(s, { title, price, link, coupon }) {
   msg += `${tpl.linkText}\n${link}\n\n`;
   if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
     const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
+    const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
+    const maxVal = Math.max(...couponValues);
+    if (maxVal > 0) msg += `${tpl.couponText} [ $${maxVal} ]\n`;
     couponCodes.forEach(code => { msg += `✂️ <code>${code}</code>\n`; });
     msg += '\n';
   }
@@ -1219,6 +1222,9 @@ app.post('/api/publish-telegram', async (req, res) => {
     message += `${s.salePrice} [ ${price} ]\n\n${s.linkText}\n${link}\n\n`;
     if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
       const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
+      const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
+      const maxVal = Math.max(...couponValues);
+      if (maxVal > 0) message += `${s.couponText} [ $${maxVal} ]\n`;
       couponCodes.forEach(code => { message += `✂️ <code>${code}</code>\n`; });
       message += '\n';
     }

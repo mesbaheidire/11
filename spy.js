@@ -2630,6 +2630,10 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
     const couponCodes = extractedCoupon.split(' | ').map(c => c.trim()).filter(Boolean);
+    const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
+    const maxVal = Math.max(...couponValues);
+    let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
+    if (maxVal > 0) message += `${escH(label)}: [ $${maxVal} ]\n`;
     couponCodes.forEach(code => {
       message += `✂️ <code>${escH(code)}</code>\n`;
     });
