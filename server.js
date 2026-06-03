@@ -203,13 +203,16 @@ function rotateGeminiKey() {
 }
 
 // Get a Gemini model instance with current key
-function getGeminiModel() {
+function getGeminiModel(generationConfig = {}) {
   const apiKey = getCurrentGeminiKey();
   if (!apiKey) return null;
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    return genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    return genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: { temperature: 0.1, ...generationConfig }
+    });
   } catch (e) {
     console.log('Error creating Gemini model:', e.message);
     return null;
@@ -219,7 +222,7 @@ function getGeminiModel() {
 // Initial setup - keep for backward compatibility
 const geminiApiKey = process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
-const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }) : null;
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.1 } }) : null;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -1812,59 +1815,99 @@ app.post('/api/ai-analyze-post', async (req, res) => {
       return res.json({ success: true, result: null, method: 'no_ai' });
     }
 
-    const prompt = `أنت خبير في تحليل منشورات قنوات عروض AliExpress بالعربية. حلّل المنشور التالي واستخرج كل المعلومات بدقة عالية.
+    const prompt = `أنت نظام متخصص في تحليل منشورات عروض AliExpress العربية. مهمتك استخراج المعلومات بدقة تامة بغض النظر عن أسلوب كتابة المنشور.
 
-## الفرق الجوهري بين الكوبونات العامة وقسيمة البائع:
+━━━━━━━━━━━━━━━━━━━━━
+📦 1. اسم المنتج (productName)
+━━━━━━━━━━━━━━━━━━━━━
+- استخرج الاسم الإنجليزي الكامل: العلامة التجارية + الموديل + المواصفات (RAM/ROM/لون إن وُجد).
+- إذا كان الاسم عربياً فقط، اجعله null.
+- أزل الكلمات الزائدة: "Global Version", "Free Shipping", "Hot Sale", "Original", "New".
+- مثال جيد: "Xiaomi Redmi Note 14 Pro 5G 8/256GB" أو "Anker PowerCore 10000".
 
-### الكوبونات العامة (Platform Coupons):
-- هي أكواد خصم تُستخدم عند الدفع على منصة AliExpress.
-- تأتي بعد كلمات: "كوبون", "كوبــون", "كود", "coupon", "code".
-- أمثلة: CDOF06, OD20, ODYOUS20, AZRA2, SEBOT, PAD11
-- قد تكون مع مبلغ مثل: "كوبون $20/159 : CDOF06"
-- عادة يوجد أكثر من كوبون واحد في المنشور.
+━━━━━━━━━━━━━━━━━━━━━
+💰 2. السعر (price)
+━━━━━━━━━━━━━━━━━━━━━
+- استخرج السعر النهائي بعد كل الخصومات.
+- تنسيقات مقبولة: "$237.11" أو "237.11$" أو "237 دولار" أو "237$".
+- أعده دائماً بصيغة "$X.XX" (بعلامة $ في البداية).
+- إذا ذُكر سعران (قبل/بعد) → خذ الأرخص (بعد الخصم).
+- إذا لم يُذكر سعر واضح → null.
 
-### قسيمة البائع (Seller/Store Coupon):
-- هي خصم خاص من متجر البائع نفسه — يجب "حجزها" أو "إحجازها" من صفحة المتجر.
-- تأتي بعد عبارات محددة فقط: "قسيمة البائع", "إحجز قسيمة البائع", "حصل قسيمة البائع", "خصم البائع", "عرض المتجر", "store coupon", "seller coupon".
-- عادة تكون مبلغ مثل "$0.87" أو "$32" أو "$2/20" أو كود خاص طويل مثل ONE8EV82 أو SUV5QSCYTUHK.
-- إذا لم تجد عبارة "قسيمة البائع" أو ما يشابهها صراحة → ضع sellerCoupon: null.
-- ⚠️ مهم جداً: إذا كان الكود يأتي بعد كلمة "كوبون" (وليس "قسيمة البائع") → هو كوبون عام وليس قسيمة بائع!
+━━━━━━━━━━━━━━━━━━━━━
+🎟 3. الكوبونات العامة (coupons) — أكواد المنصة
+━━━━━━━━━━━━━━━━━━━━━
+- أكواد خصم تُستخدم عند الدفع على AliExpress (Platform Coupons).
+- تأتي بعد: "كوبون", "كوبـون", "كوبـــون", "كود", "coupon", "code", "كود خصم", "كوبون الموقع".
+- فواصلها: | أو / أو سطر جديد أو مسافة.
+- أمثلة للأكواد: CDOF06, OD20, ODYOUS20, AZRA2, SEBOT, PAD11, AFSO40, ZEDGA40.
+- ✅ استخرج كل كود على حدة في المصفوفة (حتى لو 5 أكواد).
+- ✅ حوّل كل كود إلى UPPERCASE.
+- ⚠️ تجاهل الأرقام مثل "$20/159" — هذه قيمة الخصم وليست كوداً.
 
-## قواعد صارمة:
-1. استخرج اسم المنتج الإنجليزي الدقيق (العلامة التجارية + الموديل + النسخة).
-2. استخرج السعر النهائي بعد التخفيض فقط (بالدولار).
-3. الكوبونات العامة: كل كود يأتي بعد "كوبون" أو على سطور "كوبون" → ضعه في coupons[].
-4. قسيمة البائع: فقط ما يأتي صراحة بعد "قسيمة البائع" أو "إحجز قسيمة" → sellerCoupon. إذا لم يوجد → null.
-5. ⚠️ لا تضع نفس الكود في كلا المكانين. إذا كان الكود كوبون عام، لا تضعه كقسيمة بائع.
-6. استخرج كل روابط AliExpress كمصفوفة بدون تكرار.
-7. حدد إذا كان المنتج هاتف ذكي أم لا.
+━━━━━━━━━━━━━━━━━━━━━
+🏷 4. قسيمة البائع (sellerCoupon + sellerCouponCode)
+━━━━━━━━━━━━━━━━━━━━━
+- خصم من متجر البائع مباشرة — تُحجز من صفحة المنتج.
+- تأتي بعد: "قسيمة البائع", "إحجز قسيمة", "احجز قسيمة", "حصل قسيمة", "خصم البائع", "قسيمة المتجر", "store coupon", "seller coupon".
+- sellerCoupon = قيمة الخصم (مثل "$32" أو "$0.87" أو "$2/20").
+- sellerCouponCode = الكود المصاحب إن وُجد (مثل ONE8EV82 أو SUV5QSCYTUHK).
+- إذا لم تجد عبارة "قسيمة البائع" أو ما يشابهها صراحةً → sellerCoupon: null وsellerCouponCode: null.
+- ⚠️ كود بعد "كوبون" هو كوبون عام وليس قسيمة بائع — لا تخلط بينهما أبداً.
+- ⚠️ لا تضع نفس الكود في coupons[] وsellerCoupon في نفس الوقت.
 
-## أمثلة:
-مثال 1: "كوبون $20/159 : CDOF06 \n كوبون $20/159 : OD20 \n كوبون $20/159 : ODYOUS20"
-→ coupons: ["CDOF06", "OD20", "ODYOUS20"], sellerCoupon: null (لا يوجد ذكر لقسيمة البائع)
+━━━━━━━━━━━━━━━━━━━━━
+🔗 5. الروابط (links)
+━━━━━━━━━━━━━━━━━━━━━
+- استخرج كل روابط AliExpress (تبدأ بـ aliexpress.com أو s.click.aliexpress.com أو a.aliexpress.com أو ae.aliexpress.com).
+- بدون تكرار، بدون اختصار.
 
-مثال 2: "كوبون: CDOF06 \n إحجز قسيمة البائع: $0.87"
-→ coupons: ["CDOF06"], sellerCoupon: "$0.87"
+━━━━━━━━━━━━━━━━━━━━━
+📱 6. هاتف ذكي (isPhone)
+━━━━━━━━━━━━━━━━━━━━━
+- true إذا كان المنتج هاتفاً ذكياً (smartphone/mobile phone).
+- false لكل شيء آخر (سماعات، ساعات، أجهزة لوحية، إكسسوارات...).
 
-مثال 3: "حصل قسيمة البائع $32: ONE8EV82"
-→ coupons: [], sellerCoupon: "$32", sellerCouponCode: "ONE8EV82"
+━━━━━━━━━━━━━━━━━━━━━
+📝 أمثلة تطبيقية:
+━━━━━━━━━━━━━━━━━━━━━
 
-مثال 4: "كوبون: SEBOT | PAD11 | CDOF06 \n إحجز قسيمة البائع: CDOF06 | OD20 | ODYOUS20"
-→ coupons: ["SEBOT", "PAD11", "CDOF06"], sellerCoupon: "CDOF06 | OD20 | ODYOUS20"
+مثال 1:
+"Xiaomi Redmi Note 14 Pro 5G 💥
+السعر: 237.11$
+كوبون $20/159 : CDOF06
+كوبون $20/159 : OD20
+كوبون $20/159 : ODYOUS20
+https://s.click.aliexpress.com/xxx"
+→ {"productName":"Xiaomi Redmi Note 14 Pro 5G","price":"$237.11","coupons":["CDOF06","OD20","ODYOUS20"],"sellerCoupon":null,"sellerCouponCode":null,"links":["https://s.click.aliexpress.com/xxx"],"isPhone":true}
 
-## النص:
+مثال 2:
+"Anker PowerCore - السعر 45$
+كوبون: SEBOT | PAD11
+إحجز قسيمة البائع: $2"
+→ {"productName":"Anker PowerCore","price":"$45","coupons":["SEBOT","PAD11"],"sellerCoupon":"$2","sellerCouponCode":null,"links":[],"isPhone":false}
+
+مثال 3:
+"Samsung Galaxy S25 Ultra 256GB
+🔥سعر 999$
+كوبون: AFSO40
+كوبون: ZEDGA40
+حصل قسيمة البائع $32: ONE8EV82"
+→ {"productName":"Samsung Galaxy S25 Ultra 256GB","price":"$999","coupons":["AFSO40","ZEDGA40"],"sellerCoupon":"$32","sellerCouponCode":"ONE8EV82","links":[],"isPhone":true}
+
+مثال 4:
+"عرض 🔥 Baseus شاحن 65W
+225 دولار → 89 دولار
+كود الخصم: BAS65W / EXTRA10"
+→ {"productName":"Baseus 65W Charger","price":"$89","coupons":["BAS65W","EXTRA10"],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false}
+
+━━━━━━━━━━━━━━━━━━━━━
+📄 النص المراد تحليله:
+━━━━━━━━━━━━━━━━━━━━━
 ${text}
 
-## رد بـ JSON فقط (بدون markdown أو شرح):
-{
-  "productName": "اسم المنتج بالإنجليزية أو null",
-  "price": "السعر النهائي أو null",
-  "coupons": ["كوبون1", "كوبون2"],
-  "sellerCoupon": "مبلغ أو كود قسيمة البائع أو null",
-  "sellerCouponCode": "كود قسيمة البائع أو null",
-  "links": ["رابط1", "رابط2"],
-  "isPhone": false
-}`;
+رد بـ JSON فقط بدون أي نص إضافي أو markdown:
+{"productName":null,"price":null,"coupons":[],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false}`;
 
     try {
       const rawResult = await runGeminiWithRotation(prompt);
