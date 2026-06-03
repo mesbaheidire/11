@@ -2626,11 +2626,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   else if (productTitle) message += `${escH(productTitle)}\n`;
   if (productPrice && t.priceLabel) {
     const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
-    message += `${escH(t.priceLabel)} ${escH(priceDisplay)}\n`;
+    message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)} ]\n`;
   }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
-    let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
-    message += `${escH(label)}: ${escH(extractedCoupon)}\n`;
+    const couponCodes = extractedCoupon.split(' | ').map(c => c.trim()).filter(Boolean);
+    couponCodes.forEach(code => {
+      message += `✂️ <code>${escH(code)}</code>\n`;
+    });
   }
 
   const platformCouponCodes = extractedCoupon
@@ -2677,7 +2679,7 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (sellerCouponLines.length > 0) {
     const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-    message += `🎟 إحجز قسيمة البائع: ${escH(couponDisplay)}\n`;
+    message += `🎟 إحجز قسيمة البائع: [ ${escH(couponDisplay)} ]\n`;
   }
 
   message += '\n';

@@ -459,10 +459,12 @@ function buildMessageFromSettings(s, { title, price, link, coupon }) {
     hashtags: '#Aliexpress'
   };
   let msg = `${tpl.prefix} ${title || ''}\n\n`;
-  if (price) msg += `${tpl.salePrice} ${price}\n\n`;
+  if (price) msg += `${tpl.salePrice} [ ${price} ]\n\n`;
   msg += `${tpl.linkText}\n${link}\n\n`;
   if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
-    msg += `${tpl.couponText} ${coupon}\n\n`;
+    const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
+    couponCodes.forEach(code => { msg += `✂️ <code>${code}</code>\n`; });
+    msg += '\n';
   }
   msg += `${tpl.footer}\n🔗 ${tpl.botLink}\n\n${tpl.hashtags}`;
   return msg;
@@ -1214,8 +1216,12 @@ app.post('/api/publish-telegram', async (req, res) => {
     };
     
     let message = `${s.prefix} ${title}\n\n`;
-    message += `${s.salePrice} ${price}\n\n${s.linkText}\n${link}\n\n`;
-    if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) message += `${s.couponText} ${coupon}\n\n`;
+    message += `${s.salePrice} [ ${price} ]\n\n${s.linkText}\n${link}\n\n`;
+    if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
+      const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
+      couponCodes.forEach(code => { message += `✂️ <code>${code}</code>\n`; });
+      message += '\n';
+    }
     message += `${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;
     
     // Use custom message if provided

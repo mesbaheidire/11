@@ -335,9 +335,12 @@
                 message += `<blockquote>${quoteParts.join('\n')}</blockquote>\n\n`;
             }
             message += `${s.prefix} ${title}\n`;
-            message += `${s.salePrice} ${salePriceVal}\n`;
+            message += `${s.salePrice} [ ${salePriceVal} ]\n`;
             message += `${s.linkText}\n${link}\n`;
-            if (coupon) message += `${s.couponText} ${coupon}\n`;
+            if (coupon) {
+                const couponCodes = coupon.split(/\s*\|\s*/).map(c => c.trim()).filter(Boolean);
+                couponCodes.forEach(code => { message += `✂️ <code>${code}</code>\n`; });
+            }
             message += `\n${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;
             
             return message;
