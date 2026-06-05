@@ -1685,20 +1685,22 @@ app.post('/api/ai-extract-phone-name', async (req, res) => {
     }
 
     try {
-      const prompt = `أنت خبير في الهواتف الذكية. استخرج اسم الهاتف الكامل والدقيق من النص التالي.
+      const prompt = `أنت خبير في الهواتف الذكية. مهمتك استخراج اسم الهاتف الكامل والدقيق من النص.
 
 قواعد صارمة:
-1. استخرج اسم الهاتف الكامل تماماً (مثال: realme P4 Power 8/256, POCO X8 PRO 5G, Samsung Galaxy S24 Ultra, iPhone 16 Pro Max, Xiaomi 14 Ultra).
-2. يجب تضمين: الشركة + الموديل + الرقم + اللاحقة (Pro, Ultra, Power, Flagship, Plus, Max, Lite, 5G).
-3. أضف مواصفات RAM/Storage (مثال: 8/256 أو 8GB/256GB).
-4. ابحث عن جميع الماركات: realme, POCO, Xiaomi, Samsung, iPhone, Oppo, HTC, Nokia, OnePlus, Motorola.
-5. أمثلة من الصور الحقيقية:
-   - "realme P4 Power 8/256" → realme P4 Power 8/256
-   - "POCO X8 PRO 5G" → POCO X8 PRO 5G
-   - بحث دقيق: ابحث عن الهاتف بعد الصور والكلمات الرئيسية
-6. لا تترجم الاسم — اكتبه بالإنجليزية.
-7. أعد فقط JSON: {"phoneName":"الاسم الكامل"} أو {"phoneName":null}
-8. لا تضف شرح — فقط JSON.
+1. استخرج: الشركة + الموديل + الرقم + اللاحقة + مواصفات RAM/Storage.
+2. الصيغة المطلوبة: "POCO F6 12/512GB" أو "Samsung Galaxy S25 Ultra 12/256GB" أو "iPhone 16 Pro Max 256GB".
+3. RAM/Storage أساسية — لا تحذفها أبداً إذا ذُكرت في النص.
+4. ابحث عن جميع الماركات: POCO, Xiaomi, Redmi, Samsung, iPhone, Apple, Oppo, Realme, OnePlus, Motorola, Nokia, Huawei, Honor, Vivo, Tecno, Infinix.
+5. اللواحق المهمة: Pro, Ultra, Power, Plus, Max, Lite, 5G, 4G — أضفها إذا وُجدت.
+6. أمثلة:
+   - "POCO F6 12/512" → {"phoneName":"POCO F6 12/512GB"}
+   - "Samsung Galaxy S25 Ultra 12GB 256GB" → {"phoneName":"Samsung Galaxy S25 Ultra 12/256GB"}
+   - "تخفيض على POCO C85 6GB+128GB" → {"phoneName":"POCO C85 6/128GB"}
+   - "iPhone 16 Pro Max" → {"phoneName":"iPhone 16 Pro Max"}
+7. لا تترجم الاسم — اكتبه بالإنجليزية فقط.
+8. أعد JSON فقط: {"phoneName":"الاسم الكامل مع المواصفات"} أو {"phoneName":null}
+9. لا تضف أي شرح — فقط JSON.
 
 النص:
 ${text}`;
@@ -1751,19 +1753,21 @@ app.post('/api/ai-extract-product-info', async (req, res) => {
     try {
       const prompt = `أنت خبير تحديد المنتجات. حلّل منشور من قناة عروض واستخرج معلومات المنتج بدقة.
 
-القواعس:
+القواعد:
 1. تعرف على اسم المنتج التجاري الدقيق (العلامة التجارية + الموديل + النسخة).
-2. للهواتف الذكية: البحث عن: Brand Model Number (مثل: iPhone 15 Pro, Samsung Galaxy S24, DJI Osmo Mobile 7, Soundcore by Anker Space Q45).
+2. للهواتف الذكية: استخرج الاسم الكامل مع RAM/Storage كما هو في النص.
+   - أمثلة صحيحة: "POCO F6 12/512GB", "Samsung Galaxy S25 Ultra 12/256GB", "iPhone 16 Pro Max 256GB", "Xiaomi Redmi Note 14 Pro 5G 8/256GB"
+   - لا تحذف أبداً الأرقام مثل 12/512 أو 8/256 — هي جزء أساسي من اسم الهاتف.
 3. للأجهزة الأخرى: اسم منتج قصير جذاب (3-8 كلمات كحد أقصى).
 4. اكتب اسم المنتج باللغة الإنجليزية فقط.
 5. حدّد إذا كان المنتج هاتف ذكي أو لا.
-6. ابحث في النص عن: اسم العلامة التجارية (Samsung, iPhone, DJI, Anker, Sony, إلخ)، رقم الموديل أو النسخة (15, S24, 7, Pro, Ultra, Max، إلخ).
-7. تجاهل الكلمات العربية والحروف والرموز - انتقِ الأسماء الإنجليزية فقط.
+6. ابحث عن: اسم العلامة التجارية (Samsung, POCO, Xiaomi, iPhone, Oppo, Realme, OnePlus, Motorola, Nokia, إلخ)، رقم الموديل (F6, S25, Note14, إلخ)، اللاحقة (Pro, Ultra, Max, Plus, Lite, 5G)، والمواصفات (12/512GB, 8/256GB).
+7. تجاهل الكلمات العربية والرموز — انتقِ الأسماء الإنجليزية فقط.
 8. رد بـ JSON فقط، بلا شرح أو markdown:
-{"productName":"اسم المنتج الدقيق","isPhone":true/false}
+{"productName":"اسم المنتج الدقيق مع المواصفات","isPhone":true/false}
 9. إذا لم تتعرف على المنتج: {"productName":null,"isPhone":false}
 
-${apiTitle ? `API Title (قد تكون خاطئة): ${apiTitle}\n` : ''}
+${apiTitle ? `API Title (قد تكون خاطئة أو مختلفة — لا تعتمد عليها وحدها): ${apiTitle}\n` : ''}
 نص المنشور:
 ${text}`;
 
@@ -1820,10 +1824,13 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 ━━━━━━━━━━━━━━━━━━━━━
 📦 1. اسم المنتج (productName)
 ━━━━━━━━━━━━━━━━━━━━━
-- استخرج الاسم الإنجليزي الكامل: العلامة التجارية + الموديل + المواصفات (RAM/ROM/لون إن وُجد).
+- استخرج الاسم الإنجليزي الكامل: العلامة التجارية + الموديل + المواصفات.
+- للهواتف الذكية: يجب تضمين RAM/Storage كما يظهر في النص (أمثلة: "POCO F6 12/512GB", "Samsung Galaxy S25 Ultra 12/256GB", "Xiaomi Redmi Note 14 Pro 5G 8/256GB").
+- للهواتف: لا تحذف أبداً الأرقام مثل 12/512 أو 8GB/256GB — هي جزء أساسي من الاسم.
+- للمنتجات الأخرى: اسم قصير جذاب مع الموديل إن وُجد.
 - إذا كان الاسم عربياً فقط، اجعله null.
-- أزل الكلمات الزائدة: "Global Version", "Free Shipping", "Hot Sale", "Original", "New".
-- مثال جيد: "Xiaomi Redmi Note 14 Pro 5G 8/256GB" أو "Anker PowerCore 10000".
+- أزل الكلمات الزائدة فقط: "Global Version", "Free Shipping", "Hot Sale", "Original", "New Arrival".
+- مثال جيد: "POCO F6 12/512GB" أو "Samsung Galaxy S25 Ultra 12/256GB" أو "Anker PowerCore 10000".
 
 ━━━━━━━━━━━━━━━━━━━━━
 💰 2. السعر (price)
@@ -1873,13 +1880,13 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 ━━━━━━━━━━━━━━━━━━━━━
 
 مثال 1:
-"Xiaomi Redmi Note 14 Pro 5G 💥
+"Xiaomi Redmi Note 14 Pro 5G 8/256GB 💥
 السعر: 237.11$
 كوبون $20/159 : CDOF06
 كوبون $20/159 : OD20
 كوبون $20/159 : ODYOUS20
 https://s.click.aliexpress.com/xxx"
-→ {"productName":"Xiaomi Redmi Note 14 Pro 5G","price":"$237.11","coupons":["CDOF06","OD20","ODYOUS20"],"sellerCoupon":null,"sellerCouponCode":null,"links":["https://s.click.aliexpress.com/xxx"],"isPhone":true}
+→ {"productName":"Xiaomi Redmi Note 14 Pro 5G 8/256GB","price":"$237.11","coupons":["CDOF06","OD20","ODYOUS20"],"sellerCoupon":null,"sellerCouponCode":null,"links":["https://s.click.aliexpress.com/xxx"],"isPhone":true}
 
 مثال 2:
 "Anker PowerCore - السعر 45$

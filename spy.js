@@ -1891,11 +1891,15 @@ function callAiRefine(title, isHook) {
 }
 
 function shortenTitleFallback(title) {
-  if (!title || title.length <= 60) return title;
+  if (!title || title.length <= 80) return title;
+  // لا نقطع أسماء الهواتف أبداً
+  const looksLikePhone = /\b(poco|xiaomi|redmi|samsung|galaxy|iphone|apple|oppo|realme|oneplus|motorola|nokia|huawei|honor|vivo|tecno|infinix)\b/i.test(title)
+    || /\d+\s*\/\s*\d+\s*GB/i.test(title);
+  if (looksLikePhone) return title;
   const junk = /\b(for|with|and|the|a|an|in|on|at|to|of|by|from|Global Version|Free Shipping|Original|New Arrival|Hot Sale|2024|2025|2026|High Quality)\b/gi;
   let short = title.replace(junk, ' ').replace(/\s{2,}/g, ' ').trim();
   const words = short.split(/\s+/);
-  if (words.length > 8) short = words.slice(0, 8).join(' ');
+  if (words.length > 10) short = words.slice(0, 10).join(' ');
   return short;
 }
 
@@ -2515,10 +2519,15 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  if (productTitle && productTitle.length > 60) {
+  // لا نقطع أسماء الهواتف التي تحتوي على مواصفات RAM/Storage (مثل POCO F6 12/512GB)
+  const isPhoneName = /\b(poco|xiaomi|samsung|iphone|oppo|realme|oneplus|motorola|nokia|huawei|vivo|honor|redmi|galaxy|pixel)\b/i.test(productTitle || '')
+    || /\d+\/\d+\s*GB/i.test(productTitle || '');
+  if (productTitle && productTitle.length > 80 && !isPhoneName) {
     console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
     productTitle = shortenTitleFallback(productTitle);
     console.log(`✂️ بعد التقصير: ${productTitle}`);
+  } else if (productTitle && productTitle.length > 80 && isPhoneName) {
+    console.log(`📱 عنوان هاتف طويل (${productTitle.length} حرف) — يُحتفظ به كما هو`);
   }
 
   const t = Object.assign({}, config.messageTemplate || {});
