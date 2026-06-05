@@ -1,17 +1,20 @@
 FROM node:20-slim
 
-# Create app directory
+# Install system dependencies required by sharp
+RUN apt-get update && apt-get install -y \
+    libvips-dev \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/app
 
-# Install app dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm install --no-audit --no-fund
 
-# Bundle app source
 COPY . .
 
-# Expose the port the app runs on
 EXPOSE 5000
 
-# Start the application
 CMD [ "npm", "start" ]

@@ -2773,9 +2773,14 @@ async function startSpy(config) {
     await stopSpy();
   }
 
-  const { TelegramClient } = require('telegram');
-  const { StringSession } = require('telegram/sessions');
-  const { NewMessage } = require('telegram/events');
+  let TelegramClient, StringSession, NewMessage;
+  try {
+    TelegramClient = require('telegram').TelegramClient;
+    StringSession = require('telegram/sessions').StringSession;
+    NewMessage = require('telegram/events').NewMessage;
+  } catch (e) {
+    throw new Error('مكتبة telegram غير مثبّتة — ميزة التجسس غير متاحة في هذه البيئة');
+  }
 
   const apiId = parseInt(config.apiId);
   const apiHash = config.apiHash;
@@ -3104,8 +3109,13 @@ async function stopSpy() {
 }
 
 async function sendLoginCode(config) {
-  const { TelegramClient } = require('telegram');
-  const { StringSession } = require('telegram/sessions');
+  let TelegramClient, StringSession;
+  try {
+    TelegramClient = require('telegram').TelegramClient;
+    StringSession = require('telegram/sessions').StringSession;
+  } catch (e) {
+    throw new Error('مكتبة telegram غير مثبّتة — ميزة التجسس غير متاحة في هذه البيئة');
+  }
 
   const apiId = parseInt(config.apiId);
   const apiHash = config.apiHash;
