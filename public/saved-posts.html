@@ -280,21 +280,18 @@
             setTimeout(() => toast.className = 'toast', 3000);
         }
 
-        async function loadPosts() {
-            document.getElementById('loadingState').style.display = 'none';
+        // ===== localStorage helpers =====
+        const LS_KEY = 'affilidz_saved_posts';
+        function lsGetPosts() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+        }
+        function lsSavePosts(posts) {
+            try { localStorage.setItem(LS_KEY, JSON.stringify(posts)); } catch(e) { showToast('تعذر الحفظ في المتصفح (مساحة ممتلئة؟)', 'error'); }
+        }
 
-            // قاعدة البيانات هي المصدر الوحيد
-            let posts = [];
-            try {
-                const res = await fetch('/api/saved-posts');
-                const data = await res.json();
-                if (data.success && Array.isArray(data.posts)) {
-                    posts = data.posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                }
-            } catch (e) {
-                console.error('فشل تحميل المنشورات من قاعدة البيانات:', e);
-                showToast('تعذر الاتصال بقاعدة البيانات', 'error');
-            }
+        function loadPosts() {
+            document.getElementById('loadingState').style.display = 'none';
+            const posts = lsGetPosts().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
             if (posts.length > 0) {
                 savedPosts = posts;
@@ -513,31 +510,27 @@
             document.getElementById('editOverlay').style.display = 'none';
         }
 
-        async function uploadEditImage(e) {
+        function uploadEditImage(e) {
             const file = e.target.files[0];
             if (!file) return;
-            const fd = new FormData();
-            fd.append('image', file);
             const prev = document.getElementById('eImagePrev');
-            prev.innerHTML = '<div style="padding:30px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> جاري الرفع...</div>';
-            try {
-                const r = await fetch('/api/upload-saved-image', { method: 'POST', body: fd });
-                const d = await r.json();
-                if (d.success && d.imageUrl) {
-                    document.getElementById('eImage').value = d.imageUrl;
-                    prev.innerHTML = `<img src="${d.imageUrl}" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px">`;
-                    showToast('تم رفع الصورة', 'success');
-                } else {
-                    prev.innerHTML = `<div style="padding:20px;color:#ef4444">${d.error || 'فشل الرفع'}</div>`;
-                }
-            } catch (err) {
-                prev.innerHTML = '<div style="padding:20px;color:#ef4444">خطأ في الاتصال</div>';
-            }
+            prev.innerHTML = '<div style="padding:30px;color:var(--text-muted)"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>';
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const dataUrl = ev.target.result;
+                document.getElementById('eImage').value = dataUrl;
+                prev.innerHTML = `<img src="${dataUrl}" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px">`;
+                showToast('تم تحميل الصورة', 'success');
+            };
+            reader.onerror = () => {
+                prev.innerHTML = '<div style="padding:20px;color:#ef4444">فشل قراءة الصورة</div>';
+            };
+            reader.readAsDataURL(file);
         }
 
-        async function saveEditPost() {
+        function saveEditPost() {
             const id = document.getElementById('ePostId').value;
-            const body = {
+            const updates = {
                 title: document.getElementById('eTitle').value.trim(),
                 price: document.getElementById('ePrice').value.trim(),
                 coupon: document.getElementById('eCoupon').value.trim(),
@@ -550,74 +543,62 @@
             const orig = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري الحفظ...';
+
             try {
-                const r = await fetch('/api/saved-posts/' + encodeURIComponent(id), {
+                const posts = lsGetPosts();
+                const idx = posts.findIndex(p => p.id === id);
+                if (idx === -1) { showToast('لم يُعثر على المنشور', 'error'); return; }
+                posts[idx] = { ...posts[idx], ...updates };
+                lsSavePosts(posts);
+                showToast('تم الحفظ بنجاح ✅', 'success');
+                closeEditModal();
+                loadPosts();
+                // تحديث السيرفر في الخلفية (بدون انتظار)
+                fetch('/api/saved-posts/' + encodeURIComponent(id), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const d = await r.json();
-                if (d.success) {
-                    showToast('تم الحفظ بنجاح ✅', 'success');
-                    closeEditModal();
-                    loadPosts();
-                } else {
-                    showToast(d.error || 'فشل الحفظ', 'error');
-                }
+                    body: JSON.stringify(updates)
+                }).catch(() => {});
             } catch (e) {
-                showToast('خطأ في الاتصال', 'error');
+                showToast('فشل الحفظ', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = orig;
             }
         }
 
-        async function deletePost(id) {
+        function deletePost(id) {
             if (!confirm('هل تريد حذف هذا المنشور؟')) return;
-            try {
-                const res = await fetch(`/api/saved-posts/${id}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'فشل الحذف');
-                showToast('تم حذف المنشور', 'success');
-                loadPosts();
-            } catch (e) {
-                showToast(e.message || 'فشل الحذف', 'error');
-            }
+            const posts = lsGetPosts().filter(p => p.id !== id);
+            lsSavePosts(posts);
+            showToast('تم حذف المنشور', 'success');
+            loadPosts();
+            // حذف من السيرفر في الخلفية
+            fetch(`/api/saved-posts/${id}`, { method: 'DELETE' }).catch(() => {});
         }
 
-        document.getElementById('clearAllBtn').onclick = async () => {
+        document.getElementById('clearAllBtn').onclick = () => {
             if (!confirm('هل تريد حذف جميع المنشورات المحفوظة؟')) return;
-            try {
-                const res = await fetch('/api/saved-posts', { method: 'DELETE' });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'فشل المسح');
-                showToast('تم حذف جميع المنشورات', 'success');
-                loadPosts();
-            } catch (e) {
-                showToast(e.message || 'فشل المسح', 'error');
-            }
+            localStorage.removeItem(LS_KEY);
+            showToast('تم حذف جميع المنشورات', 'success');
+            loadPosts();
+            fetch('/api/saved-posts', { method: 'DELETE' }).catch(() => {});
         };
 
-        document.getElementById('deleteBeforeBtn').onclick = async () => {
+        document.getElementById('deleteBeforeBtn').onclick = () => {
             const date = document.getElementById('deleteBeforeDate').value;
-            if (!date) {
-                showToast('اختر تاريخاً أولاً', 'error');
-                return;
-            }
+            if (!date) { showToast('اختر تاريخاً أولاً', 'error'); return; }
             if (!confirm('هل تريد حذف كل المنشورات الأقدم من هذا التاريخ؟')) return;
-            try {
-                const res = await fetch('/api/saved-posts/before', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: new Date(date).toISOString() })
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'فشل الحذف');
-                showToast('تم حذف المنشورات الأقدم من التاريخ', 'success');
-                loadPosts();
-            } catch (e) {
-                showToast(e.message || 'فشل الحذف', 'error');
-            }
+            const cutoff = new Date(date).getTime();
+            const posts = lsGetPosts().filter(p => new Date(p.createdAt).getTime() >= cutoff);
+            lsSavePosts(posts);
+            showToast('تم حذف المنشورات الأقدم من التاريخ', 'success');
+            loadPosts();
+            fetch('/api/saved-posts/before', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date: new Date(date).toISOString() })
+            }).catch(() => {});
         };
 
         // ===== Republish Campaigns UI =====

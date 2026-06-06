@@ -739,7 +739,16 @@
                 createdAt: new Date().toISOString()
             };
 
-            // الحفظ في قاعدة البيانات (المصدر الوحيد)
+            // حفظ في localStorage (المصدر الرئيسي — يبقى بعد إعادة تشغيل السيرفر)
+            try {
+                const existing = JSON.parse(localStorage.getItem('affilidz_saved_posts') || '[]');
+                existing.unshift(postData);
+                localStorage.setItem('affilidz_saved_posts', JSON.stringify(existing));
+            } catch (e) {
+                console.error('Error saving post to localStorage:', e);
+            }
+
+            // حفظ في السيرفر أيضاً (للحملات التلقائية)
             try {
                 await fetch('/api/saved-posts', {
                     method: 'POST',
