@@ -2643,7 +2643,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     const maxVal = Math.max(...couponValues);
     let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
     if (maxVal > 0) message += `${escH(label)}: [ $${maxVal} ]\n`;
-    message += `✂️ <code>${couponCodes.map(escH).join(' | ')}</code>\n`;
+    message += `✂️ ${couponCodes.map(c => `<code>${escH(c)}</code>`).join(' | ')}\n`;
   }
 
   const platformCouponCodes = extractedCoupon
