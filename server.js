@@ -469,7 +469,7 @@ function buildMessageFromSettings(s, { title, price, link, coupon }) {
     const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
     const maxVal = Math.max(...couponValues);
     if (maxVal > 0) msg += `${tpl.couponText} [ $${maxVal} ]\n`;
-    couponCodes.forEach(code => { msg += `✂️ <code>${code}</code>\n`; });
+    msg += `✂️ <code>${couponCodes.join(' | ')}</code>\n`;
     msg += '\n';
   }
   msg += `${tpl.footer}\n🔗 ${tpl.botLink}\n\n${tpl.hashtags}`;
@@ -1228,7 +1228,7 @@ app.post('/api/publish-telegram', async (req, res) => {
       const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
       const maxVal = Math.max(...couponValues);
       if (maxVal > 0) message += `${s.couponText} [ $${maxVal} ]\n`;
-      couponCodes.forEach(code => { message += `✂️ <code>${code}</code>\n`; });
+      message += `✂️ <code>${couponCodes.join(' | ')}</code>\n`;
       message += '\n';
     }
     message += `${s.footer}\n🔗 ${s.botLink}\n\n${s.hashtags}`;
