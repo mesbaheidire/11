@@ -458,7 +458,7 @@ function calcDzd(priceStr, rate) {
   const num = parseFloat(cleaned);
   if (isNaN(num) || num <= 0) return null;
   const dz = Math.round(num * r);
-  return dz.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' دج';
+  return dz.toString() + ' دج';
 }
 
 function buildMessageFromSettings(s, { title, price, link, coupon }) {

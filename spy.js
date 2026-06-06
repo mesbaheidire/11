@@ -2637,7 +2637,11 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (t.prefix) message += `${escH(t.prefix)} ${escH(productTitle)}\n`;
   else if (productTitle) message += `${escH(productTitle)}\n`;
   if (productPrice && t.priceLabel) {
-    const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
+    const priceDisplay = (() => {
+      const num = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
+      if (isNaN(num)) return String(productPrice);
+      return '$' + (num % 1 === 0 ? num.toFixed(0) : parseFloat(num.toFixed(2)));
+    })();
     const dzdDisplay = (() => {
       const r = parseFloat(t.dollarRate);
       if (!r || isNaN(r) || r <= 0) return null;
@@ -2645,7 +2649,7 @@ async function processPost(config, text, sourceImage, sourceName) {
       const num = parseFloat(cleaned);
       if (isNaN(num) || num <= 0) return null;
       const dz = Math.round(num * r);
-      return dz.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' دج';
+      return dz.toString() + ' دج';
     })();
     message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)}${dzdDisplay ? ' | ' + escH(dzdDisplay) : ''} ]\n`;
   }
