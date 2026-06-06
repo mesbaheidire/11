@@ -2638,10 +2638,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (productPrice && t.priceLabel) {
     const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
     const dzdDisplay = (() => {
-      if (!t.dollarRate || isNaN(t.dollarRate) || t.dollarRate <= 0) return null;
-      const num = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
+      const r = parseFloat(t.dollarRate);
+      if (!r || isNaN(r) || r <= 0) return null;
+      const cleaned = String(productPrice).replace(/,/g, '.').replace(/[^\d.]/g, '');
+      const num = parseFloat(cleaned);
       if (isNaN(num) || num <= 0) return null;
-      return Math.round(num * t.dollarRate).toLocaleString('ar-DZ') + ' دج';
+      const dz = Math.round(num * r);
+      return dz.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' دج';
     })();
     message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)}${dzdDisplay ? ' | ' + escH(dzdDisplay) : ''} ]\n`;
   }

@@ -452,10 +452,13 @@ Title: ${title}`;
 
 // بناء الرسالة بنفس قالب الإعدادات المستخدم في /api/publish-telegram
 function calcDzd(priceStr, rate) {
-  if (!rate || isNaN(rate) || rate <= 0) return null;
-  const num = parseFloat(String(priceStr).replace(/[^\d.]/g, ''));
+  const r = parseFloat(rate);
+  if (!r || isNaN(r) || r <= 0) return null;
+  const cleaned = String(priceStr).replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const num = parseFloat(cleaned);
   if (isNaN(num) || num <= 0) return null;
-  return Math.round(num * rate).toLocaleString('ar-DZ') + ' دج';
+  const dz = Math.round(num * r);
+  return dz.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' دج';
 }
 
 function buildMessageFromSettings(s, { title, price, link, coupon }) {
