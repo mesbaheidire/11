@@ -2533,14 +2533,15 @@ async function processPost(config, text, sourceImage, sourceName) {
   const t = Object.assign({}, config.messageTemplate || {});
   // Override with latest main settings from DB (so changes in settings page take effect immediately)
   try {
-    const [dbPrefix, dbSalePrice, dbLinkText, dbCouponText, dbFooter, dbBotLink, dbHashtags] = await Promise.all([
+    const [dbPrefix, dbSalePrice, dbLinkText, dbCouponText, dbFooter, dbBotLink, dbHashtags, dbDollarRate] = await Promise.all([
       db.getAppStorage('MSG_prefix'),
       db.getAppStorage('MSG_salePrice'),
       db.getAppStorage('MSG_linkText'),
       db.getAppStorage('MSG_couponText'),
       db.getAppStorage('MSG_footer'),
       db.getAppStorage('MSG_botLink'),
-      db.getAppStorage('MSG_hashtags')
+      db.getAppStorage('MSG_hashtags'),
+      db.getAppStorage('MSG_dollarRate')
     ]);
     if (dbPrefix)    t.prefix    = dbPrefix;
     if (dbSalePrice) t.priceLabel = dbSalePrice;
@@ -2549,6 +2550,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     if (dbFooter)    t.footer    = dbFooter;
     if (dbBotLink)   t.botLink   = dbBotLink;
     if (dbHashtags)  t.hashtags  = dbHashtags;
+    if (dbDollarRate) t.dollarRate = parseFloat(dbDollarRate) || 0;
   } catch (e) {
     console.log('⚠️ تعذّر تحميل إعدادات الرسالة من DB:', e.message);
   }
@@ -2635,7 +2637,13 @@ async function processPost(config, text, sourceImage, sourceName) {
   else if (productTitle) message += `${escH(productTitle)}\n`;
   if (productPrice && t.priceLabel) {
     const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
-    message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)} ]\n`;
+    const dzdDisplay = (() => {
+      if (!t.dollarRate || isNaN(t.dollarRate) || t.dollarRate <= 0) return null;
+      const num = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
+      if (isNaN(num) || num <= 0) return null;
+      return Math.round(num * t.dollarRate).toLocaleString('ar-DZ') + ' دج';
+    })();
+    message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)}${dzdDisplay ? ' | ' + escH(dzdDisplay) : ''} ]\n`;
   }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
     const couponCodes = extractedCoupon.split(' | ').map(c => c.trim()).filter(Boolean);

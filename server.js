@@ -451,6 +451,13 @@ Title: ${title}`;
 }
 
 // بناء الرسالة بنفس قالب الإعدادات المستخدم في /api/publish-telegram
+function calcDzd(priceStr, rate) {
+  if (!rate || isNaN(rate) || rate <= 0) return null;
+  const num = parseFloat(String(priceStr).replace(/[^\d.]/g, ''));
+  if (isNaN(num) || num <= 0) return null;
+  return Math.round(num * rate).toLocaleString('ar-DZ') + ' دج';
+}
+
 function buildMessageFromSettings(s, { title, price, link, coupon }) {
   const tpl = s || {
     prefix: '📢تخفيض لـ',
@@ -462,7 +469,10 @@ function buildMessageFromSettings(s, { title, price, link, coupon }) {
     hashtags: '#Aliexpress'
   };
   let msg = `${tpl.prefix} ${title || ''}\n\n`;
-  if (price) msg += `${tpl.salePrice} [ ${price} ]\n\n`;
+  if (price) {
+    const dzd = calcDzd(price, tpl.dollarRate);
+    msg += `${tpl.salePrice} [ ${price}${dzd ? ' | ' + dzd : ''} ]\n\n`;
+  }
   msg += `${tpl.linkText}\n${link}\n\n`;
   if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
     const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
@@ -1222,7 +1232,8 @@ app.post('/api/publish-telegram', async (req, res) => {
     };
     
     let message = `${s.prefix} ${title}\n\n`;
-    message += `${s.salePrice} [ ${price} ]\n\n${s.linkText}\n${link}\n\n`;
+    const _dzd = calcDzd(price, s.dollarRate);
+    message += `${s.salePrice} [ ${price}${_dzd ? ' | ' + _dzd : ''} ]\n\n${s.linkText}\n${link}\n\n`;
     if (coupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(String(coupon).trim())) {
       const couponCodes = String(coupon).split(' | ').map(c => c.trim()).filter(Boolean);
       const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
@@ -3188,10 +3199,10 @@ app.get('/api/spy/status', async (req, res) => {
 
 app.post('/api/settings/message', async (req, res) => {
   try {
-    const keys = ['prefix', 'salePrice', 'linkText', 'couponText', 'footer', 'botLink', 'hashtags'];
+    const keys = ['prefix', 'salePrice', 'linkText', 'couponText', 'footer', 'botLink', 'hashtags', 'dollarRate'];
     for (const key of keys) {
       if (req.body[key] !== undefined) {
-        await db.setAppStorage('MSG_' + key, req.body[key]);
+        await db.setAppStorage('MSG_' + key, String(req.body[key]));
       }
     }
     res.json({ success: true });

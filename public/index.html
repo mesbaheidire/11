@@ -346,6 +346,12 @@
                     <label>✅ نص السعر بعد التخفيض:</label>
                     <input type="text" id="settingSalePrice" placeholder="✅السعر بعد التخفيض:">
                 </div>
+
+                <div class="form-group">
+                    <label>💱 سعر الدولار بالدينار الجزائري (لحساب السعر بالدج):</label>
+                    <input type="number" id="settingDollarRate" placeholder="مثال: 215" min="1" step="1" style="direction:ltr">
+                    <small style="color:var(--text-muted,#888);font-size:12px;margin-top:4px;display:block">اتركه فارغاً إذا لا تريد عرض السعر بالدج</small>
+                </div>
                 
                 <div class="form-group">
                     <label>📌 نص رابط الشراء:</label>
@@ -518,6 +524,7 @@
             document.getElementById('settingSeasonOfferEnabled').checked = !!settings.seasonOfferEnabled;
             document.getElementById('settingPrefix').value = settings.prefix || '';
             document.getElementById('settingSalePrice').value = settings.salePrice || '';
+            document.getElementById('settingDollarRate').value = settings.dollarRate || '';
             document.getElementById('settingLinkText').value = settings.linkText || '';
             document.getElementById('settingCouponText').value = settings.couponText || '';
             document.getElementById('settingFooter').value = settings.footer || '';
@@ -617,6 +624,7 @@
             settings.seasonOfferEnabled = document.getElementById('settingSeasonOfferEnabled').checked;
             settings.prefix = document.getElementById('settingPrefix').value;
             settings.salePrice = document.getElementById('settingSalePrice').value;
+            settings.dollarRate = parseFloat(document.getElementById('settingDollarRate').value) || 0;
             settings.linkText = document.getElementById('settingLinkText').value;
             settings.couponText = document.getElementById('settingCouponText').value;
             settings.footer = document.getElementById('settingFooter').value;
@@ -640,7 +648,8 @@
                     couponText: settings.couponText,
                     footer: settings.footer,
                     botLink: settings.botLink,
-                    hashtags: settings.hashtags
+                    hashtags: settings.hashtags,
+                    dollarRate: settings.dollarRate || 0
                 })
             }).catch(() => {});
 
