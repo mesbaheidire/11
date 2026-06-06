@@ -614,7 +614,8 @@
                 hashtags: mainSettings.hashtags || '',
                 hookEnabled: document.getElementById('tmplHookEnabled').checked,
                 seasonOffer: mainSettings.seasonOffer || '',
-                seasonOfferEnabled: !!mainSettings.seasonOfferEnabled
+                seasonOfferEnabled: !!mainSettings.seasonOfferEnabled,
+                dollarRate: parseFloat(mainSettings.dollarRate) || 0
             };
             return config;
         }

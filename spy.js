@@ -2551,6 +2551,7 @@ async function processPost(config, text, sourceImage, sourceName) {
     if (dbBotLink)   t.botLink   = dbBotLink;
     if (dbHashtags)  t.hashtags  = dbHashtags;
     if (dbDollarRate) t.dollarRate = parseFloat(dbDollarRate) || 0;
+    console.log(`💱 MSG_dollarRate from DB: ${JSON.stringify(dbDollarRate)} → t.dollarRate: ${t.dollarRate}`);
   } catch (e) {
     console.log('⚠️ تعذّر تحميل إعدادات الرسالة من DB:', e.message);
   }

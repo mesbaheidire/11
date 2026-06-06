@@ -3208,6 +3208,18 @@ app.post('/api/settings/message', async (req, res) => {
         await db.setAppStorage('MSG_' + key, String(req.body[key]));
       }
     }
+    // أيضاً احفظ dollarRate في spy_config.json مباشرة (أكثر موثوقية)
+    if (req.body.dollarRate !== undefined) {
+      try {
+        const spyCfg = await loadSpyConfig();
+        if (!spyCfg.messageTemplate) spyCfg.messageTemplate = {};
+        spyCfg.messageTemplate.dollarRate = parseFloat(req.body.dollarRate) || 0;
+        await saveSpyConfig(spyCfg);
+        console.log(`💱 dollarRate saved to spy_config: ${spyCfg.messageTemplate.dollarRate}`);
+      } catch (e) {
+        console.log('⚠️ فشل حفظ dollarRate في spy_config:', e.message);
+      }
+    }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
