@@ -1890,6 +1890,14 @@ app.post('/api/ai-analyze-post', async (req, res) => {
 - false لكل شيء آخر (سماعات، ساعات، أجهزة لوحية، إكسسوارات...).
 
 ━━━━━━━━━━━━━━━━━━━━━
+🛒 7. عرض باندل (isBundleDeal + bundleQuantity)
+━━━━━━━━━━━━━━━━━━━━━
+- isBundleDeal: true إذا كان المنشور يتضمن "عروض باندل" أو "bundle deals" أو يشترط شراء عدد معين من القطع للحصول على السعر المخفض.
+- كلمات دلالة: "عند شراء X قطع", "اشترِ X قطع", "X pcs", "bundle", "باندل", "عروض الباندل", "افتح صفحة عروض باندل".
+- bundleQuantity: عدد القطع المطلوبة كرقم صحيح (مثل 2 أو 3)، أو null إذا لم يُذكر.
+- إذا لم يكن عرض باندل → isBundleDeal: false, bundleQuantity: null.
+
+━━━━━━━━━━━━━━━━━━━━━
 📝 أمثلة تطبيقية:
 ━━━━━━━━━━━━━━━━━━━━━
 
@@ -1920,7 +1928,17 @@ https://s.click.aliexpress.com/xxx"
 "عرض 🔥 Baseus شاحن 65W
 225 دولار → 89 دولار
 كود الخصم: BAS65W / EXTRA10"
-→ {"productName":"Baseus 65W Charger","price":"$89","coupons":["BAS65W","EXTRA10"],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false}
+→ {"productName":"Baseus 65W Charger","price":"$89","coupons":["BAS65W","EXTRA10"],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false,"isBundleDeal":false,"bundleQuantity":null}
+
+مثال 5:
+"عروض باندل عند شراء 3 قطع
+جهاز قياس ضغط الدم
+السعر: $16.4 ($5.4 للقطعة)
+افتح صفحة عروض باندل وخليها مفتوحة 👇
+https://s.click.aliexpress.com/e/_c4bm56xT
+ثم ادخل لرابط المنتج من هنا وأضف 3 قطع 👇
+https://s.click.aliexpress.com/e/_c3IvJsKt"
+→ {"productName":"Blood Pressure Monitor","price":"$16.4","coupons":[],"sellerCoupon":null,"sellerCouponCode":null,"links":["https://s.click.aliexpress.com/e/_c4bm56xT","https://s.click.aliexpress.com/e/_c3IvJsKt"],"isPhone":false,"isBundleDeal":true,"bundleQuantity":3}
 
 ━━━━━━━━━━━━━━━━━━━━━
 📄 النص المراد تحليله:
@@ -1928,7 +1946,7 @@ https://s.click.aliexpress.com/xxx"
 ${text}
 
 رد بـ JSON فقط بدون أي نص إضافي أو markdown:
-{"productName":null,"price":null,"coupons":[],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false}`;
+{"productName":null,"price":null,"coupons":[],"sellerCoupon":null,"sellerCouponCode":null,"links":[],"isPhone":false,"isBundleDeal":false,"bundleQuantity":null}`;
 
     try {
       const rawResult = await runGeminiWithRotation(prompt);

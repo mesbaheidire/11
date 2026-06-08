@@ -2710,10 +2710,23 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
 
   message += '\n';
-  if (t.linkLabel) message += `${escH(t.linkLabel)}\n`;
-  convertedLinks.forEach(cl => {
-    message += `${escH(cl.affLink)}\n`;
-  });
+  const isBundleDeal = aiResult && aiResult.isBundleDeal === true && convertedLinks.length >= 2;
+  if (isBundleDeal) {
+    const qty = (aiResult.bundleQuantity && Number.isInteger(aiResult.bundleQuantity) && aiResult.bundleQuantity > 1)
+      ? aiResult.bundleQuantity : 3;
+    message += `👇👇 افتح صفحة عروض باندل وخليها مفتوحة\n`;
+    message += `${escH(convertedLinks[0].affLink)}\n\n`;
+    message += `👇👇 ثم ادخل لرابط المنتج من هنا وأضف ${qty} قطع\n`;
+    message += `${escH(convertedLinks[1].affLink)}\n`;
+    if (convertedLinks.length > 2) {
+      convertedLinks.slice(2).forEach(cl => { message += `${escH(cl.affLink)}\n`; });
+    }
+  } else {
+    if (t.linkLabel) message += `${escH(t.linkLabel)}\n`;
+    convertedLinks.forEach(cl => {
+      message += `${escH(cl.affLink)}\n`;
+    });
+  }
   if (t.footer) message += `\n${escH(t.footer)}\n`;
   if (t.botLink) message += `🔗 ${escH(t.botLink)}\n`;
   if (t.hashtags) message += `\n${escH(t.hashtags)}`;
