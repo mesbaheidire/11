@@ -838,6 +838,23 @@
                     })
                 });
                 const result = await res.json();
+                if (result.success) {
+                    try {
+                        const postData = {
+                            id: Date.now().toString(),
+                            title: currentProductData.title,
+                            price: currentProductData.price,
+                            link: link,
+                            coupon: couponInput.value.trim() || null,
+                            image: result.resolvedImage || currentProductData.image || null,
+                            message: document.getElementById('aiPreview')?.value || '',
+                            createdAt: new Date().toISOString()
+                        };
+                        const existing = JSON.parse(localStorage.getItem('affilidz_saved_posts') || '[]');
+                        existing.unshift(postData);
+                        localStorage.setItem('affilidz_saved_posts', JSON.stringify(existing));
+                    } catch(e) {}
+                }
                 showToast(result.success ? 'تم النشر! ✅' : 'فشل النشر');
             } catch (e) { showToast('خطأ'); }
             finally { publishBtn.disabled = false; }

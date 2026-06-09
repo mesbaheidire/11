@@ -289,9 +289,40 @@
             try { localStorage.setItem(LS_KEY, JSON.stringify(posts)); } catch(e) { showToast('تعذر الحفظ في المتصفح (مساحة ممتلئة؟)', 'error'); }
         }
 
-        function loadPosts() {
+        async function loadPosts() {
             document.getElementById('loadingState').style.display = 'none';
-            const posts = lsGetPosts().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const lsPosts = lsGetPosts();
+
+            // اجلب أيضاً من السيرفر (منشورات التجسس + منشورات index.html القديمة)
+            let serverPosts = [];
+            try {
+                const r = await fetch('/api/saved-posts');
+                const d = await r.json();
+                if (Array.isArray(d)) serverPosts = d;
+            } catch(e) {}
+
+            // دمج: localStorage + سيرفر بدون تكرار (ID كمفتاح)
+            const seen = new Set();
+            const merged = [];
+            for (const p of [...lsPosts, ...serverPosts]) {
+                const key = p.id || p.post_id;
+                if (key && seen.has(key)) continue;
+                if (key) seen.add(key);
+                // توحيد الحقول (سيرفر يستخدم post_id، localStorage يستخدم id)
+                merged.push({
+                    id: p.id || p.post_id,
+                    title: p.title,
+                    price: p.price,
+                    link: p.link || p.affiliate_link,
+                    coupon: p.coupon,
+                    image: p.image || p.image_url,
+                    message: p.message,
+                    hook: p.hook,
+                    createdAt: p.createdAt || p.created_at || p.saved_at
+                });
+            }
+
+            const posts = merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
             if (posts.length > 0) {
                 savedPosts = posts;
