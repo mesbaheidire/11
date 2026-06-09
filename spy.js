@@ -2711,7 +2711,7 @@ async function processPost(config, text, sourceImage, sourceName) {
 
   message += '\n';
   // كشف عرض الباندل: من جيميني أو مباشرة من نص الرسالة الأصلية
-  const bundleKeywords = /bundle\s*deals?|عروض\s*باندل|باندل|سعر\s*(ثلاث|ثلاثة|اثنين|اثنان|\d+)\s*قطع|أدخل\s*أولا\s*لهذا\s*الرابط|ادخل\s*اولا|ثانيا\s*أضف|ثانياً\s*أضف/i;
+  const bundleKeywords = /bundle\s*deals?|عروض\s*باندل|باندل|(?:سعر|تخفيض[^،.]{0,30}?|وأضف|أضف)\s*(ثلاث|ثلاثة|اثنين|اثنان|\d+)\s*قطع|افتح\s*(?:هذا\s*)?(?:الرابط|الرابط\s*أولا|أولا)|أدخل\s*أولا|ادخل\s*أولا|ثانيا\s*(?:ادخل|أدخل|أضف)|ثانياً\s*(?:ادخل|أدخل|أضف)|خليه?\s*مفتوح/i;
   const aiBundle = aiResult && (aiResult.isBundleDeal === true || aiResult.isBundleDeal === 'true');
   const textBundle = bundleKeywords.test(text || '');
   const isBundleDeal = (aiBundle || textBundle) && convertedLinks.length >= 2;
@@ -2721,7 +2721,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       ? aiResult.bundleQuantity : null;
     if (!qty) {
       const qtyMap = { 'ثلاث': 3, 'ثلاثة': 3, 'اثنين': 2, 'اثنان': 2 };
-      const qtyMatch = (text || '').match(/سعر\s*(ثلاث|ثلاثة|اثنين|اثنان|(\d+))\s*قطع/i);
+      // ابحث عن X قطع في أي سياق: سعر X قطع، تخفيض X قطع، وأضف X قطع، ثانيا...X قطع
+      const qtyMatch = (text || '').match(/(?:سعر|تخفيض[^،.]{0,30}?|وأضف|أضف|لـ|لـ)\s*(ثلاث|ثلاثة|اثنين|اثنان|(\d+))\s*قطع/i)
+        || (text || '').match(/(ثلاث|ثلاثة|اثنين|اثنان|(\d+))\s*قطع/i);
       if (qtyMatch) qty = qtyMap[qtyMatch[1]] || parseInt(qtyMatch[2]) || 3;
       else qty = 3;
     }
