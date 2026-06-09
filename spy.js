@@ -2728,9 +2728,9 @@ async function processPost(config, text, sourceImage, sourceName) {
       else qty = 3;
     }
     console.log(`🛒 عرض باندل مكتشف (AI: ${aiBundle}, نص: ${textBundle}) — ${qty} قطع`);
-    message += `👇👇 افتح صفحة عروض باندل وخليها مفتوحة\n`;
+    message += `1️⃣ أدخل أولا لهذا الرابط\n`;
     message += `${escH(convertedLinks[0].affLink)}\n\n`;
-    message += `👇👇 ثم ادخل لرابط المنتج من هنا وأضف ${qty} قطع\n`;
+    message += `2️⃣ ثانيا أضف المنتج الى السلة من هنا\n`;
     message += `${escH(convertedLinks[1].affLink)}\n`;
     if (convertedLinks.length > 2) {
       convertedLinks.slice(2).forEach(cl => { message += `${escH(cl.affLink)}\n`; });
