@@ -51,7 +51,7 @@ async function loadSharedCredentials() {
   if (process.env.GEMINI_API_KEY) credentials.geminiApiKey = process.env.GEMINI_API_KEY;
   if (process.env.TELEGRAM_CHANNEL_ID) credentials.telegramChannelId = process.env.TELEGRAM_CHANNEL_ID;
   if (Object.keys(credentials).length > 0) {
-    console.log('✅ تم تحميل بيانات حساسة من متغيرات البيئة (Hugging Face)');
+    console.log('✅ تم تحميل بيانات حساسة من متغيرات البيئة (Render)');
     return credentials;
   }
 
@@ -2909,7 +2909,7 @@ app.post('/api/facebook/verify', async (req, res) => {
     const pageAccessToken = body.pageAccessToken || process.env.FACEBOOK_PAGE_TOKEN || spyCfg.facebookPageToken;
     const pageId = body.pageId || process.env.FACEBOOK_PAGE_ID || spyCfg.facebookPageId;
     if (!pageAccessToken || !pageId) {
-      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Hugging Face)' });
+      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Rendre)' });
     }
     const result = await verifyPageToken(pageAccessToken, pageId);
     res.json({
@@ -2935,7 +2935,7 @@ app.post('/api/facebook/test-post', async (req, res) => {
     const pageId = body.pageId || process.env.FACEBOOK_PAGE_ID || spyCfg.facebookPageId;
     const message = body.message;
     if (!pageAccessToken || !pageId) {
-      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Hugging Face)' });
+      return res.json({ success: false, error: 'لم يتم ضبط FACEBOOK_PAGE_ID و FACEBOOK_PAGE_TOKEN في متغيرات البيئة (Render)' });
     }
     // أولاً: تحقّق سريع قبل المحاولة (نستخرج رسالة خطأ أوضح)
     const verify = await verifyPageToken(pageAccessToken, pageId);
