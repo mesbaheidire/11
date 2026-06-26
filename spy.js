@@ -1,9 +1,8 @@
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
 const { portaffFunction, directAffLink, fetchLinkPreview } = require('./afflink');
-const { getProductDetails, searchProducts } = require('./aliexpress-api');
+const { getProductDetails } = require('./aliexpress-api');
 const http = require('http');
 const db = require('./db');
 const { postToFacebookPage } = require('./facebook');
@@ -66,74 +65,6 @@ const INFLIGHT_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
 let processedLinksCache = null;
 let processedLinksCacheTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-// تتبّع تكرار الصور عبر منتجات/روابط مختلفة (لكشف الصور الافتراضية/الخاطئة)
-const imageUsageTracker = new Map(); // fp -> Set of identifiers
-const blacklistedImageHashes = new Map(); // fp -> { ts, count, source }
-const MAX_TRACKER_ENTRIES = 500;
-const MAX_BLACKLIST_ENTRIES = 300;
-const BLACKLIST_TTL_MS = 72 * 60 * 60 * 1000; // 72 ساعة
-const REPEAT_THRESHOLD = 3; // ثلاث منتجات مختلفة لتجنب false positives (variants/relist)
-
-function getImageFingerprint(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 1000) return null;
-  const chunk = Buffer.concat([
-    buffer.slice(0, Math.min(8192, buffer.length)),
-    buffer.slice(Math.floor(buffer.length / 2), Math.floor(buffer.length / 2) + Math.min(4096, buffer.length)),
-    buffer.slice(Math.max(0, buffer.length - 4096)),
-  ]);
-  return crypto.createHash('sha1').update(chunk).digest('hex').slice(0, 16);
-}
-
-function pruneBlacklist() {
-  const now = Date.now();
-  // إزالة المنتهية صلاحيتها
-  for (const [fp, info] of blacklistedImageHashes) {
-    if (now - info.ts > BLACKLIST_TTL_MS) blacklistedImageHashes.delete(fp);
-  }
-  // حد أقصى للحجم (أقدم أولاً)
-  while (blacklistedImageHashes.size > MAX_BLACKLIST_ENTRIES) {
-    const firstKey = blacklistedImageHashes.keys().next().value;
-    blacklistedImageHashes.delete(firstKey);
-  }
-}
-
-function isImageBlacklisted(buffer) {
-  pruneBlacklist();
-  const fp = getImageFingerprint(buffer);
-  return fp && blacklistedImageHashes.has(fp);
-}
-
-function trackImageUsage(buffer, productId, originalLink, sourceName) {
-  const fp = getImageFingerprint(buffer);
-  // معرّف بديل عند غياب productId: hash من الرابط الأصلي
-  const identifier = productId
-    ? `pid:${productId}`
-    : (originalLink ? `lnk:${crypto.createHash('sha1').update(String(originalLink)).digest('hex').slice(0, 12)}` : null);
-  if (!fp || !identifier) return { duplicated: false };
-
-  let set = imageUsageTracker.get(fp);
-  if (!set) {
-    set = new Set();
-    imageUsageTracker.set(fp, set);
-  }
-  set.add(identifier);
-  // تنظيف الذاكرة (FIFO)
-  if (imageUsageTracker.size > MAX_TRACKER_ENTRIES) {
-    const firstKey = imageUsageTracker.keys().next().value;
-    imageUsageTracker.delete(firstKey);
-  }
-  if (set.size >= REPEAT_THRESHOLD) {
-    if (!blacklistedImageHashes.has(fp)) {
-      blacklistedImageHashes.set(fp, { ts: Date.now(), count: set.size, source: sourceName });
-      console.log(`🚫 صورة افتراضية مكتشفة! نفس الصورة استُخدمت لـ ${set.size} منتجات/روابط مختلفة → blacklist (المصدر: ${sourceName})`);
-      console.log(`   ↳ Identifiers: ${[...set].join(', ')}`);
-      pruneBlacklist();
-    }
-    return { duplicated: true, count: set.size };
-  }
-  return { duplicated: false };
-}
 
 function isMessageProcessed(chatId, msgId) {
   const key = `${chatId}:${msgId}`;
@@ -514,114 +445,6 @@ function downloadImageAsBuffer(url, timeoutMs = 15000, maxRedirects = 3) {
   });
 }
 
-// تطبيق الإطار + إزالة الخلفية + سعر يدوي ديناميكي
-async function applyFrameToImage(productImage, imageUrl, watermark, opts = {}) {
-  let buffer = null;
-  try {
-    if (productImage && typeof productImage === 'object' && Buffer.isBuffer(productImage.source)) {
-      buffer = productImage.source;
-    } else if (typeof productImage === 'string' && /^https?:\/\//i.test(productImage)) {
-      buffer = await downloadImageAsBuffer(productImage);
-    } else if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
-      buffer = await downloadImageAsBuffer(imageUrl);
-    }
-    if (!buffer) return null;
-
-    const customFramePath = path.join(__dirname, 'public', 'custom_frame.jpg');
-    const framePath = path.join(__dirname, 'public', 'frame.jpg');
-    const useFramePath = fs.existsSync(customFramePath) ? customFramePath : framePath;
-    if (!fs.existsSync(useFramePath)) return null;
-
-    const meta = await sharp(useFramePath).metadata();
-    const fW = meta.width, fH = meta.height;
-    // Geometry: المنتج داخل المساحة البيضاء، تحت تبويبة الشعار وفوق شريط الشراء
-    // إطار 1024px: حدود 36 جانبي + 28 علوي + شريط سفلي 150، تبويبة شعار حتى y=130
-    const innerLeft = Math.round(fW * (106 / 1024));   // 36 + 70 padding
-    const innerTop = Math.round(fH * (158 / 1024));    // 28 + 130 (تحت اللوقو)
-    const innerW = Math.round(fW * (812 / 1024));      // 1024 - 2*106
-    const innerH = Math.round(fH * (676 / 1024));      // (1024-150) - 158 - 20
-
-    // إزالة خلفية المنتج إذا مفعّلة
-    let productBuf = buffer;
-    let hasTransparency = false;
-    if (opts.removeBg) {
-      try {
-        const { removeBackground } = require('./imageProcessor');
-        const transparent = await removeBackground(buffer);
-        if (transparent) {
-          productBuf = transparent;
-          hasTransparency = true;
-          console.log('🎨 تمت إزالة خلفية المنتج');
-        }
-      } catch (e) {
-        console.log('⚠️ إزالة الخلفية فشلت — سنستعمل الصورة الأصلية:', e.message);
-      }
-    }
-
-    // تركيب المنتج: شفّاف بدون خلفية، أو ضمن مسرح أبيض
-    const resizedProduct = hasTransparency
-      ? await sharp(productBuf).resize(innerW, innerH, { fit: 'inside', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()
-      : await sharp(productBuf).resize(innerW, innerH, { fit: 'inside', background: { r: 255, g: 255, b: 255, alpha: 1 } }).toBuffer();
-
-    // توسيط داخل المسرح
-    const pMeta = await sharp(resizedProduct).metadata();
-    const offX = innerLeft + Math.round((innerW - (pMeta.width || innerW)) / 2);
-    const offY = innerTop + Math.round((innerH - (pMeta.height || innerH)) / 2);
-
-    const composites = [{ input: resizedProduct, left: offX, top: offY, blend: 'over' }];
-
-    const logoPath = path.join(__dirname, 'public', 'watermark_logo.png');
-    if (fs.existsSync(logoPath) && watermark) {
-      try {
-        const logoSize = watermark.size === 'small' ? 80 : watermark.size === 'large' ? 160 : 120;
-        const padding = 20;
-        const resizedLogo = await sharp(logoPath).resize(logoSize, logoSize, { fit: 'inside' }).png().toBuffer();
-        const logoMeta = await sharp(resizedLogo).metadata();
-        const lW = logoMeta.width, lH = logoMeta.height;
-        let left, top;
-        switch (watermark.position) {
-          case 'top-left': left = padding; top = padding; break;
-          case 'top-right': left = fW - lW - padding; top = padding; break;
-          case 'bottom-left': left = padding; top = fH - lH - padding; break;
-          case 'center': left = Math.round((fW - lW) / 2); top = Math.round((fH - lH) / 2); break;
-          case 'bottom-right':
-          default: left = fW - lW - padding; top = fH - lH - padding;
-        }
-        composites.push({ input: resizedLogo, left, top, blend: 'over' });
-      } catch (logoErr) {
-        console.log('⚠️ تطبيق اللوقو فشل:', logoErr.message);
-      }
-    }
-
-    let result = await sharp(useFramePath).composite(composites).jpeg({ quality: 92 }).toBuffer();
-
-    // طبقة السعر اليدوي الديناميكي
-    try {
-      const { extractPrice, overlayPrice } = require('./imageProcessor');
-      let price = opts.price || null;
-      if (!price && opts.postText) price = extractPrice(opts.postText);
-      if (price) {
-        // السعر بخط يدوي مركّز داخل الزر البنفسجي (380x110 في 50,SIZE-130)
-        const priceFontSize = Math.round(fH * (76 / 1024));
-        const priceX = Math.round(fW * (110 / 1024));
-        const priceY = fH - Math.round(fH * (145 / 1024));
-        result = await overlayPrice(result, String(price).replace(',', '.'), {
-          x: priceX, y: priceY, fontSize: priceFontSize,
-          color: '#FFFFFF', accent: '#FFC424',
-        });
-        console.log(`💰 السعر اليدوي: ${price}$`);
-      }
-    } catch (priceErr) {
-      console.log('⚠️ تركيب السعر فشل:', priceErr.message);
-    }
-
-    return result;
-  } catch (e) {
-    console.log('⚠️ applyFrameToImage فشل:', e.message);
-    return null;
-  }
-}
-
 // تنظيف رابط صور AliExpress من لاحقات .avif/.webp غير المدعومة في تيليغرام
 function sanitizeAliImageUrlSpy(url) {
   if (!url || typeof url !== 'string' || url.startsWith('data:')) return url;
@@ -982,102 +805,6 @@ function fetchImageFromMobilePageJson(productId, timeoutMs = 15000) {
   });
 }
 
-// ===== آلية جديدة A: Open Graph من رابط الأفليت (يتبع التحويلات) =====
-async function fetchImageViaAffOgImage(affLink, timeoutMs = 15000) {
-  if (!affLink || !/^https?:\/\//i.test(affLink)) return null;
-  try {
-    const img = await fetchOgImage(affLink, timeoutMs, 6);
-    if (img && /^https?:\/\//i.test(img) && /alicdn|aliexpress-media/i.test(img) && !isLikelyVideoUrl(img)) {
-      console.log(`✅ Aff OG وجد صورة: ${img.substring(0, 80)}...`);
-      return { image: img };
-    }
-  } catch (e) {}
-  return null;
-}
-
-// ===== آلية جديدة B: بحث AliExpress بالعنوان (Affiliate Product Query API) =====
-async function fetchImageViaTitleSearch(title, timeoutMs = 20000) {
-  if (!title || title.length < 3) return null;
-  try {
-    const clean = title.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
-    if (!clean) return null;
-    const result = await Promise.race([
-      searchProducts({ keywords: clean.substring(0, 100), limit: 5 }),
-      new Promise(r => setTimeout(() => r({ success: false }), timeoutMs)),
-    ]);
-    if (result && result.success && Array.isArray(result.products) && result.products.length > 0) {
-      const withImage = result.products.find(p => p.image_url && /alicdn|aliexpress-media/i.test(p.image_url) && !isLikelyVideoUrl(p.image_url));
-      if (withImage) {
-        console.log(`✅ بحث بالعنوان وجد صورة: ${withImage.image_url.substring(0, 80)}... (منتج: ${withImage.title?.substring(0, 50)})`);
-        return { image: withImage.image_url, title: withImage.title, productId: withImage.id };
-      }
-    }
-  } catch (e) { console.log(`⚠️ بحث بالعنوان: ${e.message}`); }
-  return null;
-}
-
-// ===== آلية جديدة C: JSON-LD من صفحة المنتج (Mobile/Structured Data API) =====
-function fetchImageViaJsonLd(productId, timeoutMs = 12000) {
-  return new Promise((resolve) => {
-    if (!productId) return resolve(null);
-    const urls = [
-      `https://www.aliexpress.com/item/${productId}.html`,
-      `https://m.aliexpress.com/item/${productId}.html`,
-      `https://ar.aliexpress.com/item/${productId}.html`,
-    ];
-    let idx = 0;
-    const tryNext = () => {
-      if (idx >= urls.length) return resolve(null);
-      const url = urls[idx++];
-      if (!isSafeUrl(url)) return tryNext();
-      const req = https.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Mobile) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
-          'Accept': 'text/html,application/json',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-        timeout: timeoutMs,
-      }, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume(); return tryNext();
-        }
-        if (res.statusCode !== 200) { res.resume(); return tryNext(); }
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', c => { body += c; if (body.length > 600000) res.destroy(); });
-        res.on('end', () => {
-          // ابحث عن كل سكربتات JSON-LD
-          const ldMatches = body.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-          if (ldMatches) {
-            for (const block of ldMatches) {
-              const jsonText = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim();
-              try {
-                const data = JSON.parse(jsonText);
-                const candidates = Array.isArray(data) ? data : [data];
-                for (const item of candidates) {
-                  let img = null;
-                  if (typeof item.image === 'string') img = item.image;
-                  else if (Array.isArray(item.image) && item.image.length > 0) img = item.image[0];
-                  else if (item.image && item.image.url) img = item.image.url;
-                  if (img && /^https?:\/\//.test(img) && /alicdn|aliexpress-media/i.test(img) && !isLikelyVideoUrl(img)) {
-                    console.log(`✅ JSON-LD وجد صورة: ${img.substring(0, 80)}...`);
-                    return resolve({ image: img, title: item.name || null });
-                  }
-                }
-              } catch {}
-            }
-          }
-          tryNext();
-        });
-        res.on('error', () => tryNext());
-      });
-      req.on('error', () => tryNext());
-      req.setTimeout(timeoutMs, () => { req.destroy(); tryNext(); });
-    };
-    tryNext();
-  });
-}
-
 // ===== آلية جديدة #2: بحث صور Bing كملاذ أخير =====
 function fetchImageViaBingSearch(query, timeoutMs = 12000) {
   return new Promise((resolve) => {
@@ -1279,7 +1006,7 @@ function invalidateConfigCache() {
 }
 
 async function getBotToken() {
-  // Environment variables (Render) take priority
+  // Environment variables (Hugging Face) take priority
   if (process.env.TELEGRAM_BOT_TOKEN) return process.env.TELEGRAM_BOT_TOKEN;
   const shared = loadSharedCredentials();
   if (shared.botToken) return shared.botToken;
@@ -1288,7 +1015,7 @@ async function getBotToken() {
 }
 
 async function getCookie() {
-  // Environment variables (Render) take priority
+  // Environment variables (Hugging Face) take priority
   if (process.env.cook) return process.env.cook;
   const shared = loadSharedCredentials();
   if (shared.cook) return shared.cook;
@@ -1570,8 +1297,7 @@ function stopReviewBot() {
 }
 
 async function executePublish(review) {
-  const { message, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
-  let productImage = review.productImage;
+  const { message, productImage, targetIds, sourceName, originalLink, affiliateLink, productTitle, productPrice, imageUrlForLog } = review;
   const botToken = await getBotToken();
   if (!botToken) {
     console.log('❌ فشل النشر: لا يوجد توكن بوت');
@@ -1616,28 +1342,6 @@ async function executePublish(review) {
   let publishedCount = 0;
   const textMessage = message.length > 4096 ? message.substring(0, 4090) + '...' : message;
   const captionMessage = message.length > 1000 ? message.substring(0, 997) + '...' : message;
-
-  // تطبيق الإطار + اللوقو إذا كان مفعّلاً
-  if (config.applyFrame) {
-    try {
-      const framedBuf = await applyFrameToImage(productImage, logImage, {
-        position: config.watermarkPosition || 'bottom-right',
-        size: config.watermarkSize || 'medium'
-      }, {
-        removeBg: !!config.removeBackground,
-        postText: message,
-        price: productPrice || null
-      });
-      if (framedBuf) {
-        productImage = { source: framedBuf };
-        console.log('🖼️ تم تطبيق الإطار على صورة المنشور');
-      } else {
-        console.log('⚠️ تعذّر تطبيق الإطار — سيُنشر بالصورة الأصلية');
-      }
-    } catch (frameErr) {
-      console.log('⚠️ خطأ في تطبيق الإطار:', frameErr.message);
-    }
-  }
 
   for (const target of targetIds) {
     try {
@@ -1702,7 +1406,7 @@ async function executePublish(review) {
       });
       const options = {
         hostname: '127.0.0.1',
-        port: parseInt(process.env.PORT) || 5000,
+        port: parseInt(process.env.PORT) || 7860,
         path: '/api/saved-posts',
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1787,7 +1491,7 @@ async function extractPriceWithAI(text) {
     const postData = JSON.stringify({ text });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-extract-price',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1814,7 +1518,7 @@ async function extractCouponWithAI(text) {
     const postData = JSON.stringify({ text });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-extract-coupon',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1856,7 +1560,7 @@ function callAiRefine(title, isHook) {
     const postData = JSON.stringify({ title, isHook });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-refine-title',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1891,15 +1595,11 @@ function callAiRefine(title, isHook) {
 }
 
 function shortenTitleFallback(title) {
-  if (!title || title.length <= 80) return title;
-  // لا نقطع أسماء الهواتف أبداً
-  const looksLikePhone = /\b(poco|xiaomi|redmi|samsung|galaxy|iphone|apple|oppo|realme|oneplus|motorola|nokia|huawei|honor|vivo|tecno|infinix)\b/i.test(title)
-    || /\d+\s*\/\s*\d+\s*GB/i.test(title);
-  if (looksLikePhone) return title;
+  if (!title || title.length <= 60) return title;
   const junk = /\b(for|with|and|the|a|an|in|on|at|to|of|by|from|Global Version|Free Shipping|Original|New Arrival|Hot Sale|2024|2025|2026|High Quality)\b/gi;
   let short = title.replace(junk, ' ').replace(/\s{2,}/g, ' ').trim();
   const words = short.split(/\s+/);
-  if (words.length > 10) short = words.slice(0, 10).join(' ');
+  if (words.length > 8) short = words.slice(0, 8).join(' ');
   return short;
 }
 
@@ -1908,7 +1608,7 @@ async function extractPhoneNameWithAI(text) {
     const postData = JSON.stringify({ text });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-extract-phone-name',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1935,7 +1635,7 @@ async function extractProductInfoWithAI(text, apiTitle) {
     const postData = JSON.stringify({ text, apiTitle });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-extract-product-info',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1966,7 +1666,7 @@ async function extractSellerCouponWithAI(text) {
     const postData = JSON.stringify({ text });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 7860,
       path: '/api/ai-extract-seller-coupon',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -1997,7 +1697,7 @@ async function analyzePostFull(text) {
     const postData = JSON.stringify({ text });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-analyze-post',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -2020,21 +1720,13 @@ async function analyzePostFull(text) {
 }
 
 // التحقق البصري من الصورة عبر Gemini — يتصل بـ /api/ai-validate-image
-// strict=true → عند فشل/timeout/no_ai نرفض الصورة (للمصادر غير الموثوقة)
-// strict=false → نقبل افتراضياً عند الفشل (للمصدر الاحتياطي فقط)
-async function validateImageMatchesPost(buffer, postText, productTitle, strict = true) {
+async function validateImageMatchesPost(buffer, postText, productTitle) {
   return new Promise((resolve) => {
-    let settled = false;
-    const safeResolve = (val) => { if (!settled) { settled = true; resolve(val); } };
-
-    if (!Buffer.isBuffer(buffer) || buffer.length < 1000) {
-      console.log(`⚠️ [validate-image] صورة صغيرة جداً (${buffer?.length || 0}b) — ${strict ? 'رفض' : 'قبول'}`);
-      return safeResolve(!strict);
-    }
-    // الصور الكبيرة جداً: في الوضع الصارم نرفض (لا bypass)
+    if (!Buffer.isBuffer(buffer) || buffer.length < 1000) return resolve(true);
+    // حد أقصى 5MB raw — base64 سيزيد ~33% فيظل تحت حد express.json (10mb)
     if (buffer.length > 5 * 1024 * 1024) {
-      console.log(`⚠️ [validate-image] صورة كبيرة جداً (${Math.round(buffer.length/1024)}KB) — ${strict ? 'رفض (وضع صارم)' : 'قبول'}`);
-      return safeResolve(!strict);
+      console.log(`⏭ [validate-image] تخطّي صورة كبيرة (${Math.round(buffer.length/1024)}KB) — قبول افتراضي`);
+      return resolve(true);
     }
     const imageBase64 = buffer.toString('base64');
     const ext = detectImageExt(buffer);
@@ -2042,7 +1734,7 @@ async function validateImageMatchesPost(buffer, postText, productTitle, strict =
     const postData = JSON.stringify({ imageBase64, mimeType, postText: (postText || '').substring(0, 800), productTitle: productTitle || '' });
     const options = {
       hostname: '127.0.0.1',
-      port: parseInt(process.env.PORT) || 5000,
+      port: parseInt(process.env.PORT) || 8000,
       path: '/api/ai-validate-image',
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
@@ -2053,33 +1745,13 @@ async function validateImageMatchesPost(buffer, postText, productTitle, strict =
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          // إذا الـ AI فحص فعلاً وأجاب بـ yes → تطابق
-          if (parsed && parsed.matches === true && !parsed.reason) {
-            return safeResolve(true);
-          }
-          // إذا الـ AI أجاب بـ no صريحاً → رفض
-          if (parsed && parsed.matches === false) {
-            return safeResolve(false);
-          }
-          // غير ذلك: الـ AI لم يفحص (no_ai, no_text, ai_error, no_image, exception)
-          const reason = (parsed && parsed.reason) || 'unknown';
-          console.log(`⚠️ [validate-image] الفحص لم يُجرَ — السبب: ${reason} → ${strict ? '❌ رفض (وضع صارم)' : '✅ قبول (وضع متساهل)'}`);
-          safeResolve(!strict);
-        } catch {
-          console.log(`⚠️ [validate-image] فشل JSON parse → ${strict ? 'رفض' : 'قبول'}`);
-          safeResolve(!strict);
-        }
+          // إذا فشل AI أو لا يوجد مفتاح، نقبل الصورة (لا نحظر بدون سبب)
+          resolve(parsed && parsed.matches !== false);
+        } catch { resolve(true); }
       });
     });
-    req.on('error', () => {
-      console.log(`⚠️ [validate-image] خطأ شبكة → ${strict ? 'رفض' : 'قبول'}`);
-      safeResolve(!strict);
-    });
-    req.setTimeout(15000, () => {
-      req.destroy();
-      console.log(`⏱ [validate-image] timeout بعد 15s → ${strict ? 'رفض' : 'قبول'}`);
-      safeResolve(!strict);
-    });
+    req.on('error', () => resolve(true));
+    req.setTimeout(12000, () => { req.destroy(); resolve(true); });
     req.write(postData);
     req.end();
   });
@@ -2262,98 +1934,42 @@ async function processPost(config, text, sourceImage, sourceName) {
   // عنوان المنتج للتحقق البصري (إن وُجد من AI أو سيُحدَّث لاحقاً)
   const titleHintForValidation = (aiResult && aiResult.productName) ? aiResult.productName : '';
 
-  // تتبّع المصدر النهائي للصورة (لكشف المصدر المسؤول عن صور خاطئة)
-  let finalImageSource = null;
-
-  // محاولة وضع صورة كمرشح + فحص blacklist + تحقق Gemini. ترجع true إن قُبلت.
+  // محاولة وضع صورة كمرشح + التحقق البصري عبر Gemini. ترجع true إن قُبلت.
   const tryAcceptImage = async (stepName, candidateBuffer, candidateUrl) => {
     if (!candidateBuffer || !Buffer.isBuffer(candidateBuffer)) return false;
-
-    // 🚫 1) فحص القائمة السوداء (الصور المتكررة عبر منتجات مختلفة)
-    if (isImageBlacklisted(candidateBuffer)) {
-      console.log(`🚫 [${stepName}] الصورة في القائمة السوداء (افتراضية مكتشفة سابقاً) — رفض`);
-      return false;
-    }
-
-    // 🤖 2) تحقق Gemini البصري
     const matches = await validateImageMatchesPost(candidateBuffer, text, titleHintForValidation);
     if (!matches) {
-      console.log(`❌ [${stepName}] Gemini رفض الصورة (لا تتطابق مع المنتج)`);
+      console.log(`❌ [${stepName}] Gemini رفض الصورة (لا تتطابق مع المنتج) — انتقال للخطوة التالية`);
       return false;
     }
-
-    // 📊 3) تتبّع التكرار (لكشف الصور الافتراضية مستقبلاً)
-    const firstOriginalLink = convertedLinks && convertedLinks[0] ? convertedLinks[0].originalLink : null;
-    const tracking = trackImageUsage(candidateBuffer, firstProductId, firstOriginalLink, stepName);
-    if (tracking.duplicated) {
-      console.log(`⚠️ [${stepName}] صورة استُخدمت من قبل لمنتج مختلف — رفض احتياطي`);
-      return false;
-    }
-
     productImage = { source: candidateBuffer };
     productImageUrl = candidateUrl || productImageUrl;
-    finalImageSource = stepName;
-    console.log(`✅ [${stepName}] صورة مقبولة (مرّت كل الفحوصات)`);
+    console.log(`✅ [${stepName}] صورة مقبولة (مرّت تحقق Gemini)`);
     return true;
   };
 
-  // ⭐ Simple Preview — الآن مع تحقق Gemini + blacklist (كان بدون تحقق سابقاً)
+  // ⭐ -1) الكود البسيط المُجرَّب في بوتات أخرى — linkpreview.xyz + vi.aliexpress.com
+  // بدون تحقق Gemini (مثل بوتاتك الأخرى التي تعمل بسلاسة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [⭐] محاولة Simple Preview...`);
+    console.log(`🖼 [⭐] محاولة Simple Preview (الكود المُجرَّب)...`);
     try {
       const sp = await fetchImageViaSimplePreview(firstProductId);
       if (sp && sp.image && !isLikelyVideoUrl(sp.image)) {
         const spBuf = await downloadImageAsBuffer(sp.image);
-        if (spBuf && await tryAcceptImage('Simple Preview', spBuf, sp.image)) {
+        if (spBuf && Buffer.isBuffer(spBuf)) {
+          productImage = { source: spBuf };
+          productImageUrl = sp.image;
           if (!firstApiTitle && sp.title) firstApiTitle = sp.title;
+          console.log(`✅ [Simple Preview] صورة مقبولة بدون تحقق (مصدر موثوق)`);
         }
       }
     } catch (e) { console.log(`⚠️ Simple Preview فشل: ${e.message}`); }
   }
 
-  // 🆕 [0bis/5] Mobile JSON Page — يقرأ imagePathList من صفحة المنتج
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [0bis/5] محاولة Mobile JSON Page (imagePathList)...`);
-    try {
-      const mjResult = await fetchImageFromMobilePageJson(firstProductId);
-      if (mjResult && mjResult.image && isAliCdnImage(mjResult.image) && !isLikelyVideoUrl(mjResult.image)) {
-        const mjBuffer = await downloadImageAsBuffer(mjResult.image);
-        if (mjBuffer && await tryAcceptImage('Mobile JSON', mjBuffer, mjResult.image)) {
-          if (!firstApiTitle && mjResult.title) firstApiTitle = mjResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ Mobile JSON فشل: ${e.message}`); }
-  }
-
-  // 🆕 [A] JSON-LD من صفحة المنتج (Structured Data — موثوق جداً)
-  if (!productImage && firstProductId) {
-    console.log(`🖼 [A] محاولة JSON-LD Structured Data...`);
-    try {
-      const jlResult = await fetchImageViaJsonLd(firstProductId);
-      if (jlResult && jlResult.image && isAliCdnImage(jlResult.image) && !isLikelyVideoUrl(jlResult.image)) {
-        const jlBuffer = await downloadImageAsBuffer(jlResult.image);
-        if (jlBuffer && await tryAcceptImage('JSON-LD', jlBuffer, jlResult.image)) {
-          if (!firstApiTitle && jlResult.title) firstApiTitle = jlResult.title;
-        }
-      }
-    } catch (e) { console.log(`⚠️ JSON-LD فشل: ${e.message}`); }
-  }
-
-  // 🆕 [B] Open Graph من رابط الأفليت مباشرة (يتبع التحويلات حتى الصفحة النهائية)
-  if (!productImage && previewLink) {
-    console.log(`🖼 [B] محاولة OG Image من رابط الأفليت...`);
-    try {
-      const ogResult = await fetchImageViaAffOgImage(previewLink);
-      if (ogResult && ogResult.image && isAliCdnImage(ogResult.image) && !isLikelyVideoUrl(ogResult.image)) {
-        const ogBuffer = await downloadImageAsBuffer(ogResult.image);
-        if (ogBuffer) await tryAcceptImage('Aff OG', ogBuffer, ogResult.image);
-      }
-    } catch (e) { console.log(`⚠️ Aff OG فشل: ${e.message}`); }
-  }
-
-  // 0) صورة من fetchLinkPreview
+  // 0) صورة من fetchLinkPreview (نفس ما تستعمله الصفحة الرئيسية — أغنى بايبلاين)
+  // مصدر موثوق: نسمح بأي CDN (Gemini سيتحقق بصرياً)
   if (!productImage && firstProductImage) {
-    console.log(`🖼 [0/5] محاولة صورة fetchLinkPreview...`);
+    console.log(`🖼 [0/4] محاولة صورة fetchLinkPreview (مثل الصفحة الرئيسية)...`);
     try {
       if (!isLikelyVideoUrl(firstProductImage)) {
         const lpBuf = await downloadImageAsBuffer(firstProductImage);
@@ -2362,9 +1978,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل تحميل صورة fetchLinkPreview: ${e.message}`); }
   }
 
-  // 1) AliExpress API
+  // 1) AliExpress API (مباشرة)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [1/5] محاولة AliExpress API...`);
+    console.log(`🖼 [1/4] محاولة AliExpress API...`);
     try {
       const apiResult = await getProductDetails(firstProductId);
       if (apiResult && apiResult.image_url && !isLikelyVideoUrl(apiResult.image_url) && isAliCdnImage(apiResult.image_url)) {
@@ -2381,9 +1997,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل AliExpress API: ${e.message}`); }
   }
 
-  // 2) Cheerio scraper
+  // 2) كشط صفحة AliExpress بـ Cheerio (og:image — يُقبل فقط من alicdn.com)
   if (!productImage && firstProductId) {
-    console.log(`🖼 [2/5] محاولة Cheerio scraper...`);
+    console.log(`🖼 [2/4] محاولة Cheerio scraper (صفحة AliExpress)...`);
     try {
       const chResult = await fetchImageFromAliExpressPageCheerio(firstProductId);
       if (chResult && chResult.image && isAliCdnImage(chResult.image) && !isLikelyVideoUrl(chResult.image)) {
@@ -2395,9 +2011,9 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Cheerio scraper: ${e.message}`); }
   }
 
-  // 3) Microlink.io
+  // 3) Microlink.io (مصدر موثوق — نسمح بأي CDN، Gemini سيتحقق بصرياً)
   if (!productImage && previewLink) {
-    console.log(`🖼 [3/5] محاولة Microlink.io...`);
+    console.log(`🖼 [3/4] محاولة Microlink.io...`);
     try {
       const mlResult = await fetchImageViaMicrolink(previewLink);
       if (mlResult && mlResult.image && !isLikelyVideoUrl(mlResult.image)) {
@@ -2409,54 +2025,10 @@ async function processPost(config, text, sourceImage, sourceName) {
     } catch (e) { console.log(`⚠️ فشل Microlink.io: ${e.message}`); }
   }
 
-  // 🆕 [C] بحث AliExpress بالعنوان (مفيد عند فشل كل طرق Product ID)
-  if (!productImage) {
-    const searchTitle = (aiResult && aiResult.productName) || firstApiTitle || '';
-    if (searchTitle && searchTitle.length >= 3) {
-      console.log(`🖼 [C] محاولة بحث AliExpress بالعنوان: "${searchTitle.substring(0, 60)}"...`);
-      try {
-        const tsResult = await fetchImageViaTitleSearch(searchTitle);
-        if (tsResult && tsResult.image && isAliCdnImage(tsResult.image) && !isLikelyVideoUrl(tsResult.image)) {
-          const tsBuffer = await downloadImageAsBuffer(tsResult.image);
-          if (tsBuffer && await tryAcceptImage('Title Search', tsBuffer, tsResult.image)) {
-            if (!firstApiTitle && tsResult.title) firstApiTitle = tsResult.title;
-          }
-        }
-      } catch (e) { console.log(`⚠️ Title Search فشل: ${e.message}`); }
-    }
-  }
-
-  // 5) صورة المنشور الأصلي من تيليجرام — الآن بفحص كامل (كانت تتجاوز كل شيء سابقاً!)
-  if (!productImage && sourceImage && Buffer.isBuffer(sourceImage)) {
-    console.log(`🖼 [5/5] محاولة صورة المنشور الأصلي من تيليغرام...`);
-    // فحص blacklist
-    if (isImageBlacklisted(sourceImage)) {
-      console.log(`🚫 صورة المنشور الأصلي في القائمة السوداء — رفض`);
-    } else {
-      // فحص Gemini البصري بوضع متساهل (لا نرفض عند فشل AI)
-      const matches = await validateImageMatchesPost(sourceImage, text, titleHintForValidation, false);
-      if (!matches) {
-        console.log(`❌ [Telegram Source] Gemini رفض صورة المصدر صراحةً — لن تُنشر صورة`);
-      } else {
-        // تتبّع التكرار (إذا كانت قناة التجسس تستخدم نفس الصورة لمنتجات مختلفة)
-        const firstOriginalLink = convertedLinks && convertedLinks[0] ? convertedLinks[0].originalLink : null;
-        const tracking = trackImageUsage(sourceImage, firstProductId, firstOriginalLink, 'Telegram Source');
-        if (tracking.duplicated) {
-          console.log(`⚠️ [Telegram Source] صورة استُخدمت لمنتجات أخرى — رفض احتياطي`);
-        } else {
-          productImage = { source: sourceImage };
-          finalImageSource = 'Telegram Source';
-          console.log(`✅ [Telegram Source] صورة مقبولة (آخر احتياط)`);
-        }
-      }
-    }
-  }
-
-  // 📊 سجل نهائي يكشف مصدر الصورة المختار
-  if (productImage && finalImageSource) {
-    console.log(`📌 المصدر النهائي للصورة: [${finalImageSource}] لمنتج ${firstProductId || 'بدون ID'}`);
-  } else if (!productImage) {
-    console.log(`❌ لم يتم العثور على أي صورة صالحة لهذا المنشور — سيُنشر بدون صورة`);
+  // 5) صورة المنشور الأصلي من تيليغرام (آخر احتياط — بلا تحقق Gemini لأنها الصورة الفعلية المنشورة)
+  if (!productImage && sourceImage) {
+    console.log(`🖼 [4/4] استخدام صورة المنشور الأصلي من تيليغرام (بلا تحقق)`);
+    productImage = { source: sourceImage };
   }
 
   // تحميل كـ Buffer إن وُجدت صورة كرابط نصي
@@ -2519,42 +2091,13 @@ async function processPost(config, text, sourceImage, sourceName) {
     }
   }
 
-  // لا نقطع أسماء الهواتف التي تحتوي على مواصفات RAM/Storage (مثل POCO F6 12/512GB)
-  const isPhoneName = /\b(poco|xiaomi|samsung|iphone|oppo|realme|oneplus|motorola|nokia|huawei|vivo|honor|redmi|galaxy|pixel)\b/i.test(productTitle || '')
-    || /\d+\/\d+\s*GB/i.test(productTitle || '');
-  if (productTitle && productTitle.length > 80 && !isPhoneName) {
+  if (productTitle && productTitle.length > 60) {
     console.log(`✂️ العنوان طويل (${productTitle.length} حرف) — تقصير يدوي`);
     productTitle = shortenTitleFallback(productTitle);
     console.log(`✂️ بعد التقصير: ${productTitle}`);
-  } else if (productTitle && productTitle.length > 80 && isPhoneName) {
-    console.log(`📱 عنوان هاتف طويل (${productTitle.length} حرف) — يُحتفظ به كما هو`);
   }
 
-  const t = Object.assign({}, config.messageTemplate || {});
-  // Override with latest main settings from DB (so changes in settings page take effect immediately)
-  try {
-    const [dbPrefix, dbSalePrice, dbLinkText, dbCouponText, dbFooter, dbBotLink, dbHashtags, dbDollarRate] = await Promise.all([
-      db.getAppStorage('MSG_prefix'),
-      db.getAppStorage('MSG_salePrice'),
-      db.getAppStorage('MSG_linkText'),
-      db.getAppStorage('MSG_couponText'),
-      db.getAppStorage('MSG_footer'),
-      db.getAppStorage('MSG_botLink'),
-      db.getAppStorage('MSG_hashtags'),
-      db.getAppStorage('MSG_dollarRate')
-    ]);
-    if (dbPrefix)    t.prefix    = dbPrefix;
-    if (dbSalePrice) t.priceLabel = dbSalePrice;
-    if (dbLinkText)  t.linkLabel  = dbLinkText;
-    if (dbCouponText) t.couponLabel = dbCouponText;
-    if (dbFooter)    t.footer    = dbFooter;
-    if (dbBotLink)   t.botLink   = dbBotLink;
-    if (dbHashtags)  t.hashtags  = dbHashtags;
-    if (dbDollarRate) t.dollarRate = parseFloat(dbDollarRate) || 0;
-    console.log(`💱 MSG_dollarRate from DB: ${JSON.stringify(dbDollarRate)} → t.dollarRate: ${t.dollarRate}`);
-  } catch (e) {
-    console.log('⚠️ تعذّر تحميل إعدادات الرسالة من DB:', e.message);
-  }
+  const t = config.messageTemplate || {};
   const productPrice = firstProductPrice;
 
   let extractedCoupon = null;
@@ -2637,29 +2180,12 @@ async function processPost(config, text, sourceImage, sourceName) {
   if (t.prefix) message += `${escH(t.prefix)} ${escH(productTitle)}\n`;
   else if (productTitle) message += `${escH(productTitle)}\n`;
   if (productPrice && t.priceLabel) {
-    const priceDisplay = (() => {
-      const num = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
-      if (isNaN(num)) return String(productPrice);
-      return '$' + (num % 1 === 0 ? num.toFixed(0) : parseFloat(num.toFixed(2)));
-    })();
-    const dzdDisplay = (() => {
-      const r = parseFloat(t.dollarRate);
-      if (!r || isNaN(r) || r <= 0) return null;
-      const cleaned = String(productPrice).replace(/,/g, '.').replace(/[^\d.]/g, '');
-      const num = parseFloat(cleaned);
-      if (isNaN(num) || num <= 0) return null;
-      const dz = Math.round(num * r);
-      return dz.toString() + ' دج';
-    })();
-    message += `${escH(t.priceLabel)} [ ${escH(priceDisplay)}${dzdDisplay ? ' | ' + escH(dzdDisplay) : ''} ]\n`;
+    const priceDisplay = /^\$|.*\$/.test(productPrice) ? productPrice : `$${productPrice}`;
+    message += `${escH(t.priceLabel)} ${escH(priceDisplay)}\n`;
   }
   if (extractedCoupon && !/^(null|undefined|none|coupon:?\s*null)$/i.test(extractedCoupon.trim())) {
-    const couponCodes = extractedCoupon.split(' | ').map(c => c.trim()).filter(Boolean);
-    const couponValues = couponCodes.map(c => { const m = c.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
-    const maxVal = Math.max(...couponValues);
     let label = (t.couponLabel || 'كوبون').replace(/:+\s*$/, '').trim();
-    if (maxVal > 0) message += `${escH(label)}: [ $${maxVal} ]\n`;
-    message += `✂️ ${couponCodes.map(c => `<code>${escH(c)}</code>`).join(' | ')}\n`;
+    message += `${escH(label)}: ${escH(extractedCoupon)}\n`;
   }
 
   const platformCouponCodes = extractedCoupon
@@ -2706,41 +2232,14 @@ async function processPost(config, text, sourceImage, sourceName) {
   }
   if (sellerCouponLines.length > 0) {
     const couponDisplay = t.sellerCouponCode && t.sellerCouponCode.trim() ? t.sellerCouponCode.trim() : sellerCouponLines.join(' | ');
-    message += `🎟 إحجز قسيمة البائع: [ ${escH(couponDisplay)} ]\n`;
+    message += `🎁 إحجز قسيمة البائع: ${escH(couponDisplay)}\n`;
   }
 
   message += '\n';
-  // كشف عرض الباندل: من جيميني أو مباشرة من نص الرسالة الأصلية
-  const bundleKeywords = /bundle\s*deals?|عروض\s*باندل|باندل|(?:سعر|تخفيض[^،.]{0,30}?|وأضف|أضف)\s*(ثلاث|ثلاثة|اثنين|اثنان|\d+)\s*قطع|افتح\s*(?:هذا\s*)?(?:الرابط|الرابط\s*أولا|أولا)|أدخل\s*أولا|ادخل\s*أولا|ثانيا\s*(?:ادخل|أدخل|أضف)|ثانياً\s*(?:ادخل|أدخل|أضف)|خليه?\s*مفتوح/i;
-  const aiBundle = aiResult && (aiResult.isBundleDeal === true || aiResult.isBundleDeal === 'true');
-  const textBundle = bundleKeywords.test(text || '');
-  const isBundleDeal = (aiBundle || textBundle) && convertedLinks.length >= 2;
-  if (isBundleDeal) {
-    // استخراج عدد القطع: من جيميني أولاً، ثم من النص
-    let qty = (aiResult && aiResult.bundleQuantity && Number.isInteger(aiResult.bundleQuantity) && aiResult.bundleQuantity > 1)
-      ? aiResult.bundleQuantity : null;
-    if (!qty) {
-      const qtyMap = { 'ثلاث': 3, 'ثلاثة': 3, 'اثنين': 2, 'اثنان': 2 };
-      // ابحث عن X قطع في أي سياق: سعر X قطع، تخفيض X قطع، وأضف X قطع، ثانيا...X قطع
-      const qtyMatch = (text || '').match(/(?:سعر|تخفيض[^،.]{0,30}?|وأضف|أضف|لـ|لـ)\s*(ثلاث|ثلاثة|اثنين|اثنان|(\d+))\s*قطع/i)
-        || (text || '').match(/(ثلاث|ثلاثة|اثنين|اثنان|(\d+))\s*قطع/i);
-      if (qtyMatch) qty = qtyMap[qtyMatch[1]] || parseInt(qtyMatch[2]) || 3;
-      else qty = 3;
-    }
-    console.log(`🛒 عرض باندل مكتشف (AI: ${aiBundle}, نص: ${textBundle}) — ${qty} قطع`);
-    message += `1️⃣ أدخل أولا لهذا الرابط\n`;
-    message += `${escH(convertedLinks[0].affLink)}\n\n`;
-    message += `2️⃣ ثانيا أضف المنتج الى السلة من هنا\n`;
-    message += `${escH(convertedLinks[1].affLink)}\n`;
-    if (convertedLinks.length > 2) {
-      convertedLinks.slice(2).forEach(cl => { message += `${escH(cl.affLink)}\n`; });
-    }
-  } else {
-    if (t.linkLabel) message += `${escH(t.linkLabel)}\n`;
-    convertedLinks.forEach(cl => {
-      message += `${escH(cl.affLink)}\n`;
-    });
-  }
+  if (t.linkLabel) message += `${escH(t.linkLabel)}\n`;
+  convertedLinks.forEach(cl => {
+    message += `${escH(cl.affLink)}\n`;
+  });
   if (t.footer) message += `\n${escH(t.footer)}\n`;
   if (t.botLink) message += `🔗 ${escH(t.botLink)}\n`;
   if (t.hashtags) message += `\n${escH(t.hashtags)}`;
@@ -2814,14 +2313,9 @@ async function startSpy(config) {
     await stopSpy();
   }
 
-  let TelegramClient, StringSession, NewMessage;
-  try {
-    TelegramClient = require('telegram').TelegramClient;
-    StringSession = require('telegram/sessions').StringSession;
-    NewMessage = require('telegram/events').NewMessage;
-  } catch (e) {
-    throw new Error('مكتبة telegram غير مثبّتة — ميزة التجسس غير متاحة في هذه البيئة');
-  }
+  const { TelegramClient } = require('telegram');
+  const { StringSession } = require('telegram/sessions');
+  const { NewMessage } = require('telegram/events');
 
   const apiId = parseInt(config.apiId);
   const apiHash = config.apiHash;
@@ -3150,13 +2644,8 @@ async function stopSpy() {
 }
 
 async function sendLoginCode(config) {
-  let TelegramClient, StringSession;
-  try {
-    TelegramClient = require('telegram').TelegramClient;
-    StringSession = require('telegram/sessions').StringSession;
-  } catch (e) {
-    throw new Error('مكتبة telegram غير مثبّتة — ميزة التجسس غير متاحة في هذه البيئة');
-  }
+  const { TelegramClient } = require('telegram');
+  const { StringSession } = require('telegram/sessions');
 
   const apiId = parseInt(config.apiId);
   const apiHash = config.apiHash;
