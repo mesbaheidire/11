@@ -1,1 +1,2 @@
-#repo-content-pjax-container > react-app > div > div:nth-child(4) > div.prc-PageLayout-PageLayoutRoot--KH-d > div > div > div.prc-PageLayout-ContentWrapper-gR9eG > div > div > div.CodeView-module__contentWrapper__cG2JH > div.d-flex.flex-row > div > div.BlobViewContent-module__blobContentWrapper__JS0W6 > section > div > img
+
+//*[@id="repo-content-pjax-container"]/react-app/div/div[2]/div[1]/div/div/div[2]/div/div/div[2]/div[3]/div/div[3]/section/div/img
