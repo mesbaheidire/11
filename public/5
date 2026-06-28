@@ -1,6 +1,207 @@
-4f886fd
- 
- 
-version https://git-lfs.github.com/spec/v1
-oid sha256:dc79d67251e97fc5ab4c2353e3ab9846692ed239fa92aed5b62e9a9e00547084
-size 386578
+import { useState, useEffect, useMemo } from "react";
+import {
+  ShoppingCart,
+  ChevronLeft,
+  Share2,
+  Bell,
+  Copy,
+  Tag,
+  Check,
+} from "lucide-react";
+
+const CATEGORIES = [
+  { id: "mega", label: "Mega Coupons" },
+  { id: "tech", label: "Tech" },
+  { id: "home", label: "Home" },
+  { id: "sports", label: "Sports & Entertainment" },
+];
+
+const DISCOUNT_COUPONS = [
+  { discount: "$25", minOrder: "$309+", code: "SUMMER25", status: "remind" },
+  { discount: "$40", minOrder: "$449+", code: "SUMMER40", status: "remind" },
+  { discount: "$55", minOrder: "$449+", code: "SUMMER55", status: "remind" },
+  { discount: "$2", minOrder: "$15+", code: "CDSR01", status: "copy" },
+];
+
+const STORE_COUPONS = {
+  mega: [
+    { id: 1, store: "AutoTreasure Store", price: "US $31.49", discount: "US $2.00", minOrder: "Orders over $2.01", image: "https://picsum.photos/seed/gadget1/200/200", category: "mega" },
+    { id: 2, store: "e.appliances Store", price: "US $36.77", discount: "US $0.88", minOrder: "Orders over $8.83", image: "https://picsum.photos/seed/shaver1/200/200", category: "mega" },
+    { id: 3, store: "Alisa Fitness Store", price: "US $7.65", discount: "US $3.00", minOrder: "Orders over $49.07", image: "https://picsum.photos/seed/fitness1/200/200", category: "mega" },
+    { id: 4, store: "POCO Flagship Store", price: "US $379.00", discount: "US $10.00", minOrder: "Orders over $10.01", image: "https://picsum.photos/seed/phone1/200/200", category: "mega" },
+    { id: 5, store: "QWQ Direct Store", price: "US $5.11", discount: "US $1.00", minOrder: "Orders over $11.00", image: "https://picsum.photos/seed/cable1/200/200", category: "mega" },
+    { id: 6, store: "EUS Co.,Ltd. Store", price: "US $37.26", discount: "US $7.00", minOrder: "Orders over $7.01", image: "https://picsum.photos/seed/headphones1/200/200", category: "mega" },
+  ],
+  tech: [
+    { id: 7, store: "TechVision Store", price: "US $89.99", discount: "US $5.00", minOrder: "Orders over $90.00", image: "https://picsum.photos/seed/tech1/200/200", category: "tech" },
+    { id: 8, store: "SmartGadgets Hub", price: "US $45.00", discount: "US $3.50", minOrder: "Orders over $45.00", image: "https://picsum.photos/seed/tech2/200/200", category: "tech" },
+    { id: 9, store: "DigiWorld Store", price: "US $120.00", discount: "US $8.00", minOrder: "Orders over $100.00", image: "https://picsum.photos/seed/tech3/200/200", category: "tech" },
+    { id: 10, store: "ProElectronics", price: "US $66.00", discount: "US $4.00", minOrder: "Orders over $50.00", image: "https://picsum.photos/seed/tech4/200/200", category: "tech" },
+  ],
+  home: [
+    { id: 11, store: "HomeCraft Store", price: "US $22.50", discount: "US $2.00", minOrder: "Orders over $20.00", image: "https://picsum.photos/seed/home1/200/200", category: "home" },
+    { id: 12, store: "LivingSpace Co.", price: "US $55.00", discount: "US $6.00", minOrder: "Orders over $55.00", image: "https://picsum.photos/seed/home2/200/200", category: "home" },
+    { id: 13, store: "CozyNest Store", price: "US $18.99", discount: "US $1.50", minOrder: "Orders over $15.00", image: "https://picsum.photos/seed/home3/200/200", category: "home" },
+    { id: 14, store: "KitchenPro Hub", price: "US $34.00", discount: "US $3.00", minOrder: "Orders over $30.00", image: "https://picsum.photos/seed/home4/200/200", category: "home" },
+  ],
+  sports: [
+    { id: 15, store: "ActiveLife Store", price: "US $28.00", discount: "US $3.00", minOrder: "Orders over $25.00", image: "https://picsum.photos/seed/sports1/200/200", category: "sports" },
+    { id: 16, store: "FitnessPro Hub", price: "US $75.00", discount: "US $7.00", minOrder: "Orders over $70.00", image: "https://picsum.photos/seed/sports2/200/200", category: "sports" },
+    { id: 17, store: "OutdoorGear Co.", price: "US $49.00", discount: "US $5.00", minOrder: "Orders over $45.00", image: "https://picsum.photos/seed/sports3/200/200", category: "sports" },
+    { id: 18, store: "SportElite Store", price: "US $33.00", discount: "US $2.50", minOrder: "Orders over $30.00", image: "https://picsum.photos/seed/sports4/200/200", category: "sports" },
+  ],
+};
+
+function useCountdown(targetDate) {
+  const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0 });
+  useEffect(() => {
+    function update() {
+      const diff = targetDate.getTime() - Date.now();
+      if (diff <= 0) { setTimeLeft({ hours: 0, minutes: 0, seconds: 0 }); return; }
+      setTimeLeft({
+        hours: Math.floor(diff / 3600000) % 24,
+        minutes: Math.floor(diff / 60000) % 60,
+        seconds: Math.floor(diff / 1000) % 60,
+      });
+    }
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+  return timeLeft;
+}
+
+function pad(n) { return String(n).padStart(2, "0"); }
+
+export default function App() {
+  const [activeCategory, setActiveCategory] = useState("mega");
+  const [copiedId, setCopiedId] = useState(null);
+  const [remindedIds, setRemindedIds] = useState(new Set());
+  const [couponActions] = useState(
+    Object.fromEntries(DISCOUNT_COUPONS.map((c, i) => [i, c.status]))
+  );
+
+  const endDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    d.setHours(7, 59, 0, 0);
+    return d;
+  }, []);
+  const { hours, minutes, seconds } = useCountdown(endDate);
+  const visibleCoupons = STORE_COUPONS[activeCategory] ?? [];
+
+  function handleCouponAction(index) {
+    if (couponActions[index] === "copy") {
+      navigator.clipboard.writeText(DISCOUNT_COUPONS[index].code).catch(() => {});
+      setCopiedId(index);
+      setTimeout(() => setCopiedId(null), 2000);
+    } else {
+      setRemindedIds((prev) => new Set(prev).add(index));
+    }
+  }
+
+  function handleGetCoupon(id) {
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-start justify-center">
+      <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button className="p-1 rounded-full hover:bg-gray-100"><ChevronLeft size={22} className="text-gray-700" /></button>
+            <h1 className="text-base font-semibold text-gray-900">Coupons Center</h1>
+            <div className="flex items-center gap-2">
+              <button className="p-1 rounded-full hover:bg-gray-100"><Share2 size={20} className="text-gray-700" /></button>
+              <button className="p-1 rounded-full hover:bg-gray-100 relative">
+                <ShoppingCart size={20} className="text-gray-700" />
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">3</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Summer Sale Banner */}
+        <div className="bg-gradient-to-r from-orange-400 to-red-500 px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Tag size={14} className="text-white" />
+              <span className="text-white text-xs font-semibold">Summer Sale — Ends in:</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {[pad(hours), pad(minutes), pad(seconds)].map((val, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <span className="bg-white/20 text-white text-xs font-bold px-1.5 py-0.5 rounded">{val}</span>
+                  {i < 2 && <span className="text-white text-xs font-bold">:</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Discount Coupon Cards */}
+        <div className="bg-gray-50 py-3">
+          <div className="flex gap-2.5 px-4 overflow-x-auto pb-1">
+            {DISCOUNT_COUPONS.map((coupon, index) => (
+              <div key={index} className="flex-shrink-0 w-[130px] bg-white border border-gray-200 rounded-xl p-3 flex flex-col gap-1.5 shadow-sm">
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-red-500 text-[10px] font-semibold">US</span>
+                  <span className="text-red-500 text-lg font-bold leading-none">{coupon.discount}</span>
+                  <span className="text-gray-400 text-[10px] ml-0.5">off</span>
+                </div>
+                <p className="text-gray-500 text-[10px]">Orders {coupon.minOrder}</p>
+                <p className="text-gray-400 text-[10px]">{coupon.code}</p>
+                <button onClick={() => handleCouponAction(index)}
+                  className={`mt-auto w-full py-1.5 rounded-lg text-[11px] font-semibold transition-all ${remindedIds.has(index) || couponActions[index] === "remind" ? "border border-red-400 text-red-500" : "bg-red-500 text-white"}`}>
+                  {remindedIds.has(index) ? <span className="flex items-center justify-center gap-1"><Bell size={10}/> Reminded</span>
+                    : couponActions[index] === "remind" ? <span className="flex items-center justify-center gap-1"><Bell size={10}/> Remind</span>
+                    : copiedId === index ? <span className="flex items-center justify-center gap-1"><Check size={10}/> Copied!</span>
+                    : <span className="flex items-center justify-center gap-1"><Copy size={10}/> Copy</span>}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Store Coupons */}
+        <div className="flex-1 flex flex-col">
+          <div className="px-4 pt-4 pb-2"><h2 className="text-sm font-bold text-gray-900">Store Coupons</h2></div>
+          <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
+            {CATEGORIES.map((cat) => (
+              <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeCategory === cat.id ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"}`}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 px-4 pb-6">
+            {visibleCoupons.map((item) => (
+              <div key={item.id} className="bg-white rounded-xl overflow-hidden border border-gray-100 shadow-sm flex flex-col">
+                <div className="relative">
+                  <img src={item.image} alt={item.store} className="w-full aspect-square object-cover"
+                    onError={(e) => { e.target.src = "https://placehold.co/200x200/f3f4f6/9ca3af?text=Product"; }} />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
+                    <span className="text-white text-xs font-bold">{item.price}</span>
+                  </div>
+                </div>
+                <div className="p-2.5 flex flex-col gap-1.5 flex-1">
+                  <p className="text-gray-700 text-[11px] font-medium truncate">{item.store}</p>
+                  <div className="bg-red-50 border border-red-100 rounded-lg px-2 py-1">
+                    <p className="text-red-500 text-xs font-bold">{item.discount} off</p>
+                    <p className="text-gray-400 text-[10px] truncate">{item.minOrder}</p>
+                  </div>
+                  <button onClick={() => handleGetCoupon(item.id)}
+                    className="w-full mt-auto py-1.5 bg-red-500 hover:bg-red-600 text-white text-[11px] font-semibold rounded-lg transition-all">
+                    {copiedId === item.id ? <span className="flex items-center justify-center gap-1"><Check size={10}/> Got It!</span> : "Get Coupon"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
